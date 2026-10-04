@@ -21,7 +21,7 @@ import {
   seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
-  drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, denSpot, DEN_DAY, BURY_AT, JAY_CACHE, jayFliesAway, coneDrop, CONE_DROP, type Drawn,
+  drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, HIDE2_TURN, HIDE2_STEP, hide2Stand, denSpot, DEN_DAY, BURY_AT, JAY_CACHE, jayFliesAway, coneDrop, CONE_DROP, type Drawn,
   NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
 } from './eekhoorn.places.ts';
@@ -310,11 +310,11 @@ function lensSeesHalf(me: { x: number; z: number }, camH: number, pts: { x: numb
 }
 
 /** A perfect player's hide-and-seek round `c` from his last wait's side: where he finds it. */
-function playHide(c: HomeTree, start: { x: number; z: number }, id: string, o: { most: number; round: number } = HIDE): { found: boolean; slips: number; round: number; me: { x: number; z: number }; sqAng: number } {
+function playHide(c: HomeTree, start: { x: number; z: number }, id: string, o: { most: number; round: number; cam?: number } = HIDE): { found: boolean; slips: number; round: number; me: { x: number; z: number }; sqAng: number } {
   const cR = barkRadius(trunk(c), HIDE.h);
   let me = { ...start };
   let heading = headingTo(me, c);
-  let camH = heading;
+  let camH = o.cam ?? heading; // (the lens's bearing as the hide begins: behind him, or `cam`)
   const eyeAt = (): { x: number; z: number } => ({ x: me.x - Math.sin(camH) * LENS.back, z: me.z - Math.cos(camH) * LENS.back });
   let sqAng = hideStart(c, [me, eyeAt()], STUMP);
   // it starts out of the lens's sight, and out of his
@@ -389,7 +389,7 @@ test('hide-and-seek round every hide tree: it keeps the trunk between them, slip
 
 test('the second hide (ek-day): from where he found it the first time, a short hide-and-seek round the close pine — it slips once at most, he walks a little round, then it is in view', () => {
   const short = { most: 1, round: HIDE.round * 0.6 };
-  let n = 0;
+  let n = 0, stepped = 0;
   for (const rid of ROUTE_IDS) {
     const r = ROUTES[rid], c = r.hide, t2 = SECOND_HIDE[rid];
     const from = headingTo(c, comesFrom(r, r.waits.length - 1));
@@ -398,15 +398,24 @@ test('the second hide (ek-day): from where he found it the first time, a short h
       if (dist(start, seatOf(c)) > SEE_D || HOME_TREES.some((o) => dist(o, start) < trunkClear(o))) continue;
       const first = playHide(c, start, `${rid} first`);
       if (!first.found) continue;
-      // he stands where the found view left him, and takes a step toward the next pine
+      // he stands where the found view left him and turns so that the lens behind him holds
+      // the squirrel on the first pine and the second pine both (its dash plays in his
+      // picture, across it or away from the lens: hide2Turn), and plays from there
+      // (or, where no turn does it, from a few calm steps off: hide2Stand)
       const face = foundFace(c, first.sqAng, first.me);
       const at0 = foundStand(c, face, first.me);
-      const toward = headingTo(at0, t2);
-      const me = { x: at0.x + Math.sin(toward) * 0.35, z: at0.z + Math.cos(toward) * 0.35 };
-      for (const o of HOME_TREES) assert.ok(dist(o, me) > trunkClear(o) - 0.35, `${rid}: his step clears ${o.id}`);
-      // its dash there runs ahead of him (never at his feet: the trunks it leaves and lands on
-      // are both in front of him)
-      const res = playHide(t2, me, `${rid}/${t2.id} second from ${k}/${d}`, short);
+      const rr = barkRadius(trunk(c), HIDE.h) + 0.08;
+      const sqAt = { x: c.x + Math.sin(face) * rr, z: c.z + Math.cos(face) * rr };
+      const turn = hide2Stand(at0, sqAt, c, t2);
+      const me = turn.at;
+      if (dist(me, at0) > 0) stepped += 1;
+      assert.ok(turn.ok, `${rid}: a turn whose picture holds its dash to ${t2.id} (from ${k}/${d})`);
+      assert.ok(dist(me, at0) <= HIDE2_STEP[HIDE2_STEP.length - 1] + 1e-9, `${rid}: a few steps at most`);
+      for (const o of HOME_TREES) assert.ok(dist(o, me) >= trunkClear(o), `${rid}: he stands clear of ${o.id}`);
+      const lens = { x: me.x - Math.sin(turn.face) * HIDE2_TURN.back, z: me.z - Math.cos(turn.face) * HIDE2_TURN.back };
+      // (never toward the lens: the second pine no nearer it than where the squirrel leaves)
+      assert.ok(dist(lens, t2) > dist(lens, sqAt) - 0.3 * dist(sqAt, t2), `${rid}: its dash goes across or away (from ${k}/${d})`);
+      const res = playHide(t2, me, `${rid}/${t2.id} second from ${k}/${d}`, { ...short, cam: turn.face });
       n += 1;
       assert.ok(res.found, `${rid}: found round ${t2.id} too (from ${k}/${d})`);
       assert.ok(res.slips <= 1, `${rid}: a short one (${res.slips} slips)`);
@@ -415,6 +424,8 @@ test('the second hide (ek-day): from where he found it the first time, a short h
     }
   }
   assert.ok(n >= 12, `${n} second hides played`);
+  // (as often as not he watches it go from where he found it)
+  assert.ok(stepped <= n / 2, `${stepped} of ${n} stepped back first`);
 });
 
 test('hide-and-seek: right up at the bark on its side (where a child steering at its chatter ends up) he is by it; round the side he is not', () => {

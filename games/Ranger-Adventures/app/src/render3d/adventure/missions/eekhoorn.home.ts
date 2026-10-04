@@ -285,7 +285,7 @@ export class EekhoornHome implements HomeDressing {
     /* -- run 7 (ek-day): a pine cone that may drop beside his path (one mesh) -- */
     this.cone.name = 'dropped-pine-cone';
     this.cone.visible = false;
-    this.cone.scale.setScalar(1.15);
+    this.cone.scale.setScalar(1.4); // (a little generous: a child sees it drop a few metres off)
     this.group.add(this.cone);
 
     /* -- run 7 (ek-day): the scales of a cone it nibbles (one mesh) -- */

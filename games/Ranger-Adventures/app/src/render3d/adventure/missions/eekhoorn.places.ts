@@ -1304,6 +1304,74 @@ export const SECOND_HIDE: Readonly<Record<RouteId, HomeTree>> = {
 export const ALL_HIDE_TREES: readonly HomeTree[] = [...new Set([...HIDE_TREES, ...ROUTE_IDS.map((id) => SECOND_HIDE[id])])];
 
 /**
+ * Run 7 (ek-day): how he turns before the second hide, so the squirrel's dash to the second
+ * pine plays in his picture (played 2026-10-04: with the found view's lens left where it
+ * was, the second pine stood behind it and the squirrel ran at the lens). The lens comes
+ * round behind him (kit `behind`: `back` m back, looking the way he faces); from there the
+ * squirrel where it sits on the first pine (`sq`) and the second pine both stand in the
+ * picture (`half` rad either side of its middle), neither behind a trunk, its way between
+ * them over the ground never behind his own body (`body` rad either side of him), the
+ * second pine in front of him and the first not far behind him nor near the lens, the lens clear of every trunk, and its run from the one to the other goes
+ * across the picture or away from the lens (at most `toward` of it toward the lens). The
+ * turn nearest his way to the second pine that does it (`ok`); else that way.
+ */
+export const HIDE2_TURN = { back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, toward: 0.3, step: (2.5 * Math.PI) / 180, most: (85 * Math.PI) / 180, ahead: 0.4, behind: 0.8, lensD: 3.0, hid: 1 } as const;
+export function hide2Turn(me: Spot, sq: Spot, from: HomeTree, t2: HomeTree): { face: number; ok: boolean } {
+  const want = headingTo(me, t2);
+  const run = { x: t2.x - sq.x, z: t2.z - sq.z };
+  const len = Math.hypot(run.x, run.z) || 1;
+  const rOf = (t: HomeTree): number => barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, 1) + 0.3;
+  const fits = (h: number): boolean => {
+    const f = { x: Math.sin(h), z: Math.cos(h) };
+    const lens = { x: me.x - f.x * HIDE2_TURN.back, z: me.z - f.z * HIDE2_TURN.back };
+    const off = (q: Spot): number => Math.abs(wrapA(headingTo(lens, q) - h));
+    if (off(sq) > HIDE2_TURN.half || off(t2) > HIDE2_TURN.half) return false;
+    // (the pine it runs to in front of him, the one it leaves at most `behind` m back from
+    // him and well off the lens (`lensD` m): it never starts under the picture's edge by the
+    // lens, its trunk faded between him and the lens — played 2026-10-04)
+    const ahead = (q: Spot): number => (q.x - me.x) * f.x + (q.z - me.z) * f.z;
+    if (ahead(t2) < HIDE2_TURN.ahead || ahead(sq) < -HIDE2_TURN.behind || dist(lens, sq) < HIDE2_TURN.lensD) return false;
+    if (segDist(from, lens, me) < rOf(from) + 0.2) return false;
+    // (its way over the ground not behind his own body: off to his side, or nearer the lens
+    // than he is — played 2026-10-04: facing the second pine square on, his back hid the
+    // whole dash; up on the bark, where it sits and where it climbs, it shows over his head)
+    let hid = 0;
+    for (let k = 1; k <= 5; k++) {
+      const q = { x: sq.x + (run.x * k) / 6, z: sq.z + (run.z * k) / 6 };
+      if (off(q) < HIDE2_TURN.body && dist(lens, q) > dist(lens, me) - 0.3) hid += 1;
+    }
+    if (hid > HIDE2_TURN.hid) return false;
+    if ((run.x * f.x + run.z * f.z) / len < -HIDE2_TURN.toward) return false;
+    return HOME_TREES.every((t) => dist(t, lens) > rOf(t) + 0.7
+      && (t === from || segDist(t, lens, sq) > rOf(t))
+      && (t === t2 || segDist(t, lens, t2) > rOf(t)));
+  };
+  for (let a = 0; a <= HIDE2_TURN.most; a += HIDE2_TURN.step) {
+    for (const s of a === 0 ? [1] : [1, -1]) if (fits(want + s * a)) return { face: wrapA(want + s * a), ok: true };
+  }
+  return { face: want, ok: false };
+}
+/** Where he watches its dash from: where he stands when a turn there does it (`hide2Turn`);
+ *  else — standing between the two pines, or with them too far apart in his picture — a few
+ *  calm steps back from them (the nearest spot, `HIDE2_STEP` m at most, the way straight
+ *  back from the two pines first) that is clear of the trunks, his steps there too, and
+ *  from which one does; else where he stands. */
+export const HIDE2_STEP = [0.6, 1.0, 1.4, 1.8] as const;
+export function hide2Stand(me: Spot, sq: Spot, from: HomeTree, t2: HomeTree): { at: Spot; face: number; ok: boolean } {
+  const here = hide2Turn(me, sq, from, t2);
+  if (here.ok) return { at: me, ...here };
+  const back = headingTo({ x: (sq.x + t2.x) / 2, z: (sq.z + t2.z) / 2 }, me);
+  const ways = Array.from({ length: 16 }, (_, i) => back + ((i % 2 ? 1 : -1) * Math.ceil(i / 2) * Math.PI) / 8);
+  for (const r of HIDE2_STEP) for (const a of ways) {
+    const at = { x: me.x + Math.sin(a) * r, z: me.z + Math.cos(a) * r };
+    if (HOME_TREES.some((t) => dist(t, at) < trunkClear(t) || segDist(t, me, at) < trunkClear(t) - 0.15)) continue;
+    const t = hide2Turn(at, sq, from, t2);
+    if (t.ok) return { at, ...t };
+  }
+  return { at: me, ...here };
+}
+
+/**
  * The one scattered pine the squirrel's wood takes out (run 7, the triangle budget): the
  * small bos pine 4 m east of its den, between the den and the zuid way's first pine.
  * Turning round at the marker, at the noord way's first watch and at pine A, the lens

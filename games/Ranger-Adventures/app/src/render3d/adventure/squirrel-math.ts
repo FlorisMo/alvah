@@ -469,12 +469,13 @@ export function anticPlan(kind: AnticKind, p: SqPose, face: number, o: { along?:
     at = push(turnCone(0.85));
     push(settle(at, { yaw: face, pitch: 0 }, 0.26, 'sit', [0.12, 0]));
   } else if (kind === 'zonnen') {
-    // it lies down along its branch facing the trunk (`along`: the way the stub points out
-    // from the trunk), its body on the stub and its tail hanging out over the stub's end:
-    // lying down it shifts `out` m out along the stub (its body lies ahead of its feet)
+    // it lies down flat along its branch facing the trunk (`along`: the way the stub points
+    // out from the trunk), its body on the stub, its tail curled forward over its back like a
+    // parasol (as red squirrels shade themselves): lying down it shifts `out` m out along
+    // the stub (its body lies ahead of its feet)
     const along = o.along ?? face;
     const toward = along + Math.PI;
-    const flat = 1.32, out = 0.12, tl = -0.9;
+    const flat = 1.5, out = 0.08, tl = 0.55;
     const lie = { x: p.x + Math.sin(along) * out, z: p.z + Math.cos(along) * out };
     // (a calm turn to lie along its branch and back: ≤ 4.5 rad/s, the lying shorter for it)
     const tin = Math.max(0.35, Math.abs(wrap(toward - at.yaw)) / 4.5), tout = Math.max(0.5, Math.abs(wrap(face - toward)) / 4.5);

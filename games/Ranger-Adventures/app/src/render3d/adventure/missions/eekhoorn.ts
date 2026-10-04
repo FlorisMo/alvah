@@ -50,7 +50,7 @@ import {
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
   DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, nestWatch, youngPeek,
-  ANTICS, DEN_KINDS, DEN_DAY, denSpot, EINDES, BURY_AT, SECOND_HIDE, coneDrop, jayFliesAway,
+  ANTICS, DEN_KINDS, DEN_DAY, denSpot, EINDES, BURY_AT, SECOND_HIDE, coneDrop, jayFliesAway, hide2Stand,
 } from './eekhoorn.places';
 import { ontdekking } from '../../../content/ontdekkingen';
 
@@ -998,21 +998,28 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     const t2 = SECOND_HIDE[p.route];
     const tree2 = st(t2);
     k.stats.hide2 = 1;
-    k.lockFollow();
-    await k.wait(0.3);
     await dropYoung();
-    // he turns to the pine it runs to (a step toward it: the lens comes round behind him),
-    // and it pours down the bark and dashes ahead of him, up the near side of that trunk
-    const me0 = k.ranger();
-    const toward = headingTo(me0, t2);
-    const stepTo = { x: me0.x + Math.sin(toward) * 0.35, z: me0.z + Math.cos(toward) * 0.35 };
-    const turned = k.walkRanger(stepTo.x, stepTo.z, 0.05);
+    // "Nog een keer!": it chatters and flicks on the bark, still in the found view
     k.say(c.nogEenKeer);
     chatter();
-    const there2 = k.guard(sq.goTrunk(tree2, { ang: headingTo(t2, me0), h: HIDE.h + 0.25 }));
-    await turned;
+    sq.flick();
+    await k.wait(0.6);
+    // he turns toward the pine it is off to and the lens comes round behind him on an arc,
+    // to where his picture holds it on this pine and the next one both (eekhoorn.places
+    // hide2Stand: where he stands, or a few calm steps off first); then it pours down the
+    // bark and dashes across his picture, up the near side of that trunk — never at the lens
+    const rr0 = barkRadius(hideTree.trunk, HIDE.h) + 0.08;
+    const turn = hide2Stand(k.ranger(), { x: cT.x + Math.sin(sqAng) * rr0, z: cT.z + Math.cos(sqAng) * rr0 }, cT, t2);
+    k.stats.hide2_turn = turn.ok ? 1 : 0;
+    if (dist(turn.at, k.ranger()) > 0.05) {
+      k.stats.hide2_step = Math.round(dist(turn.at, k.ranger()) * 10) / 10;
+      await k.walkRanger(turn.at.x, turn.at.z, 0.05);
+    }
+    const me0 = k.ranger();
+    k.world.faceRanger(turn.face);
+    await k.behind();
     k.stats.hide2_go = 1;
-    await there2;
+    await k.guard(sq.goTrunk(tree2, { ang: headingTo(t2, me0), h: HIDE.h + 0.25 }));
     chatter();
     sq.flick();
     await k.wait(0.5);
@@ -1083,6 +1090,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       if (onStump && k.now - lastChatter > 3.2) chatter();
       if (onStump) measure();
       if (verrDone) return;
+      coneTick(gladeFrom); // (a cone that found no pine on the way tree to tree: the glade's)
       const m = k.ranger();
       if (verr === 'gaai') {
         const j = home.jayAt(), d = dist(m, j);
