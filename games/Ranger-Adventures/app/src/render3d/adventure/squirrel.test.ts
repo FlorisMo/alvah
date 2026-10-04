@@ -195,13 +195,14 @@ test('its antics: each one where it sits, 1.5-3 s, calm, its tail at rest after,
         let maxTurn = 0, prev = poseAt(plan, 0);
         for (let t = 0; t <= T + 1e-9; t += 1 / 60) {
           const p = poseAt(plan, t);
-          // it never leaves its seat (so never a step toward the lens or anyone)
-          assert.ok(Math.hypot(p.x - seat.x, p.z - seat.z) < 1e-9, `${kind}: on its seat`);
+          // it never leaves its seat (so never a step toward the lens or anyone): lying down
+          // along its branch its feet shift a hand's width out along the stub, no more
+          assert.ok(Math.hypot(p.x - seat.x, p.z - seat.z) < (kind === 'zonnen' ? 0.13 : 1e-9), `${kind}: on its seat`);
           assert.ok(p.alt >= seat.alt - 0.05 && p.alt <= seat.alt + 0.03, `${kind}: at its seat's height (${(p.alt - seat.alt).toFixed(3)})`);
           assert.equal(p.roll, seat.roll, `${kind}: never rolled over`);
           assert.ok(p.pitch > -0.3 && p.pitch < 1.6, `${kind}: pitch ${p.pitch.toFixed(2)}`);
           const tail = tailAt(plan, t);
-          assert.ok(tail >= -0.5 && tail <= 1.0, `${kind}: its tail held at ${tail.toFixed(2)}`);
+          assert.ok(tail >= -1.0 && tail <= 1.0, `${kind}: its tail held at ${tail.toFixed(2)}`);
           maxTurn = Math.max(maxTurn, Math.abs(wrapA(p.yaw - prev.yaw)) * 60);
           prev = p;
         }
@@ -209,6 +210,7 @@ test('its antics: each one where it sits, 1.5-3 s, calm, its tail at rest after,
         assert.ok(maxTurn <= 9, `${kind}: turns at most ${maxTurn.toFixed(1)} rad/s`);
         const end = poseAt(plan, T);
         assert.ok(Math.abs(wrapA(end.yaw - face)) < 1e-6 && Math.abs(end.pitch) < 1e-6 && Math.abs(end.alt - seat.alt) < 1e-6, `${kind}: sitting up facing him again`);
+        assert.ok(Math.hypot(end.x - seat.x, end.z - seat.z) < 1e-6, `${kind}: back on its seat`);
         assert.ok(Math.abs(tailAt(plan, T)) < 1e-6, `${kind}: its tail at rest at the end`);
         assert.ok(topSpeeds(plan).run === 0 && topSpeeds(plan).leap === 0, `${kind}: it goes nowhere`);
       }

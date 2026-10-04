@@ -120,6 +120,10 @@ const BIRD_FADE_S = 0.6;
  *  he has SEEN it in free roam (run 7: within `SEEDLING_SEE.within` m, `px` tall in his
  *  picture, for `secs`), it goes into his veldgids. */
 const SEEDLING_H = 0.52;
+/** The scales of a nibbled pine cone (run 7, ek-day): at most this many at once, each
+ *  lying on the needles this long (s) before it is gone. */
+const SCALES_N = 30;
+const SCALE_LIFE = 9;
 const SEEDLING_SEE = { within: 6, px: 30, secs: 1 } as const;
 /** How fast the nest fades when the lens comes by it (s), like a crown. */
 const NEST_FADE_S = 0.25;
@@ -155,6 +159,10 @@ export class EekhoornHome implements HomeDressing {
   private readonly heapK: number[] = HEAP_SPOTS.map((_, i) => (i === 0 ? 1 : 0));
   private readonly puffs: THREE.InstancedMesh;
   private readonly puff: { x: number; y: number; z: number; vx: number; vy: number; vz: number; t: number; s: number }[] = [];
+  /** run 7 (ek-day): the scales a pine cone it nibbles sheds — they flutter down from its
+   *  paws and lie on the needles a while (one mesh, drawn only while any is there) */
+  private readonly scales: THREE.InstancedMesh;
+  private readonly scale: { x: number; y: number; z: number; vy: number; sway: number; spin: number; t: number; down: boolean }[] = [];
   private readonly seedling: THREE.Mesh;
   /** one acorn on the moss: the one being buried (it sinks in) or dug up (it comes out) */
   private readonly nut: THREE.Mesh;
@@ -259,6 +267,14 @@ export class EekhoornHome implements HomeDressing {
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < 18; i++) this.puffs.setMatrixAt(i, zero);
     this.small.add(this.puffs);
+
+    /* -- run 7 (ek-day): the scales of a cone it nibbles (one mesh) -- */
+    this.scales = new THREE.InstancedMesh(new THREE.CircleGeometry(0.022, 3).scale(1, 0.62, 1), new THREE.MeshStandardMaterial({ color: '#94603a', roughness: 0.9, side: THREE.DoubleSide }), SCALES_N);
+    this.scales.name = 'cone-scales';
+    this.scales.frustumCulled = false;
+    this.scales.visible = false;
+    for (let i = 0; i < SCALES_N; i++) this.scales.setMatrixAt(i, zero);
+    this.group.add(this.scales);
 
     /* -- the acorn being buried or dug up (one at a time) -- */
     this.nut = new THREE.Mesh(acornGeometry(), acornMaterial());
@@ -570,6 +586,16 @@ export class EekhoornHome implements HomeDressing {
     }
   }
 
+  /** Run 7 (ek-day): a scale of the pine cone it nibbles comes off at (x, y, z) — its paws —
+   *  and flutters down to the needles, where it lies a while (none under reduced motion). */
+  scaleAt(x: number, y: number, z: number, reduced: boolean): void {
+    if (reduced) return;
+    const r = this.cos;
+    const p = { x: x + (r() - 0.5) * 0.04, y, z: z + (r() - 0.5) * 0.04, vy: -0.25, sway: r() * Math.PI * 2, spin: r() * Math.PI * 2, t: SCALE_LIFE, down: false };
+    const slot = this.scale.length < SCALES_N ? this.scale.length : this.scale.reduce((m, q, i) => (q.t < this.scale[m].t ? i : m), 0);
+    this.scale[slot] = p;
+  }
+
   /** The store grows: the acorns he dug up are piled by the stump (`n` more clusters). */
   growHeap(n: number): void { this.heapShown = Math.min(HEAP_SPOTS.length, this.heapShown + n); }
 
@@ -726,6 +752,30 @@ export class EekhoornHome implements HomeDressing {
       this.puffs.instanceMatrix.needsUpdate = true;
       this.puffs.visible = live;
     }
+    // the cone's scales: fluttering down from its paws, then lying on the needles a while
+    if (this.scale.length) {
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3();
+      let live = false;
+      for (let i = 0; i < this.scale.length; i++) {
+        const p = this.scale[i];
+        if (p.t <= 0) { this.scales.setMatrixAt(i, m.makeScale(0, 0, 0)); continue; }
+        live = true;
+        p.t -= dt;
+        const floor = this.env.groundY(p.x, p.z) + 0.004;
+        if (!p.down) {
+          p.vy = Math.max(-0.9, p.vy - 2.2 * dt); // (a flake: it drifts down, never drops like a stone)
+          p.y += p.vy * dt;
+          p.sway += dt * 7;
+          p.x += Math.cos(p.sway) * 0.12 * dt; p.z += Math.sin(p.sway) * 0.12 * dt;
+          if (p.y <= floor) { p.y = floor; p.down = true; }
+        }
+        e.set(p.down ? -Math.PI / 2 : -Math.PI / 2 + 0.6 * Math.sin(p.sway), p.spin, 0, 'YXZ');
+        const k = Math.min(1, p.t / 0.8);
+        this.scales.setMatrixAt(i, m.compose(new THREE.Vector3(p.x, p.y, p.z), q.setFromEuler(e), one.setScalar(k)));
+      }
+      this.scales.instanceMatrix.needsUpdate = true;
+      this.scales.visible = live;
+    }
     // the seedling grows while the ranger is away (a later visit finds it)
     if (this.state === 'after' && this.seedlingWaits) {
       const me = movers.find((q) => q.ranger);
@@ -800,6 +850,9 @@ export class EekhoornHome implements HomeDressing {
     this.puffs.dispose();
     this.puffs.geometry.dispose();
     (this.puffs.material as THREE.Material).dispose();
+    this.scales.dispose();
+    this.scales.geometry.dispose();
+    (this.scales.material as THREE.Material).dispose();
     this.seedling.geometry.dispose();
     (this.seedling.material as THREE.Material).dispose();
     this.nut.geometry.dispose();

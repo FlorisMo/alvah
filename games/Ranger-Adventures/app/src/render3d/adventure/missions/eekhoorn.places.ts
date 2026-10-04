@@ -393,7 +393,7 @@ const STUB_AT: Spot = (() => {
 })();
 const INTRO_OFF = 0.7;
 const INTRO_D = 2.8; // (≈ where the lens fit lands: for choosing the side only)
-export function introView(me: Spot, toward: Spot = ROUTES.midden.waits[0], tall = 1.85): {
+export function introView(me: Spot, toward: Spot = ROUTES.midden.waits[0], tall = 1.85, at: Spot = STUB_AT): {
   at: Spot; heading: number; halfW: number; halfD: number; tall: number; pitchDeg: number; insetTop: number; insetBottom: number;
 } {
   const toStub = headingTo(me, STUB_AT);
@@ -403,7 +403,30 @@ export function introView(me: Spot, toward: Spot = ROUTES.midden.waits[0], tall 
   const lensOf = (h: number): Spot => ({ x: STUB_AT.x - Math.sin(h) * INTRO_D, z: STUB_AT.z - Math.cos(h) * INTRO_D });
   const a = toStub + INTRO_OFF, b = toStub - INTRO_OFF;
   const heading = Math.hypot(lensOf(a).x - follow.x, lensOf(a).z - follow.z) < Math.hypot(lensOf(b).x - follow.x, lensOf(b).z - follow.z) ? a : b;
-  return { at: STUB_AT, heading, halfW: 0.55, halfD: 0.3, tall, pitchDeg: 8, insetTop: 104, insetBottom: 60 };
+  return { at, heading, halfW: 0.55, halfD: 0.3, tall, pitchDeg: 8, insetTop: 104, insetBottom: 60 };
+}
+
+/**
+ * Run 7 (ek-day, design §6.8): where it is in the den look, by this play's den. `omlaag`: head
+ * down on the bark under its stub (its feet `downH` m up), turned `downTurn` rad from the
+ * stub toward the lens — it hangs there looking out, its tail up the trunk. `voet`: sitting
+ * on the needles at the pine's foot, out past its root spurs (`footOut` m beyond them), turned
+ * `footTurn` rad round from the lens toward the stub's side — nibbling a pine cone. `lens`:
+ * where the den look's lens stands. (`tak` and `spiraal` end on its stub, as it always sat.)
+ */
+export const DEN_DAY = { downH: 0.95, downTurn: 0.4, footTurn: 0.75, footOut: 0.2, footTall: 1.2 } as const;
+export function denSpot(lens: Spot, me: Spot): { down: { ang: number; h: number }; foot: Spot; footFace: number } {
+  const t = HOME_TREES[0], b = t.branch!;
+  const tr = { x: t.x, z: t.z, H: t.h, species: t.species };
+  const camAng = headingTo(t, lens);
+  const toCam = Math.sign(wrapA(camAng - b.ang)) || 1;
+  const down = { ang: b.ang + toCam * DEN_DAY.downTurn, h: DEN_DAY.downH };
+  // (round from the lens on the side away from him: never at his feet)
+  const r = Math.max(trunkOutline(tr, 0), barkRadius(tr, 0)) + DEN_DAY.footOut;
+  const at = (a: number): Spot => ({ x: t.x + Math.sin(a) * r, z: t.z + Math.cos(a) * r });
+  const [a1, a2] = [camAng + DEN_DAY.footTurn, camAng - DEN_DAY.footTurn];
+  const foot = dist(at(a1), me) >= dist(at(a2), me) ? at(a1) : at(a2);
+  return { down, foot, footFace: headingTo(foot, lens) };
 }
 
 /** The framed views (design §3.6): the glade floor from above for the acorns (corsi),
@@ -1160,7 +1183,8 @@ export function drawDay(play: Forks, o: { route: RouteId; buren: Trio; mood?: st
   const dens = o.rare === 'eekhoorn.donkere-eekhoorn' || o.rare === 'donkere-eekhoorn' ? DEN_KINDS.filter((d) => d === 'tak' || d === 'spiraal') : DEN_KINDS;
   const known = (k: 'den' | 'einde' | 'verrassing' | 'verstop2') => o.recent.filter((r) => r[k] !== undefined);
   const den = freshPick(play.fork('den'), dens, known('den').map((r) => r.den!));
-  const pool = ANTICS.filter((a) => a !== 'zonnen' || SUN_MOODS.includes(o.mood ?? ''));
+  // (nibbling a cone at its den already: not again at a wait)
+  const pool = ANTICS.filter((a) => (a !== 'zonnen' || SUN_MOODS.includes(o.mood ?? '')) && (a !== 'knabbelen' || den !== 'voet'));
   const antics = play.fork('antics').shuffle(pool).slice(0, ROUTES[o.route].waits.length);
   const vf = play.fork('verrassing');
   const can = SURPRISES.filter((s) => s !== 'roffel' || o.buren.stam === 'grote-bonte-specht');

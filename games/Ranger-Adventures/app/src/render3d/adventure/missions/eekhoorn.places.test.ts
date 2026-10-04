@@ -21,7 +21,7 @@ import {
   seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
-  drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, type Drawn,
+  drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, denSpot, DEN_DAY, type Drawn,
   NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
 } from './eekhoorn.places.ts';
@@ -519,6 +519,49 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
   assert.ok(n >= 60, `${n} finds framed`);
 });
 
+test('the den (ek-day): every opening stands in the den look, big and whole — on its stub, head down under it, nibbling at the pine\'s foot', () => {
+  const den = TREE.oak, tr = trunk(den), g0 = groundY(den.x, den.z);
+  const report: string[] = [];
+  for (const id of ROUTE_IDS) for (const [dx, dz] of [[0, 0], [1.2, 0.6], [-1, 0.8], [0.6, -1.4], [-1.3, -0.9]]) {
+    const me = { x: MARKER.x + dx, z: MARKER.z + dz };
+    for (const kind of ['tak', 'omlaag', 'voet'] as const) {
+      const base = introView(me, ROUTES[id].waits[0]);
+      const lens0 = fitLens(base);
+      const spot = denSpot({ x: lens0.position.x, z: lens0.position.z }, me);
+      const view = kind === 'voet' ? introView(me, ROUTES[id].waits[0], DEN_DAY.footTall, spot.foot) : base;
+      const cam = fitLens(view);
+      // where it is: its feet and its head (m up)
+      let at: { x: number; z: number }, lo: number, hi: number;
+      if (kind === 'tak') { at = seatOf(den); lo = den.branch!.h; hi = lo + 0.33; }
+      else if (kind === 'omlaag') {
+        const r = barkRadius(tr, spot.down.h) + 0.12;
+        at = { x: den.x + Math.sin(spot.down.ang) * r, z: den.z + Math.cos(spot.down.ang) * r }; hi = spot.down.h + 0.05; lo = hi - 0.33;
+      } else { at = spot.foot; lo = 0; hi = 0.3; }
+      const top = px(cam, at, hi), bot = px(cam, at, lo);
+      const tall = Math.abs(bot.y - top.y);
+      report.push(`${id}/${dx},${dz}/${kind}: ${tall.toFixed(0)} px at (${top.x.toFixed(0)}, ${top.y.toFixed(0)})`);
+      assert.ok(!top.behind && tall >= 60, `${id} ${dx},${dz} ${kind}: ${tall.toFixed(0)} px in the den look`);
+      assert.ok(top.x > 60 && top.x < W - 60 && top.y > 110 && bot.y < H - 60, `${id} ${dx},${dz} ${kind}: in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)}–${bot.y.toFixed(0)})`);
+      // no trunk in front of it (its own pine only behind it), not his head
+      const mid = { ...at, y: groundY(at.x, at.z) + (lo + hi) / 2 };
+      for (const t of HOME_TREES) {
+        const tg = groundY(t.x, t.z);
+        const bark: Upright[] = [{ ...trunkUpright(trunk(t), tg), r: (y: number) => barkRadius(trunk(t), Math.max(0, y - tg)) }];
+        assert.ok(lineClear(cam.position, mid, bark), `${id} ${dx},${dz} ${kind}: ${t.id} is not in front of it`);
+      }
+      const head = [{ x: me.x, z: me.z, y0: groundY(me.x, me.z), y1: groundY(me.x, me.z) + RANGER_STAND_HEIGHT * 1.05, r: () => 0.22 }];
+      assert.ok(lineClear(cam.position, mid, head), `${id} ${dx},${dz} ${kind}: his head is not in front of it`);
+      // at the foot: on dry needles, clear of the den's root spurs and of the ring he stands in
+      if (kind === 'voet') {
+        assert.ok(dist(at, den) >= Math.max(trunkOutline(tr, 0), barkRadius(tr, 0)) + 0.15, `${kind}: past the root spurs`);
+        assert.ok(dist(at, me) > 1.2, `${id} ${dx},${dz} ${kind}: not at his feet (${dist(at, me).toFixed(2)} m; foot ${dist(at, den).toFixed(2)} m from the axis, ${(headingTo(den, at) - headingTo(den, me)).toFixed(2)} rad round from him)`);
+      }
+    }
+  }
+  void g0;
+  console.log(report.filter((_, i) => i % 5 === 0).join('\n'));
+});
+
 test('the den look turns to the side the squirrel will lead him', () => {
   for (const id of ROUTE_IDS) {
     const v = introView(MARKER, ROUTES[id].waits[0]);
@@ -780,6 +823,7 @@ test('the squirrel\'s day (ek-day): from its own forks, replayed by its seed; th
     assert.equal(d.antics.length, ROUTES[p.route].waits.length);
     assert.equal(new Set(d.antics).size, d.antics.length, `play ${s}: no antic twice`);
     if (!SUN_MOODS.includes(mood)) assert.ok(!d.antics.includes('zonnen'), `play ${s}: no sunning in the ${mood}`);
+    if (d.den === 'voet') assert.ok(!d.antics.includes('knabbelen'), `play ${s}: it nibbled at its den, not again at a wait`);
     // a surprise: never the last play's; the drum only with the great spotted woodpecker
     if (d.verrassing !== 'geen') { surprises += 1; if (recent[0]?.verrassing && recent[0].verrassing !== 'geen') assert.notEqual(d.verrassing, recent[0].verrassing, `play ${s}: another surprise`); }
     if (d.verrassing === 'roffel') assert.equal(p.buren.stam, 'grote-bonte-specht');

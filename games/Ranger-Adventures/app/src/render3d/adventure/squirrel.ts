@@ -42,6 +42,9 @@ type Perch =
   | { kind: 'stump'; top: number; x: number; z: number };
 
 const V = new THREE.Vector3();
+/** Where the cone it nibbles sits from its paws' point (group space, m): a little lower and
+ *  out in front of its chest. */
+const CONE_HELD = new THREE.Vector3(0, -0.03, 0.02);
 const Q = new THREE.Quaternion();
 const E = new THREE.Euler();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -438,7 +441,9 @@ export class Squirrel extends Actor {
       this.carry(false);
       this.cone.visible = true;
       this.cone.scale.setScalar(1);
-      this.cone.position.copy(this.paws);
+      // (held crosswise in its paws under its chin, like a cob: its face shows above it)
+      this.cone.position.copy(this.paws).add(CONE_HELD);
+      this.cone.rotation.set(0, 0, 1.25);
       this.coneFrom = this.t;
       this.coneFor = planTime(plan);
     }
@@ -846,7 +851,7 @@ export class Squirrel extends Actor {
       if (!reduced && this.pose.act === 'eat' && this.onScale && this.t >= this.scaleAt) {
         this.scaleAt = this.t + 0.2;
         this.group.updateWorldMatrix(true, false);
-        V.copy(this.paws).applyMatrix4(this.group.matrixWorld);
+        V.copy(this.paws).add(CONE_HELD).applyMatrix4(this.group.matrixWorld);
         this.onScale(V.x, V.y, V.z);
       }
     }
@@ -927,11 +932,11 @@ export class Squirrel extends Actor {
 
 /**
  * Run 7 (ek-day): a Scots pine cone, small and procedural (one geometry, vertex colours: one
- * draw call wherever it is): an egg of scales, rows of darker and lighter brown, ~7 cm long
+ * draw call wherever it is): an egg of scales, rows of darker and lighter brown, ~9 cm long
  * (a little generous, like the acorn, so a child sees it in a squirrel's paws or dropping
  * from a pine), its middle at the origin, standing along +y.
  */
-export const PINE_CONE_LEN = 0.07;
+export const PINE_CONE_LEN = 0.09;
 export function pineConeGeometry(): THREE.BufferGeometry {
   const g = new THREE.SphereGeometry(0.5, 8, 9).toNonIndexed();
   const p = g.attributes.position as THREE.BufferAttribute;
@@ -942,7 +947,7 @@ export function pineConeGeometry(): THREE.BufferGeometry {
     // an egg: fuller below its middle, a blunt tip; the scales' rows as bands of colour
     const k = 0.62 * (1 - 0.18 * y) * (1 + 0.06 * Math.cos(Math.atan2(p.getZ(i), p.getX(i)) * 8));
     p.setXYZ(i, p.getX(i) * k, y, p.getZ(i) * k);
-    col.set(Math.floor((y + 0.5) * 7) % 2 ? '#7c5232' : '#5c3a22');
+    col.set(Math.floor((y + 0.5) * 7) % 2 ? '#a0703f' : '#7a4c2a');
     c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b;
   }
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));

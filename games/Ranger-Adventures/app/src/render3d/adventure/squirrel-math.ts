@@ -430,6 +430,12 @@ function wobble(p: SqPose, dur: number, act: SqAct, wob: (s: number) => Partial<
   };
 }
 
+/** A piece that also moves it a few centimetres over its seat, from `a` to `b` (lying down
+ *  along its branch: its body lies ahead of its feet). */
+function slide(g: Segment, a: { x: number; z: number }, b: { x: number; z: number }): Segment {
+  return { ...g, at: (u) => { const e = smooth(u); return { ...g.at(u), x: lerp(a.x, b.x, e), z: lerp(a.z, b.z, e) }; } };
+}
+
 /** The end of a piece (its last pose). */
 const endOf = (g: Segment): SqPose => g.at(1);
 
@@ -463,14 +469,19 @@ export function anticPlan(kind: AnticKind, p: SqPose, face: number, o: { along?:
     at = push(turnCone(0.85));
     push(settle(at, { yaw: face, pitch: 0 }, 0.26, 'sit', [0.12, 0]));
   } else if (kind === 'zonnen') {
+    // it lies down along its branch facing the trunk (`along`: the way the stub points out
+    // from the trunk), its body on the stub and its tail hanging out over the stub's end:
+    // lying down it shifts `out` m out along the stub (its body lies ahead of its feet)
     const along = o.along ?? face;
-    const flat = 1.32;
+    const toward = along + Math.PI;
+    const flat = 1.32, out = 0.12, tl = -0.9;
+    const lie = { x: p.x + Math.sin(along) * out, z: p.z + Math.cos(along) * out };
     // (a calm turn to lie along its branch and back: ≤ 4.5 rad/s, the lying shorter for it)
-    const tin = Math.max(0.35, Math.abs(wrap(along - at.yaw)) / 4.5), tout = Math.max(0.5, Math.abs(wrap(face - along)) / 4.5);
-    at = push(settle(at, { yaw: along, pitch: 0.2 }, tin, 'sit'));
-    at = push(settle(at, { pitch: flat, alt: p.alt - 0.03 }, 0.5, 'sit', [0, -0.35]));
-    at = push(wobble(at, Math.max(0.8, Math.min(1.35, 2.85 - 0.5 - tin - tout)), 'sit', (s) => ({ pitch: 0.025 * Math.sin(s * Math.PI * 2 * 0.7) }), () => -0.35));
-    push(settle(at, { yaw: face, pitch: 0, alt: p.alt }, tout, 'sit', [-0.35, 0]));
+    const tin = Math.max(0.35, Math.abs(wrap(toward - at.yaw)) / 4.5), tout = Math.max(0.5, Math.abs(wrap(face - toward)) / 4.5);
+    at = push(settle(at, { yaw: toward, pitch: 0.2 }, tin, 'sit'));
+    at = push(slide(settle(at, { pitch: flat, alt: p.alt - 0.03 }, 0.55, 'sit', [0, tl]), at, lie));
+    at = push(wobble(at, Math.max(0.8, Math.min(1.3, 2.85 - 0.55 - tin - tout)), 'sit', (s) => ({ pitch: 0.025 * Math.sin(s * Math.PI * 2 * 0.7) }), () => tl));
+    push(slide(settle(at, { yaw: face, pitch: 0, alt: p.alt }, tout, 'sit', [tl, 0]), at, p));
   } else {
     // mopperen: three stamps, each a jolt of its body and a flick, a breath, two more
     at = push(settle(at, { yaw: face, pitch: -0.05 }, Math.max(0.2, Math.abs(wrap(face - at.yaw)) / 5), 'sit'));

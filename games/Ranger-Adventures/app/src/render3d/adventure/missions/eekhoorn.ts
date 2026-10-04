@@ -50,6 +50,7 @@ import {
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
   DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, nestWatch, youngPeek,
+  ANTICS, DEN_KINDS, DEN_DAY, denSpot,
 } from './eekhoorn.places';
 import { ontdekking } from '../../../content/ontdekkingen';
 
@@ -91,6 +92,15 @@ const SWEEP_DIG = 0.25;
 /** Each neighbour's call in the echo game is held to this snippet (s): a blackbird's long
  *  song and a great tit's short pump give the same listening tempo, whoever came today. */
 const CALL_CAP: readonly [number, number] = [0.6, 1.2];
+/** Its antic at a wait (run 7, ek-day): `first` s after it sits down (wherever he is) it
+ *  plays its antic, and again `again` s after the last one while he is still further than
+ *  `near` m off; when he has come close (the wait's own rule) it finishes the one it is in,
+ *  `grace` s more at most, sits up facing him and runs on. Lying in the sun it lies along
+ *  its stub, turned `lie` rad from the way the stub points. */
+const ANTIC = { first: 0.25, again: 2.2, near: SEE_D + 0.2, lie: 0, grace: 1.1 } as const;
+/** He has stood right by it (within SEE_D + 0.6 m) this long (s): it runs on, whatever the
+ *  lens shows of it (ek-finds review: a wait that never finished). */
+const BY_WAIT = 5;
 
 /** This play's day, drawn and laid under the briefing card (`prepare`). */
 let drawn: { seed: number; p: EekhoornPlay } | null = null;
@@ -100,11 +110,19 @@ let drawn: { seed: number; p: EekhoornPlay } | null = null;
 function lay(world: { residents: Residents }, play: Play): EekhoornPlay | null {
   const home = world.residents.dressing('eekhoorn') as EekhoornHome | null;
   if (!home) return null;
-  const p = drawEekhoornPlay(play, lastVariants(store.get().geschiedenis, 2));
+  const v = play.variant;
+  const p = drawEekhoornPlay(play, lastVariants(store.get().geschiedenis, 2), { mood: typeof v.mood === 'string' ? v.mood : undefined, rare: typeof v.rare === 'string' ? v.rare : null });
+  // (its way, pattern, trio — and its day, folded in: the next play draws against it)
   play.note(VARIANT_KEY, variantOf(p));
   // (its finds: which of the way's trees carries its nest, where its gnawed cones lie)
   play.note('nest', nestTrees(ROUTES[p.route])[p.nest].id);
   play.note('kegels', p.kegels);
+  // (its day, each choice by name: design §6.8)
+  play.note('den', p.day.den);
+  play.note('antics', p.day.antics.join('+'));
+  play.note('verrassing', p.day.verrassing);
+  play.note('verstop2', p.day.verstop2 ? 1 : 0);
+  play.note('einde', p.day.einde);
   home.layPlay(p, { cosmetic: play.fork('cosmetic').rng, squirrel: play.fork('squirrel').int(1, 0x7fffffff) });
   drawn = { seed: play.seed, p };
   return p;
@@ -129,6 +147,7 @@ export const eekhoornAdventure: Adventure = {
     const sq = new Squirrel(spec.key, env, { height: SQUIRREL_H, trees: dressing.trees, seed: 11 });
     sq.stumps.push({ x: STUMP.x, z: STUMP.z, top: STUMP.top, r: STUMP.r });
     sq.onDig = (x, z) => dressing.puffAt(x, z, env.reduced());
+    sq.onScale = (x, y, z) => dressing.scaleAt(x, y, z, env.reduced());
     dressing.squirrel = sq;
     dressing.actorEnv = env; // (a play's rare visitor is made the same way)
     return sq;
@@ -378,10 +397,39 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   //     runs up to its stub), so the child meets the squirrel he is going to follow;
   //     then the follow camera is back. (A play with the dark-brown visitor frames it a
   //     little higher: the two of them meet on the trunk.)
+  //     Run 7 (ek-day, design §6.8): what it is doing as he comes is this play's den — on
+  //     its stub, hanging head down on the bark under it, nibbling a pine cone at the
+  //     pine's foot, or a spiral run up round the trunk to its stub as the lens turns to it.
   k.beat = 'den';
-  const up = k.guard(sq.goBranch(oak, faceMe(sq.branchPose(oak))));
-  await k.frame(introView(k.ranger(), route.waits[0], dark ? DEN_VISITOR.tall : undefined), { face: headingTo(k.ranger(), oak.trunk) });
+  const den = p.day.den;
+  k.stats.den = DEN_KINDS.indexOf(den);
+  const meAtDen = k.ranger();
+  const denLook = introView(meAtDen, route.waits[0], dark ? DEN_VISITOR.tall : undefined);
+  const denLens = k.lensFor(denLook).cam;
+  const ds = denSpot({ x: denLens.x, z: denLens.z }, meAtDen);
+  const sitFace = faceMe(sq.branchPose(oak));
+  const up = k.guard((async (): Promise<boolean> => {
+    if (den === 'omlaag') {
+      // (up its pine above where it hangs, if it is not on it, then down head first to there)
+      if (sq.onTree !== oak && !(await sq.goTrunk(oak, { ang: ds.down.ang, h: ds.down.h + 0.9 }))) return false;
+      return sq.goRound(oak, ds.down, 0.8, 0, false);
+    }
+    if (den === 'voet') return sq.run(sq.dashTo(ds.foot.x, ds.foot.z, ds.footFace));
+    if (den === 'spiraal') {
+      // (down round the back of its pine, and up again, round and round, to its stub)
+      const low = { ang: oak.branch.ang + Math.PI, h: 0.4 };
+      if (sq.onTree === oak ? !(await sq.goRound(oak, low, 0.9, 0, false)) : !(await sq.goTrunk(oak, low))) return false;
+      if (!(await sq.goRound(oak, { ang: oak.branch.ang, h: oak.branch.h - 0.12 }, 2.2, 1, true))) return false;
+      return sq.goBranch(oak, sitFace);
+    }
+    return sq.goBranch(oak, sitFace);
+  })());
+  await k.frame(den === 'voet' ? introView(meAtDen, route.waits[0], DEN_DAY.footTall, ds.foot) : denLook, { face: headingTo(k.ranger(), oak.trunk) });
   await up;
+  // (nibbling at the pine's foot: a cone in its paws, its scales falling, while the look holds)
+  let nibbling = den === 'voet';
+  const nibble = async (): Promise<void> => { while (nibbling) if (!(await sq.antic('knabbelen', ds.footFace))) return; };
+  const nibbled = nibble().catch(() => {});
   k.say(c.daar);
   k.stats.den_px = Math.round(measure().px);
   chatter();
@@ -429,6 +477,12 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     chatter();
   }
   await k.wait(1.2);
+  if (nibbling) {
+    // (it stops nibbling and sits up, looking at him, before it runs off)
+    nibbling = false;
+    await k.guard(sq.settleTo(faceMe(sq), 0.3));
+  }
+  await nibbled;
   // (out of the picture he turns the way the squirrel will go: the follow camera comes
   // back behind him looking there, and the keys walk him after it)
   k.world.faceRanger(headingTo(k.ranger(), wayTo(k.ranger(), watchSpot(route.waits[0]))));
@@ -471,10 +525,22 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   /** while it waits in its nest (and peeks out of it): the spot to see it from, and which
    *  leg of the way there he is on (to the spot; the step that turns him to the nest) */
   let nestWait: { watch: ReturnType<typeof nestWatch>; leg: 'go' | 'look' | 'hold'; at?: Spot } | null = null;
-  const hop = async (name: string, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
+  const hop = async (name: string, wi: number, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
     k.say(line);
     lastMove = false;
-    const there = k.guard(go());
+    // (every wait can finish: should its way there be taken over part way — a plan replaced —
+    // it runs straight to its stub after all; ek-finds review, seed 45: a wait that never
+    // finished after the nest moment)
+    const face = headingTo(t, comesFrom(route, wi));
+    const there = k.guard((async () => {
+      let ok = await go();
+      for (let i = 1; !ok && i <= 3; i++) {
+        k.check();
+        k.stats[`${name}_retry`] = i;
+        ok = await sq.goBranch(st(t), face);
+      }
+      return ok;
+    })());
     // (a breath before the way on shows: he sees it set off from where he stands — and
     // leap on through a pine it only passes — before the chip and the keys turn him
     // toward where it goes)
@@ -486,11 +552,42 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     let toldWait = false;
     /** since when he has been within SEE_D of it with it in his view (−1: not now) */
     let closeFrom = -1;
+    /** since when he has stood right by it (−1: not now): standing there a while, it runs on
+     *  whatever the lens shows (never a wait that cannot finish) */
+    let byFrom = -1;
+    // run 7 (ek-day, design §6.8): its antic while he comes — a moment looking at him first,
+    // then it grooms, nibbles, basks, scolds or looks round, and again while he is still on
+    // his way; as he comes close it sits up and looks at him (it runs on as before)
+    const antic = p.day.antics[wi] ?? 'kijken';
+    let anticNext = Infinity, anticOn = false, anticN = 0, scoldAt = Infinity;
+    const faceHim = (): number => headingTo(sq, k.ranger());
     void there.then((ok) => {
       if (!ok) return;
       arrived = true; sitFrom = k.now; sq.glow(true); void sq.lookAt(me); chatter();
       k.stats[`${name}_arrive_px`] = Math.round(measure().px);
+      k.stats[`${name}_there`] = Math.round(k.now * 10) / 10;
+      anticNext = k.now + ANTIC.first;
     }).catch(() => {});
+    const anticTick = (): void => {
+      if (!arrived) return;
+      const d = dist(k.ranger(), sq);
+      // (its first antic as it sits down, wherever he is — he sees what it does as he comes
+      // up; again while he is still on his way)
+      if (!anticOn && k.now >= anticNext && (anticN === 0 || d > ANTIC.near)) {
+        anticOn = true;
+        anticN += 1;
+        k.stats[`antic_${wi + 1}`] = ANTICS.indexOf(antic);
+        k.stats[`antic_go_${wi + 1}`] = anticN;
+        if (antic === 'mopperen') { chatter(); scoldAt = k.now + 1.05; }
+        void sq.antic(antic, faceHim(), { along: t.branch!.ang + ANTIC.lie }).then((ok) => {
+          if (!anticOn) return;
+          anticOn = false;
+          anticNext = k.now + ANTIC.again;
+          if (ok) void sq.lookAt(me);
+        }).catch(() => {});
+      }
+      if (k.now >= scoldAt) { scoldAt = Infinity; chatter(); }
+    };
     const spot = watchSpot(t);
     const seat = seatOf(t);
     const hint = seeHint(k, name, () => {
@@ -520,14 +617,16 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
         tick: () => {
           hint.tick();
           if (!arrived) return;
-          if (k.now - lastChatter > 3.2) chatter();
+          anticTick();
+          if (k.now - lastChatter > 3.2 && !anticOn) chatter();
           const far = dist(k.ranger(), sq) > 9;
           if (far && !toldWait) { toldWait = true; k.say(c.wacht); } else if (!far && toldWait && dist(k.ranger(), sq) < 6) { toldWait = false; k.say(line); }
         },
         // (close: within SEE_D of it, it well in his view and big enough there (SET_OFF_H, or
         // SET_OFF_WAIT s on) — or right at it, under it, a bit of it showing past his own
         // head — and it sits up on its stub a moment first, even when he is there before
-        // it: it waits for him, looking at him)
+        // it: it waits for him, looking at him; or he has stood right by it BY_WAIT s, where
+        // the lens may not show it — it runs on all the same, never a wait without an end)
         reached: () => {
           if (!arrived || k.now - sitFrom < SIT) return false;
           const d = dist(k.ranger(), sq);
@@ -535,14 +634,24 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
           const close = d <= SEE_D && s.seen;
           if (!close) closeFrom = -1;
           else if (closeFrom < 0) closeFrom = k.now;
+          if (d > SEE_D + 0.6) byFrom = -1;
+          else if (byFrom < 0) byFrom = k.now;
           const big = s.px >= SET_OFF_H * (k.ctx.canvas.clientHeight || 800);
-          return (close && (big || k.now - closeFrom >= SET_OFF_WAIT)) || (d <= AT_IT && sightOf(k, sq, home.trees, 'near').glimpse);
+          if (byFrom >= 0 && k.now - byFrom >= BY_WAIT && !(close || d <= AT_IT)) k.stats[`${name}_by`] = 1;
+          return (close && (big || k.now - closeFrom >= SET_OFF_WAIT)) || (d <= AT_IT && sightOf(k, sq, home.trees, 'near').glimpse)
+            || (byFrom >= 0 && k.now - byFrom >= BY_WAIT);
         },
       });
     } finally {
       hint.off();
     }
     await there;
+    // (it was in the middle of an antic as he came close: it finishes it — a moment more at
+    // most — and sits up facing him; then it is off)
+    if (anticOn) {
+      await k.until(() => !anticOn, ANTIC.grace);
+      if (anticOn) { anticOn = false; scoldAt = Infinity; await k.guard(sq.settleTo(faceHim(), 0.25)); }
+    }
     // it saw him come: a chatter and a flick — and it is off as soon as it is where he
     // sees it (a moment for the lens to swing round after him, at most RUN_ON_WAIT s)
     chatter();
@@ -673,7 +782,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     for (const [wi, t] of route.waits.entries()) {
       const to = route.hops.findIndex((h) => h.tree === t);
       const line = wi === 0 ? c.volg : c.weer;
-      await hop(`wacht-${wi + 1}`, goTo(from, to, headingTo(t, comesFrom(route, wi)), wi === p.nest && wi < route.waits.length - 1 ? { wi, line } : null), t, line);
+      await hop(`wacht-${wi + 1}`, wi, goTo(from, to, headingTo(t, comesFrom(route, wi)), wi === p.nest && wi < route.waits.length - 1 ? { wi, line } : null), t, line);
       from = to + 1;
     }
   } finally {
