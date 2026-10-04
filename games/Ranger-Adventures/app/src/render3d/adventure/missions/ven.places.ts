@@ -33,7 +33,8 @@
 import { anchorInBiome, heightAt, VEN_CENTER, WATER_LEVEL } from '../../Biomes.ts';
 import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import { atLocal, dist, headingTo, segDist, stream, toLocal, type Frame } from '../places.ts';
-import type { Clump } from '../cover-math.ts';
+import { backPoints, type Clump, type Stem, type V3 } from '../cover-math.ts';
+import { fitWindow, type Built } from './ree.window.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import type { Play } from '../../../core/play.ts';
 import type { Skin } from '../../../content/types.ts';
@@ -803,6 +804,31 @@ export function decoySlots(b: Bay, nook: number, decoys: readonly { id: string; 
     out.push({ id: d.id, k: d.k, x: q.x, z: q.z });
   }
   return out;
+}
+
+/** A moss clod's size (m): as long and as high as it lies (ven.home clodGeometry). */
+export const CLOD_LEN = 0.2;
+export const CLOD_H = 0.11;
+
+/** The play's moss clods that lie in an empty nook of its cove (its sedge ring round them). */
+export function nookClods(b: Bay, nook: number, decoys: readonly { k: string; x: number; z: number }[]): Spot[] {
+  return decoys.filter((d) => d.k === 'bush' && b.nooks.some((n) => n.nook !== nook && dist(n, d) < 0.05)).map((d) => ({ x: d.x, z: d.z }));
+}
+
+/**
+ * The search's windows in a cove for the lens at `eye` (the home lays them; the places
+ * test measures them): each moss clod in an empty nook first gets a window fitted to the
+ * level's glimpse — the same ring, the same share showing as the frog — then the frog's
+ * own window last (so it is exactly the level's, whatever a clod's window did to a stem
+ * they share). Pure; changes `stems`.
+ */
+export function fitCove(stems: Stem[], built: readonly Built[], eye: V3, frog: Spot & { yaw: number }, clods: readonly Spot[], glimpse: number,
+  groundY: (x: number, z: number) => number): void {
+  for (const d of clods) {
+    const yaw = headingTo({ x: eye.x, z: eye.z }, d) + 0.9;
+    fitWindow(stems, built, eye, backPoints(d.x, groundY(d.x, d.z), d.z, yaw, CLOD_LEN, CLOD_H), glimpse, { x: d.x, y: 0, z: d.z });
+  }
+  fitWindow(stems, built, eye, backPoints(frog.x, groundY(frog.x, frog.z), frog.z, frog.yaw, FROG_LEN, FROG_H), glimpse, { x: frog.x, y: 0, z: frog.z });
 }
 
 /** Every spot of a cove a moss clod may lie on: its clod slots, then its nooks. */

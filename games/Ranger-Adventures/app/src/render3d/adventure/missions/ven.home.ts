@@ -23,14 +23,14 @@ import type { HomeState, ResidentSpec, Spot } from '../types';
 import { Actor, type ActorEnv } from '../actors';
 import { CoverField } from '../cover';
 import { backPoints, openWindow, type Clump, type V3 } from '../cover-math';
-import { fitWindow, refitWindow, type Built } from './ree.window';
+import { refitWindow, type Built } from './ree.window';
 import { groundDecal, groundStrip } from '../decal';
 import { atLocal, dist, headingTo, stream } from '../places';
 import { heatherGeometry, plantMaterial } from '../../world/Plants';
 import { WATER_LEVEL } from '../../Biomes';
 import {
   BAYS, BAY_IDS, CUSHION, FLOAT_SINK, FROG_H, FROG_LEN, PATH, PATH_HALF, HIDE, BENCH, MARKER,
-  allStations, carpetAt, clodSpots, coveClumps, inCarpet, pathR, polar, type BayId, type Carpet, type FrogSpot, type VenLaid, type ViewSpec,
+  allStations, carpetAt, clodSpots, coveClumps, fitCove, inCarpet, nookClods, pathR, polar, type BayId, type Carpet, type FrogSpot, type VenLaid, type ViewSpec,
 } from './ven.places';
 
 /** A look-alike laid in the play's cove, as the search takes it. */
@@ -590,8 +590,8 @@ export class VenHome implements HomeDressing {
     if (p) {
       const view = BAYS[p.laid.bay].views.search[p.laid.side];
       const lens = this.env.lensFor(asTheKitFrames(view));
-      const back = backPoints(p.frog.x, this.g(p.frog.x, p.frog.z), p.frog.z, p.frog.yaw, FROG_LEN, FROG_H);
-      fitWindow(this.cover.stems, this.built, lens.cam, back, p.glimpse, { x: p.frog.x, y: 0, z: p.frog.z });
+      // (a moss clod in an empty nook gets a window as the frog has: it shows as much as he does)
+      fitCove(this.cover.stems, this.built, lens.cam, p.frog, nookClods(BAYS[p.laid.bay], p.laid.nook, p.decoys), p.glimpse, this.g);
       // (a stem changed by the fit keeps its built height as h0: drawn as wide as it was)
       this.cover.stems.forEach((s, i) => { if (Math.abs(s.h - this.built[i].h) > 1e-6) s.h0 = this.built[i].h; });
     }
@@ -614,11 +614,22 @@ export class VenHome implements HomeDressing {
     this.wellT = -1;
   }
 
-  /** The search's own fit for the lens it really stands at (searchBeat's `fit`). */
+  /** The search's own fit for the lens it really stands at (searchBeat's `fit`): the
+   *  frog's window, and again each nook clod's (a refit starts from the stems as built). */
   fitGlimpse(eye: V3, back: readonly V3[], share: number): number[] {
     const f = this.laid?.frog;
+    const before = this.cover.stems.map((s) => s.h);
     const changed = refitWindow(this.cover.stems, this.built, eye, back, share, { x: f?.x ?? 0, y: 0, z: f?.z ?? 0 });
-    return changed;
+    const p = this.laid;
+    if (!changed.length || !p) return changed;
+    // (the refit started from the stems as built: the nook clods' windows, then his again)
+    fitCove(this.cover.stems, this.built, eye, p.frog, nookClods(BAYS[p.laid.bay], p.laid.nook, p.decoys), share, this.g);
+    const out: number[] = [];
+    this.cover.stems.forEach((s, i) => {
+      if (Math.abs(s.h - this.built[i].h) > 1e-6) s.h0 = this.built[i].h;
+      if (Math.abs(s.h - before[i]) > 1e-6) out.push(i);
+    });
+    return out;
   }
 
   /** The song's picture (the lens looks back from over the water): the sedge between it and

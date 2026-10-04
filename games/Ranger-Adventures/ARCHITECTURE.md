@@ -156,13 +156,20 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          view and the jay's way back are pure and pinned by its test): the four
                          missions met first; run 7: ven (the north bank of the ven: a shore
                          path, three coves of sedge, cotton-grass and veenmos where the
-                         heikikkers live; ven.places.ts the coves, two stations a cove and
+                         heikikkers live; ven.places.ts the coves — each with six nooks of
+                         its own, searched from either side, their place in the search
+                         picture pinned (`px`) so a play keeps the frog away from where it
+                         sat in the plays before (`venLayout`) — two stations a cove and
                          `wayOf` — his way there with the adder, the soft moss and the dry
                          path in the dagnacht trial's own order (`venOrder`), the listening
-                         stops; ven.listen.ts the chorus he follows by ear (a run hushes it);
-                         ven.home.ts the bank and `Frog`, an Actor whose throat swells, that
-                         floats, leaps and dives; ven.ts the beats: look, follow, the three
-                         moments with his feet, the search, the song, the plop)
+                         stops, the song at the water's edge (`singOf`) and the answer's
+                         pulled-back view; ven.listen.ts the chorus he follows by ear (a run
+                         hushes it); ven.home.ts the bank (one ground mesh; the coves' sedge,
+                         cotton-grass and clods one detail resting from the middle cove) and
+                         `Frog`, an Actor whose throat bubble swells, that floats, hops,
+                         leaps and dives (its body rests beyond 18 m); ven.ts the beats: look,
+                         follow, the three moments with his feet, the search, the song, the
+                         answer, the plop)
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          a `shy` resident slips into cover when he comes near (per state);
                          a home rests beyond 40-46 m, its small things (`env.detail(at)`:
@@ -182,7 +189,9 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
 - *the lens*: `await k.frame({ at, heading, halfW, halfD, pitchDeg, include }, { face })`
   holds a framed view (a Stage fit at a world anchor, the ranger's spot among `include`),
   eased, ≤ 90°/s, a cut under reduced motion (run 7: `{ dip: true }` — a view that would turn
-  more than 90° is one soft dip-cut, the jeep's warm veil, never a swing round him); `k.free()` gives the follow camera back with a
+  more than 90° is one soft dip-cut, the jeep's warm veil, never a swing round him; a view's
+  `near` and `lensUp` let the lens come nearer than 3 m and lower than 1.4 m over the ground —
+  the ven's singing frog seen from just over the water); `k.free()` gives the follow camera back with a
   blended hand-over; `await k.look(spot, line, hold, { turn })` is one calm look
   (binoculars) and back (`turn`: he ends facing it); `k.ui.watching(on)` draws a long
   watch through the glasses' two round lenses (the ree's hide; under the cards, no zoom).

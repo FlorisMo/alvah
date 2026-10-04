@@ -30,9 +30,9 @@ import { reeClearings } from './ree.places.ts';
 import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import {
-  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, CARPET_WET, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY,
+  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
-  above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, decoySlots, inCarpet,
+  above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, decoySlots, fitCove, inCarpet, nookClods,
   lastVenVariants, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
   type BayId, type FrogSpot, type Side, type ViewSpec,
 } from './ven.places.ts';
@@ -250,6 +250,33 @@ test('the search: every nook partly visible at every level, off the middle, big 
   }
   const xs = places.map((p) => p.x), ys = places.map((p) => p.y);
   assert.ok(Math.max(...xs) - Math.min(...xs) > 450 && Math.max(...ys) - Math.min(...ys) > 180, 'the nooks spread over the picture, across and up and down');
+});
+
+test('a moss clod in an empty nook shows as much as the frog does, and the frog still the level\'s share', () => {
+  for (const id of BAY_IDS) {
+    const b = BAYS[id];
+    const { stems } = growStems(coveClumps(b), 61, groundY);
+    const built = stems.map((s) => ({ h: s.h, lx: s.lx, lz: s.lz, r: s.r }));
+    for (const f of b.nooks) {
+      const cam = lensOf(b.views.search[f.side]);
+      const eye = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
+      // (the worst case: a clod in every other nook)
+      const clods = nookClods(b, f.nook, b.nooks.map((n) => ({ k: 'bush', x: n.x, z: n.z })));
+      assert.equal(clods.length, 5);
+      for (const band of [1, 4, 6]) {
+        const g = knobsFor('zoeken', band).glimpse;
+        const st = stems.map((q) => ({ ...q }));
+        fitCove(st, built, eye, f, clods, g, groundY);
+        const frogShare = visibleShare(backPoints(f.x, groundY(f.x, f.z), f.z, f.yaw, FROG_LEN, FROG_H), eye, st);
+        assert.ok(frogShare >= g * 0.6 - 1e-9 && frogShare <= g * 1.6 + 1e-9, `cove ${id} nook ${f.nook} band ${band}: the frog shows ${r2(frogShare)} (glimpse ${g})`);
+        for (const d of clods) {
+          const yaw = headingTo({ x: eye.x, z: eye.z }, d) + 0.9;
+          const sh = visibleShare(backPoints(d.x, groundY(d.x, d.z), d.z, yaw, CLOD_LEN, CLOD_H), eye, st);
+          assert.ok(sh >= g * 0.5 - 1e-9 && sh <= Math.max(g * 2, g + 0.25) + 1e-9, `cove ${id}, the frog in nook ${f.nook}, band ${band}: a clod at ${at(d)} shows ${r2(sh)} (glimpse ${g})`);
+        }
+      }
+    }
+  }
 });
 
 test('the song: the frog big and three-quarters toward the lens (his throat to it), the boy whole beside him; the answer in the picture; the plop into the water', () => {
