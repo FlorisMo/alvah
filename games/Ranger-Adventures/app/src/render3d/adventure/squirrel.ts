@@ -23,8 +23,8 @@ import * as THREE from 'three';
 import { Actor, type ActorEnv, type Lead } from './actors';
 import { acornGeometry, acornMaterial } from './acorn';
 import {
-  SQ, barkRadius, climbPlan, dashDirectPlan, dashPlan, digBob, dismountPlan, flick, hold, leapPlan, mountPlan, planTime,
-  poseAt, sqStream, trunkPose, turn, wrap, type OnTrunk, type Segment, type SqPose, type Trunk,
+  SQ, anticPlan, barkRadius, climbPlan, dashDirectPlan, dashPlan, digBob, dismountPlan, flick, hold, leapPlan, mountPlan, planTime,
+  poseAt, settlePlan, sqStream, tailAt, trunkPose, turn, wrap, type AnticKind, type OnTrunk, type Segment, type SqPose, type Trunk,
 } from './squirrel-math';
 
 /** Where on a tree the squirrel sits to wait and watch: a branch (a stub sticking out of
@@ -87,6 +87,15 @@ export class Squirrel extends Actor {
   private readonly paws = new THREE.Vector3();
   private eatFrom = -9;
   private eatFor = 1;
+  /** run 7 (ek-day): the pine cone it nibbles in its paws (an antic), stripped smaller as it
+   *  goes; the stripped scales fall (`onScale`: the home drops one at x, y, z) */
+  private readonly cone = new THREE.Mesh(pineConeGeometry(), pineConeMaterial());
+  private coneFrom = -9;
+  private coneFor = 1;
+  private scaleAt = 0;
+  onScale: ((x: number, y: number, z: number) => void) | null = null;
+  /** the tail's held bend now (an antic's), eased so a cut-short antic never snaps it */
+  private tailHold = 0;
 
   /** how much warm light its fur catches (the emissive's strength): see `dress` */
   private readonly warmth: number;
@@ -114,6 +123,9 @@ export class Squirrel extends Actor {
     this.nut.name = 'acorn-in-mouth';
     this.nut.visible = false;
     this.group.add(this.nut);
+    this.cone.name = 'pine-cone-in-paws';
+    this.cone.visible = false;
+    this.group.add(this.cone);
     void this.ready.then(() => this.dress());
   }
 
@@ -411,6 +423,39 @@ export class Squirrel extends Actor {
     this.eatFrom = -9;
     this.carry(false);
     return ok;
+  }
+
+  /**
+   * Run 7 (ek-day, additive): one of its antics where it sits (design §6.8: squirrel-math
+   * `anticPlan`) — it looks round, grooms its tail, nibbles a pine cone (the cone in its paws,
+   * stripped smaller, its scales falling through `onScale`), lies flat in the sun along its
+   * branch (`along`: the way the stub points), or scolds — and sits up facing `face` again.
+   * Resolves true once played out, false when something else took over.
+   */
+  async antic(kind: AnticKind, face: number, opts: { along?: number } = {}): Promise<boolean> {
+    const plan = anticPlan(kind, this.pose, face, opts);
+    if (kind === 'knabbelen') {
+      this.carry(false);
+      this.cone.visible = true;
+      this.cone.scale.setScalar(1);
+      this.cone.position.copy(this.paws);
+      this.coneFrom = this.t;
+      this.coneFor = planTime(plan);
+    }
+    const ok = await this.run(plan, this.where);
+    this.coneFrom = -9;
+    this.cone.visible = false;
+    return ok;
+  }
+
+  /** Run 7 (ek-day): from an antic he cut short, calmly back to sitting up facing `face` on
+   *  its perch (on a branch: its seat's height). */
+  settleTo(face: number, secs = 0.3): Promise<boolean> {
+    const w = this.where;
+    const alt = w.kind === 'branch' ? w.tree.branch.h : w.kind === 'stump' ? w.top : this.pose.alt;
+    this.coneFrom = -9;
+    this.cone.visible = false;
+    return this.run(settlePlan(this.pose, face, secs, this.tailHold, alt), w);
   }
 
   /** Put it at (x, z) at once — on its branch when (x, z) is one of its trees (the world
@@ -792,10 +837,26 @@ export class Squirrel extends Actor {
       const u = Math.min(1, (this.t - this.eatFrom) / Math.max(0.1, this.eatFor));
       this.nut.scale.setScalar(reduced ? 1 : 1 - 0.65 * Math.floor(u * 5) / 5);
     }
+    // the pine cone it nibbles: stripped a little thinner bite by bite, its scales falling
+    // from its paws (run 7, an antic)
+    if (this.coneFrom > -9 && this.cone.visible) {
+      const u = Math.min(1, (this.t - this.coneFrom) / Math.max(0.1, this.coneFor));
+      const k = reduced ? 1 : 1 - 0.45 * Math.floor(u * 6) / 6;
+      this.cone.scale.set(k, 1 - 0.15 * (1 - k), k);
+      if (!reduced && this.pose.act === 'eat' && this.onScale && this.t >= this.scaleAt) {
+        this.scaleAt = this.t + 0.2;
+        this.group.updateWorldMatrix(true, false);
+        V.copy(this.paws).applyMatrix4(this.group.matrixWorld);
+        this.onScale(V.x, V.y, V.z);
+      }
+    }
     // the rim eases on and off (a cut under reduced motion)
     this.rim.value = reduced ? this.rimTo : this.rim.value + (this.rimTo - this.rim.value) * Math.min(1, dt * 3);
-    // the tail: a flick lifts it and lets it fall (still under reduced motion)
-    this.tail.value = reduced ? 0 : flick(this.t - this.flickAt) * 0.55 + (this.pose.act === 'run' || this.pose.act === 'leap' ? -0.18 : 0);
+    // the tail: a flick lifts it and lets it fall (still under reduced motion); run 7: an
+    // antic holds it bent (grooming it, stretched out in the sun), eased in and out
+    const want = this.plan.length ? tailAt(this.plan, Math.min(this.planT, planTime(this.plan))) : 0;
+    this.tailHold = reduced ? 0 : this.tailHold + (want - this.tailHold) * Math.min(1, dt * 9);
+    this.tail.value = reduced ? 0 : flick(this.t - this.flickAt) * 0.55 + (this.pose.act === 'run' || this.pose.act === 'leap' ? -0.18 : 0) + this.tailHold;
     this.apply(reduced);
   }
 
@@ -851,6 +912,8 @@ export class Squirrel extends Actor {
   override dispose(): void {
     this.nut.geometry.dispose();
     (this.nut.material as THREE.Material).dispose();
+    this.cone.geometry.dispose();
+    (this.cone.material as THREE.Material).dispose();
     super.dispose();
   }
 
@@ -860,6 +923,36 @@ export class Squirrel extends Actor {
     const p = this.pose;
     return `act=${p.act} alt=${p.alt.toFixed(2)} perch=${this.where.kind} plan=${this.plan.length} t=${this.planT.toFixed(1)}/${planTime(this.plan).toFixed(1)}`;
   }
+}
+
+/**
+ * Run 7 (ek-day): a Scots pine cone, small and procedural (one geometry, vertex colours: one
+ * draw call wherever it is): an egg of scales, rows of darker and lighter brown, ~7 cm long
+ * (a little generous, like the acorn, so a child sees it in a squirrel's paws or dropping
+ * from a pine), its middle at the origin, standing along +y.
+ */
+export const PINE_CONE_LEN = 0.07;
+export function pineConeGeometry(): THREE.BufferGeometry {
+  const g = new THREE.SphereGeometry(0.5, 8, 9).toNonIndexed();
+  const p = g.attributes.position as THREE.BufferAttribute;
+  const c = new Float32Array(p.count * 3);
+  const col = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i);
+    // an egg: fuller below its middle, a blunt tip; the scales' rows as bands of colour
+    const k = 0.62 * (1 - 0.18 * y) * (1 + 0.06 * Math.cos(Math.atan2(p.getZ(i), p.getX(i)) * 8));
+    p.setXYZ(i, p.getX(i) * k, y, p.getZ(i) * k);
+    col.set(Math.floor((y + 0.5) * 7) % 2 ? '#7c5232' : '#5c3a22');
+    c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  g.deleteAttribute('uv');
+  g.computeVertexNormals();
+  g.scale(PINE_CONE_LEN, PINE_CONE_LEN, PINE_CONE_LEN);
+  return g;
+}
+export function pineConeMaterial(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, emissive: '#2a170a', emissiveIntensity: 0.5 });
 }
 
 /** The pose at the end of `plan` (or `from` when it is empty). */

@@ -10,8 +10,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  SQ, barkRadius, climbPlan, dashDirectPlan, dashPath, dashPlan, dismountPlan, flick, leapPlan, lineClear, mountPlan,
-  planTime, poseAt, sqStream, topSpeeds, trunkOutline, trunkPose, trunkUpright, type Segment, type SqPose, type Trunk,
+  SQ, ANTIC_KINDS, anticPlan, barkRadius, climbPlan, dashDirectPlan, dashPath, dashPlan, dismountPlan, flick, leapPlan, lineClear, mountPlan,
+  patPlan, planTime, poseAt, settlePlan, sqStream, tailAt, topSpeeds, trunkOutline, trunkPose, trunkUpright, type Segment, type SqPose, type Trunk,
 } from './squirrel-math.ts';
 
 const pine: Trunk = { x: 3, z: -2, H: 13, species: 'prop-pine-scots' };
@@ -178,4 +178,70 @@ test('sight: a trunk hides a squirrel behind it, even one whose body sticks out 
   const body = [{ x: 3, z: 0, y0: 0, y1: 1.45, r: () => 0.22 }];
   assert.equal(lineClear(eye, { x: 0, y: 1.3, z: 0 }, body, 0.12), true, 'over his head');
   assert.equal(lineClear(eye, { x: 0, y: 0.15, z: 0 }, body, 0.12), false, 'on the ground behind him: his body hides it');
+});
+
+/* ------------------------------------------------- run 7 (ek-day): its day ---- */
+
+test('its antics: each one where it sits, 1.5-3 s, calm, its tail at rest after, back up facing him', () => {
+  const wrapA = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+  // on a stub (1.1 m up), facing him; and on the ground (the den's foot, its stump's top)
+  for (const seat of [{ ...sitting(2, -1, 0.4), alt: 1.1 }, sitting(-3, 4, 2.5), { ...sitting(0, 0, -1.2), alt: 0.6 }]) {
+    for (const face of [seat.yaw, seat.yaw + 0.6, seat.yaw - 1.1]) {
+      for (const kind of ANTIC_KINDS) {
+        const plan = anticPlan(kind, seat, face, { along: seat.yaw + 2 });
+        const T = planTime(plan);
+        assert.ok(T >= 1.5 && T <= 3.0, `${kind}: ${T.toFixed(2)} s`);
+        assert.ok(worstJump(plan) < 0.02, `${kind}: no jump (${worstJump(plan).toFixed(3)} m)`);
+        let maxTurn = 0, prev = poseAt(plan, 0);
+        for (let t = 0; t <= T + 1e-9; t += 1 / 60) {
+          const p = poseAt(plan, t);
+          // it never leaves its seat (so never a step toward the lens or anyone)
+          assert.ok(Math.hypot(p.x - seat.x, p.z - seat.z) < 1e-9, `${kind}: on its seat`);
+          assert.ok(p.alt >= seat.alt - 0.05 && p.alt <= seat.alt + 0.03, `${kind}: at its seat's height (${(p.alt - seat.alt).toFixed(3)})`);
+          assert.equal(p.roll, seat.roll, `${kind}: never rolled over`);
+          assert.ok(p.pitch > -0.3 && p.pitch < 1.6, `${kind}: pitch ${p.pitch.toFixed(2)}`);
+          const tail = tailAt(plan, t);
+          assert.ok(tail >= -0.5 && tail <= 1.0, `${kind}: its tail held at ${tail.toFixed(2)}`);
+          maxTurn = Math.max(maxTurn, Math.abs(wrapA(p.yaw - prev.yaw)) * 60);
+          prev = p;
+        }
+        // a calm turn: never a snap round (≤ 9 rad/s, a squirrel's quick look)
+        assert.ok(maxTurn <= 9, `${kind}: turns at most ${maxTurn.toFixed(1)} rad/s`);
+        const end = poseAt(plan, T);
+        assert.ok(Math.abs(wrapA(end.yaw - face)) < 1e-6 && Math.abs(end.pitch) < 1e-6 && Math.abs(end.alt - seat.alt) < 1e-6, `${kind}: sitting up facing him again`);
+        assert.ok(Math.abs(tailAt(plan, T)) < 1e-6, `${kind}: its tail at rest at the end`);
+        assert.ok(topSpeeds(plan).run === 0 && topSpeeds(plan).leap === 0, `${kind}: it goes nowhere`);
+      }
+    }
+  }
+  // what tells them apart in a 40 px squirrel: grooming bends it to its tail, sunning lays it
+  // flat, nibbling holds a cone (act 'eat'), scolding jolts it, looking turns it round
+  const seat = { ...sitting(0, 0, 0), alt: 1.1 };
+  const most = (kind: (typeof ANTIC_KINDS)[number], f: (p: SqPose, t: number) => number): number => {
+    const plan = anticPlan(kind, seat, 0, { along: 1.5 });
+    let m = -Infinity;
+    for (let t = 0; t <= planTime(plan); t += 0.02) m = Math.max(m, f(poseAt(plan, t), t));
+    return m;
+  };
+  assert.ok(most('zonnen', (p) => p.pitch) > 1.2, 'in the sun it lies flat');
+  assert.ok(most('poetsen', (p) => p.pitch) > 0.45 && most('poetsen', (_p, t) => tailAt(anticPlan('poetsen', seat, 0), t)) > 0.8, 'grooming: bent to its curled tail');
+  assert.ok(most('knabbelen', (p) => (p.act === 'eat' ? 1 : 0)) === 1, 'nibbling: a cone in its paws');
+  assert.ok(most('kijken', (p) => Math.abs(p.yaw)) > 0.6, 'looking round');
+  assert.ok(most('mopperen', (p) => p.alt - seat.alt) > 0.012, 'scolding: it stamps');
+});
+
+test('cut short, it sits up calmly; it pats an acorn down where it sits', () => {
+  const lying = { ...sitting(1, 1, 0.3), alt: 1.07, pitch: 1.3 };
+  const up = settlePlan(lying, -0.5, 0.3, -0.35, 1.1);
+  const end = poseAt(up, planTime(up));
+  assert.ok(Math.abs(end.pitch) < 1e-9 && Math.abs(end.alt - 1.1) < 1e-9 && Math.abs(end.yaw + 0.5) < 1e-9);
+  assert.ok(Math.abs(tailAt(up, 0) + 0.35) < 1e-9 && Math.abs(tailAt(up, planTime(up))) < 1e-9, 'its tail eased back');
+  const pat = patPlan(sitting(2, 3, 1), 2);
+  assert.ok(planTime(pat) >= 1.0 && planTime(pat) <= 2.0, `the pats take ${planTime(pat).toFixed(2)} s`);
+  for (let t = 0; t <= planTime(pat); t += 0.02) {
+    const p = poseAt(pat, t);
+    assert.ok(Math.hypot(p.x - 2, p.z - 3) < 1e-9 && p.alt === 0, 'on the spot, on the ground');
+  }
+  assert.ok(worstJump(pat) < 0.02);
+  assert.equal(poseAt(pat, planTime(pat)).act, 'sit');
 });

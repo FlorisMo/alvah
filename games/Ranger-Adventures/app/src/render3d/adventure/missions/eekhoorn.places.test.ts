@@ -21,6 +21,7 @@ import {
   seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
+  drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, type Drawn,
   NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
 } from './eekhoorn.places.ts';
@@ -118,8 +119,9 @@ test('the three ways: each its own way and hide tree, out of the glade and the l
     assert.ok(dist(a, b) > 2.2, `${a.id} and ${b.id} stand apart (${dist(a, b).toFixed(2)} m)`);
   }
   // few new pines: the view over this wood is near its triangle budget (a pine near the
-  // lens costs 12k); the old home planted six trees
-  assert.ok(HOME_TREES.length <= 11, `${HOME_TREES.length} home trees`);
+  // lens costs 12k); the old home planted six trees; run 7 (ek-day): one more, the right
+  // way's second hide pine (the simple copy until it plays round it: homeTreeNear)
+  assert.ok(HOME_TREES.length <= 12, `${HOME_TREES.length} home trees`);
 });
 
 test('each way is a readable follow: the first wait near the ring, waits close, 2-3 waits, 14-26 m, leaps only between close pines and onward', () => {
@@ -692,7 +694,8 @@ test('a play\'s draw: from its own forks, replayed by its seed, never the last p
   for (let s = 1; s <= 30; s++) {
     const a = drawEekhoornPlay(newPlay('eekhoorn', s, 1), null), b = drawEekhoornPlay(newPlay('eekhoorn', s, 1), null);
     assert.deepEqual(a, b, `seed ${s} replays`);
-    assert.deepEqual(parseVariant(variantOf(a)), { route: a.route, veld: a.veld, buren: a.buren }, 'its variant reads back');
+    assert.deepEqual(parseVariant(variantOf(a)), { route: a.route, veld: a.veld, buren: a.buren, nest: a.nest, den: a.day.den, einde: a.day.einde, verrassing: a.day.verrassing, verstop2: a.day.verstop2 }, 'its variant reads back');
+    assert.deepEqual(parseVariant(variantOf({ route: a.route, veld: a.veld, buren: a.buren })), { route: a.route, veld: a.veld, buren: a.buren }, 'an older play\'s variant (no day) reads back');
   }
   // plays in a row, each after the last two: three in a row are three ways, three
   // patterns, three trios; each trio two neighbours another than the last
@@ -744,6 +747,81 @@ test('a play\'s draw: from its own forks, replayed by its seed, never the last p
   // the history keeps it whole after the mood and a rare (≤ 60 characters)
   const va = `mood:ochtendnevel,rare:donkere-eekhoorn,${VARIANT_KEY}:${variantOf({ route: 'midden', veld: 'spiegel-v', buren: { tak: 'roodborst', stam: 'grote-bonte-specht', top: 'koekoek' } })}`;
   assert.ok(va.length <= 60, `the longest variant line is ${va.length} characters`);
+});
+
+test('the squirrel\'s day (ek-day): from its own forks, replayed by its seed; three plays in a row, three endings and three dens; an antic per wait, none twice', () => {
+  for (let s = 1; s <= 30; s++) {
+    const a = drawEekhoornPlay(newPlay('eekhoorn', s, 1), null, { mood: 'zonnig' });
+    assert.deepEqual(a, drawEekhoornPlay(newPlay('eekhoorn', s, 1), null, { mood: 'zonnig' }), `seed ${s} replays its day`);
+    // (its day never moves the way, the pattern, the trio or the finds: forks of its own)
+    const b = drawEekhoornPlay(newPlay('eekhoorn', s, 1), null);
+    assert.deepEqual({ ...a, day: null }, { ...b, day: null }, `seed ${s}: the day draws from forks of its own`);
+  }
+  const moods = ['gouden-uur', 'ochtendnevel', 'zonnig', 'bewolkt'];
+  const seen: Drawn[] = [];
+  let surprises = 0, second = 0, dry = 0;
+  const kinds = new Set<string>(), dens = new Set<string>(), ends = new Set<string>(), antics = new Set<string>();
+  const N = 300;
+  for (let s = 1; s <= N; s++) {
+    const recent = seen.slice(-2).reverse();
+    const mood = moods[s % 4];
+    const rare = s % 7 === 0 ? 'donkere-eekhoorn' : null;
+    const p = drawEekhoornPlay(newPlay('eekhoorn', 7000 + s, s), recent, { mood, rare });
+    const d = p.day;
+    // read back from the history line (as the next play reads it)
+    const back = parseVariant(variantOf(p))!;
+    assert.deepEqual([back.den, back.einde, back.verrassing, back.verstop2, back.nest], [d.den, d.einde, d.verrassing, d.verstop2, p.nest]);
+    // the den: never one of the last two plays'; with the dark visitor one that ends on its stub
+    if (rare) assert.ok(d.den === 'tak' || d.den === 'spiraal', `play ${s}: the dark visitor meets it on its stub (${d.den})`);
+    else for (const r of recent) assert.notEqual(d.den, r.den, `play ${s}: another den than lately`);
+    // the ending: never one of the last two plays' (three plays, three endings)
+    for (const r of recent) assert.notEqual(d.einde, r.einde, `play ${s}: another ending than lately`);
+    // an antic per wait, none twice; in the sun only in a sunny light
+    assert.equal(d.antics.length, ROUTES[p.route].waits.length);
+    assert.equal(new Set(d.antics).size, d.antics.length, `play ${s}: no antic twice`);
+    if (!SUN_MOODS.includes(mood)) assert.ok(!d.antics.includes('zonnen'), `play ${s}: no sunning in the ${mood}`);
+    // a surprise: never the last play's; the drum only with the great spotted woodpecker
+    if (d.verrassing !== 'geen') { surprises += 1; if (recent[0]?.verrassing && recent[0].verrassing !== 'geen') assert.notEqual(d.verrassing, recent[0].verrassing, `play ${s}: another surprise`); }
+    if (d.verrassing === 'roffel') assert.equal(p.buren.stam, 'grote-bonte-specht');
+    // a second hide about 1 in 3, and never three plays without one
+    if (d.verstop2) { second += 1; dry = 0; } else { dry += 1; assert.ok(dry <= 2 || s <= 2, `play ${s}: three plays without a second hide`); }
+    kinds.add(d.verrassing); dens.add(d.den); ends.add(d.einde); d.antics.forEach((x) => antics.add(x));
+    seen.push(back);
+  }
+  assert.ok(surprises / N > 0.55 && surprises / N < 0.8, `a surprise in ${surprises} of ${N} plays`);
+  assert.ok(second / N > 0.28 && second / N < 0.5, `a second hide in ${second} of ${N} plays`);
+  assert.deepEqual([...kinds].sort(), ['denappel', 'gaai', 'geen', 'roffel']);
+  assert.deepEqual([...dens].sort(), [...DEN_KINDS].sort());
+  assert.deepEqual([...ends].sort(), [...EINDES].sort());
+  assert.deepEqual([...antics].sort(), [...ANTICS].sort());
+  // a fresh save (no history): a free draw
+  const fresh = drawDay(newPlay('eekhoorn', 3, 1), { route: 'zuid', buren: FIRST_TRIO, recent: [] });
+  assert.ok(DEN_KINDS.includes(fresh.den) && EINDES.includes(fresh.einde));
+  // the history keeps the whole day after the longest mood and rare (≤ 60 characters)
+  const longest = drawEekhoornPlay(newPlay('eekhoorn', 11, 1), null);
+  const va = `mood:ochtendnevel,rare:donkere-eekhoorn,${VARIANT_KEY}:${variantOf({ ...longest, route: 'midden', veld: 'spiegel-v', buren: { tak: 'roodborst', stam: 'grote-bonte-specht', top: 'koekoek' } })}`;
+  assert.ok(va.length <= 60, `the longest variant line is ${va.length} characters`);
+  // an old save's history (a variant without its day) still reads, and draws freely
+  assert.equal(lastVariants([{ m: 'eekhoorn', sd: 1, va: `mood:zonnig,${VARIANT_KEY}:n-u-mbr,nest:n1` }])[0].den, undefined);
+});
+
+test('the second hide (ek-day): a close pine of each way, in its own open ring, never one the way waits at', () => {
+  for (const id of ROUTE_IDS) {
+    const t2 = SECOND_HIDE[id], h = ROUTES[id].hide;
+    assert.notEqual(t2, h);
+    const d = dist(t2, h);
+    assert.ok(d >= 3.8 && d <= 5.2, `${id}: ${t2.id} stands ${d.toFixed(2)} m from ${h.id}`);
+    assert.ok(!ROUTES[id].waits.includes(t2), `${id}: not a pine it waits at`);
+    assert.ok(dist(t2, GLADE_RING) > GLADE_RING.r && dist(t2, LENS_ROOM) > LENS_ROOM.r, `${id}: ${t2.id} out of the glade and the lens room`);
+    assert.ok(dist(t2, P.stand) <= 11, `${id}: the glade ${dist(t2, P.stand).toFixed(1)} m on`);
+    for (const s of SCATTER) assert.ok(dist(t2, s) > 4.85, `${id}: ${t2.id} leaves the scattered pine standing`);
+  }
+  assert.ok(ALL_HIDE_TREES.length === 4, `${ALL_HIDE_TREES.length} trees it hides round`);
+  const clear = eekhoornTreeClear(), plants = eekhoornClearings();
+  for (const t of ALL_HIDE_TREES) {
+    assert.ok(clear.some((c) => dist(c, t) < 0.01 && c.r >= 4.6), `${t.id}: its open ring`);
+    assert.ok(plants.some((c) => dist(c, t) < 0.01 && c.r >= 4.2), `${t.id}: no fern round it`);
+  }
 });
 
 /* ------------------------------------------------ what he can find (run 7) ---- */

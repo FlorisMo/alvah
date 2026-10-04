@@ -27,7 +27,7 @@ import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { atLocal, dist, headingTo, segDist, uniformLocal, type Frame } from '../places.ts';
-import { barkRadius, trunkFadeUpright, trunkOutline } from '../squirrel-math.ts';
+import { ANTIC_KINDS, barkRadius, trunkFadeUpright, trunkOutline, type AnticKind } from '../squirrel-math.ts';
 import type { TreeStub } from '../../world/Forest.ts';
 
 /** The eekhoorn marker: the bos anchor it has always had (the test checks it). */
@@ -169,6 +169,14 @@ const WAY_SPECS: Readonly<Record<RouteId, readonly Spec[]>> = {
 /** The way that plants each shared tree is laid first (its stub is that way's wait). */
 const PLANT_ORDER: readonly RouteId[] = ['noord', 'zuid', 'midden'];
 
+/** Run 7 (ek-day, design §6.8): the pine of each way it hides round a SECOND time on some
+ *  plays ("Nog een keer!"), close to its first hide tree. The old line's hide pine and the
+ *  left way's stand 4.2 m apart, each the other's; the right way's is a pine of its own
+ *  4.7 m south-west of its hide pine, toward the glade (open forest floor: no other tree of
+ *  the wood there, `__ranger.treeSpots()` 2026-10-04). Each in its own open ring, as a hide
+ *  tree (the places test plays hide-and-seek round it from where the first one is found). */
+const Z5 = { id: 'z5', x: 20.3, z: -61.3, h: 13.6, rotY: 4.4 } as const;
+
 /** The trees of the home (the forest draws them with its own; the scatter keeps clear).
  *  [0] its den by the marker; then every way's trees; then the glade's oak and the pine
  *  by the store. */
@@ -201,6 +209,10 @@ export const HOME_TREES: readonly HomeTree[] = (() => {
   // the pine by the store, left of the stump: a small bird sits on its dead stub, a
   // woodpecker or a nuthatch on its bark, and after the mission the squirrel lives in it
   out.push({ id: 'storePine', ...g(-2.45, 1.7), species: 'prop-pine-scots', h: 12, rotY: 3.3, branch: { ang: headingTo(g(-2.45, 1.7), CALLERS_STAND) - 0.6, h: 1.75, out: 0.34 } });
+  // run 7 (ek-day): the right way's second hide pine (its stub where it lands from the
+  // hide pine before, as on a pine it passes)
+  const z4 = out.find((t) => t.id === 'z4')!;
+  out.push({ ...Z5, species: 'prop-pine-scots', branch: { ang: headingTo(Z5, z4) + 0.2, h: 1.55, out: 0.26 } });
   return out;
 })();
 
@@ -1026,30 +1038,75 @@ export function jayStep(step: number, steps: number): Spot {
  *  its caching pattern (and the look of its cushions), its three neighbours; run 7 (its
  *  finds, design §6.7): which wait tree of the way carries its nest (`nest`: an index into
  *  `nestTrees(route)`) and the look of it, and at which of the way's two dining spots its
- *  gnawed cones lie (`kegels`) and how they lie. */
-export interface EekhoornPlay { route: RouteId; veld: FieldSym; veldSeed: number; buren: Trio; nest: number; nestSeed: number; kegels: DiningId; kegelSeed: number }
+ *  gnawed cones lie (`kegels`) and how they lie; run 7 (ek-day, design §6.8): the
+ *  squirrel's own day (`day`). */
+export interface EekhoornPlay { route: RouteId; veld: FieldSym; veldSeed: number; buren: Trio; nest: number; nestSeed: number; kegels: DiningId; kegelSeed: number; day: Day }
+
+/* ------------------------------------------------- the squirrel's day (ek-day) ---- */
+
+/** How it is when he comes to the marker (design §6.8, `den`): on its stub (as it always
+ *  was), hanging head down on the trunk under it, nibbling a pine cone at the pine's foot,
+ *  or a spiral run up the trunk to its stub as he arrives. */
+export type DenKind = 'tak' | 'omlaag' | 'voet' | 'spiraal';
+export const DEN_KINDS: readonly DenKind[] = ['tak', 'omlaag', 'voet', 'spiraal'];
+/** How the mission ends (`einde`): it eats an acorn on its stump (as it always did), it
+ *  buries one last acorn by the stump and pats it down (a forgotten one: the seedling a
+ *  later visit finds), or it grooms on its stump with its tail curled. */
+export type Einde = 'eet' | 'begraaf' | 'poets';
+export const EINDES: readonly Einde[] = ['eet', 'begraaf', 'poets'];
+/** One small surprise on a walk (`verrassing`), or none: a pine cone drops beside his path,
+ *  the jay buries an acorn of its own ahead of him, a drum roll from the glade (only when
+ *  the great spotted woodpecker is today's neighbour on the bark). */
+export type Verrassing = 'geen' | 'denappel' | 'gaai' | 'roffel';
+export const SURPRISES: readonly Exclude<Verrassing, 'geen'>[] = ['denappel', 'gaai', 'roffel'];
+/** What it does at each wait while he comes, none twice in a play (squirrel-math
+ *  `anticPlan`); lying flat in the sun only in a sunny light. */
+export type Antic = AnticKind;
+export const ANTICS: readonly Antic[] = ANTIC_KINDS;
+export const SUN_MOODS: readonly string[] = ['zonnig', 'gouden-uur'];
+/** The squirrel's day: its den, an antic per wait (in order), the surprise, a second hide
+ *  (round `SECOND_HIDE[route]`), the ending. */
+export interface Day { den: DenKind; antics: readonly Antic[]; verrassing: Verrassing; verstop2: boolean; einde: Einde }
+/** How often (design §6.8): a surprise in about 2 of 3 plays, a second hide in about 1 of 3
+ *  — and never three plays in a row without one (the third has it). */
+export const DAY_ODDS = { verrassing: 2 / 3, verstop2: 1 / 3 } as const;
 
 /** The history's key for this mission's variant (the play notes it as `ek`). */
 export const VARIANT_KEY = 'ek';
 const ROUTE_LETTER: Record<RouteId, string> = { midden: 'm', noord: 'n', zuid: 'z' };
 const SYM_LETTER: Record<FieldSym, string> = { recht: 'r', 'spiegel-u': 'u', 'spiegel-v': 'v', om: 'o' };
+const DEN_LETTER: Record<DenKind, string> = { tak: 't', omlaag: 'o', voet: 'v', spiraal: 's' };
+const EINDE_LETTER: Record<Einde, string> = { eet: 'e', begraaf: 'b', poets: 'p' };
+const VERR_LETTER: Record<Verrassing, string> = { geen: 'x', denappel: 'd', gaai: 'g', roffel: 'r' };
+const byLetter = <T extends string>(m: Record<T, string>, l: string): T => (Object.keys(m) as T[]).find((k) => m[k] === l)!;
 
-/** The variant as the history keeps it: way, pattern, trio ('n-u-kgr'). */
-export function variantOf(p: Pick<EekhoornPlay, 'route' | 'veld' | 'buren'>): string {
-  return `${ROUTE_LETTER[p.route]}-${SYM_LETTER[p.veld]}-${trioCode(p.buren)}`;
+/** The variant as the history keeps it: way, pattern, trio ('n-u-kgr'); run 7 (ek-day), with
+ *  its day: the nest's tree, the den, the ending, the surprise and the second hide
+ *  ('n-u-kgr-1obg2'), so the next play's day is drawn against it. ≤ 16 characters: after the
+ *  mood and a rare it still fits the history's 60 (the places test). */
+export function variantOf(p: Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> & Partial<Pick<EekhoornPlay, 'nest' | 'day'>>): string {
+  const base = `${ROUTE_LETTER[p.route]}-${SYM_LETTER[p.veld]}-${trioCode(p.buren)}`;
+  if (!p.day || p.nest === undefined) return base;
+  const d = p.day;
+  return `${base}-${p.nest}${DEN_LETTER[d.den]}${EINDE_LETTER[d.einde]}${VERR_LETTER[d.verrassing]}${d.verstop2 ? 2 : 1}`;
 }
-export function parseVariant(v: string): Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> | null {
-  const m = /^([mnz])-([ruvo])-([a-z]{3})$/.exec(v);
+
+/** A last play as the draw reads it: its way, pattern and trio, and (when the history kept
+ *  it) the tree its nest was on (`nest`: its index in that way's nest trees) and its day's
+ *  den, ending, surprise and second hide. */
+export type Drawn = Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> & Partial<Pick<EekhoornPlay, 'nest'>>
+  & Partial<Pick<Day, 'den' | 'einde' | 'verrassing' | 'verstop2'>>;
+
+export function parseVariant(v: string): Drawn | null {
+  const m = /^([mnz])-([ruvo])-([a-z]{3})(?:-(\d)([tovs])([ebp])([xdgr])([12]))?$/.exec(v);
   if (!m) return null;
   const route = ROUTE_IDS.find((r) => ROUTE_LETTER[r] === m[1])!;
   const veld = FIELD_SYMS.find((s) => SYM_LETTER[s] === m[2])!;
   const buren = trioOf(m[3]);
-  return buren ? { route, veld, buren } : null;
+  if (!buren) return null;
+  if (m[4] === undefined) return { route, veld, buren };
+  return { route, veld, buren, nest: Number(m[4]), den: byLetter(DEN_LETTER, m[5]), einde: byLetter(EINDE_LETTER, m[6]), verrassing: byLetter(VERR_LETTER, m[7]), verstop2: m[8] === '2' };
 }
-
-/** A last play as the draw reads it: its way, pattern and trio, and (when the history kept
- *  it) the tree its nest was on (`nest`: its index in that way's nest trees). */
-type Drawn = Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> & Partial<Pick<EekhoornPlay, 'nest'>>;
 
 /** The squirrel's game's last plays' variants, newest first (at most `n`), from the save's
  *  beat history (each play logs it with every beat as `ek:<variant>`; a play's two beats
@@ -1064,6 +1121,7 @@ export function lastVariants(history: readonly { m: string; sd?: number; va?: st
     const v = pair ? parseVariant(pair.slice(VARIANT_KEY.length + 1)) : null;
     if (!v || (b.sd !== undefined && b.sd === lastSeed)) continue;
     lastSeed = b.sd;
+    if (v.nest !== undefined) { out.push(v); continue; } // (ek-day: its day kept the nest)
     // (its nest's tree, noted after the variant: `nest:<tree id>`)
     const tree = b.va.split(',').find((p) => p.startsWith('nest:'))?.slice(5);
     const nest = tree ? nestTrees(ROUTES[v.route]).findIndex((t) => t.id === tree) : -1;
@@ -1086,12 +1144,41 @@ function freshPick<T>(rng: { pick<U>(l: readonly U[]): U }, list: readonly T[], 
   return rng.pick(list);
 }
 
+/** The forks a draw reads (a `Play`'s). */
+type Forks = { fork(label: string): { pick<T>(l: readonly T[]): T; int(a: number, b: number): number; shuffle<T>(l: readonly T[]): T[]; chance(p: number): boolean } };
+
+/**
+ * The squirrel's day (pure, ek-day, design §6.8), each choice from a fork of its own: its
+ * den (never one of the last two plays'; with the rare dark visitor at the den, one that
+ * ends on its stub, where the visitor meets it), an antic per wait of the way (none twice;
+ * lying in the sun only in `SUN_MOODS`), a surprise in about 2 of 3 plays (never the last
+ * play's; the drum roll only with the great spotted woodpecker on the bark), a second
+ * hide in about 1 of 3 (the third play surely, after two without), its ending (never one of
+ * the last two plays': three plays, three endings).
+ */
+export function drawDay(play: Forks, o: { route: RouteId; buren: Trio; mood?: string; rare?: string | null; recent: readonly Drawn[] }): Day {
+  const dens = o.rare === 'eekhoorn.donkere-eekhoorn' || o.rare === 'donkere-eekhoorn' ? DEN_KINDS.filter((d) => d === 'tak' || d === 'spiraal') : DEN_KINDS;
+  const known = (k: 'den' | 'einde' | 'verrassing' | 'verstop2') => o.recent.filter((r) => r[k] !== undefined);
+  const den = freshPick(play.fork('den'), dens, known('den').map((r) => r.den!));
+  const pool = ANTICS.filter((a) => a !== 'zonnen' || SUN_MOODS.includes(o.mood ?? ''));
+  const antics = play.fork('antics').shuffle(pool).slice(0, ROUTES[o.route].waits.length);
+  const vf = play.fork('verrassing');
+  const can = SURPRISES.filter((s) => s !== 'roffel' || o.buren.stam === 'grote-bonte-specht');
+  const lastSurprise = known('verrassing')[0]?.verrassing;
+  const verrassing: Verrassing = vf.chance(DAY_ODDS.verrassing) ? freshPick(vf, can, lastSurprise && lastSurprise !== 'geen' ? [lastSurprise] : []) : 'geen';
+  const twice = known('verstop2');
+  const verstop2 = play.fork('verstop2').chance(DAY_ODDS.verstop2) || (twice.length >= 2 && !twice[0].verstop2 && !twice[1].verstop2);
+  const einde = freshPick(play.fork('einde'), EINDES, known('einde').map((r) => r.einde!));
+  return { den, antics, verrassing, verstop2, einde };
+}
+
 /** This play's draw (pure, from the play's own forks, design §6.1): another way and
  *  pattern than the last two plays' (three plays in a row: the three ways), a trio that
  *  came in neither of the last two, with at least two neighbours another than last time
- *  where the trios allow it. `recent`: the last plays' variants, newest first. */
-export function drawEekhoornPlay(play: { fork(label: string): { pick<T>(l: readonly T[]): T; int(a: number, b: number): number } },
-  recent: readonly Drawn[] | Drawn | null): EekhoornPlay {
+ *  where the trios allow it; run 7 (ek-day): the squirrel's day (`drawDay`; `ctx`: the play's
+ *  mood and rare, as the briefing drew them). `recent`: the last plays' variants, newest
+ *  first. */
+export function drawEekhoornPlay(play: Forks, recent: readonly Drawn[] | Drawn | null, ctx: { mood?: string; rare?: string | null } = {}): EekhoornPlay {
   const lasts: readonly Drawn[] = recent === null ? [] : Array.isArray(recent) ? recent : [recent as Drawn];
   const route = freshPick(play.fork('route'), ROUTE_IDS, lasts.map((l) => l.route));
   const veldFork = play.fork('veld');
@@ -1114,7 +1201,8 @@ export function drawEekhoornPlay(play: { fork(label: string): { pick<T>(l: reado
   const kegelFork = play.fork('kegels');
   const kegels = ROUTE_DINING[route][kegelFork.int(0, 1)];
   const kegelSeed = kegelFork.int(1, 9999);
-  return { route, veld, veldSeed, buren, nest, nestSeed, kegels, kegelSeed };
+  const day = drawDay(play, { route, buren, mood: ctx.mood, rare: ctx.rare, recent: lasts });
+  return { route, veld, veldSeed, buren, nest, nestSeed, kegels, kegelSeed, day };
 }
 
 /* --------------------------------------------------------------- the home ---- */
@@ -1141,6 +1229,13 @@ export const EEKHOORN_HOME: HomeSpec = {
 /** The trees it hides round (one per way). */
 export const HIDE_TREES: readonly HomeTree[] = ROUTE_IDS.map((id) => ROUTES[id].hide);
 
+/** Run 7 (ek-day): each way's second hide pine (see Z5 above). */
+export const SECOND_HIDE: Readonly<Record<RouteId, HomeTree>> = {
+  midden: ROUTES.noord.hide, noord: ROUTES.midden.hide, zuid: HOME_TREES.find((t) => t.id === Z5.id)!,
+};
+/** Every tree it may hide round (the hide trees and the second hide pines), each once. */
+export const ALL_HIDE_TREES: readonly HomeTree[] = [...new Set([...HIDE_TREES, ...ROUTE_IDS.map((id) => SECOND_HIDE[id])])];
+
 /**
  * The one scattered pine the squirrel's wood takes out (run 7, the triangle budget): the
  * small bos pine 4 m east of its den, between the den and the zuid way's first pine.
@@ -1160,8 +1255,9 @@ export function eekhoornTreeClear(): { x: number; z: number; r: number }[] {
     // behind the stands, where the lens holds its views
     { ...g(0.6, -6), r: 4.2 },
     ...HOME_TREES.map((t) => ({ x: t.x, z: t.z, r: 3.2 })),
-    // round each hide tree, where he walks round it (hide-and-seek), a wider ring
-    ...HIDE_TREES.map((t) => ({ x: t.x, z: t.z, r: 4.6 })),
+    // round each hide tree, where he walks round it (hide-and-seek), a wider ring (run 7,
+    // ek-day: the second hide pines too)
+    ...ALL_HIDE_TREES.map((t) => ({ x: t.x, z: t.z, r: 4.6 })),
     { ...SCATTER_TAKEN, r: 0.6 },
     // its dining stumps and logs: no stray pine on them
     ...DINING.map((d) => ({ x: d.x, z: d.z, r: 1.6 })),
@@ -1176,7 +1272,7 @@ export function eekhoornClearings(): { x: number; z: number; r: number }[] {
     ...FIELD_SYMS.flatMap((s) => gladeSpots(s)).map((s) => ({ x: s.x, z: s.z, r: 0.7 })),
     { x: STUMP.x, z: STUMP.z, r: 0.9 },
     // round each hide tree, where it plays hide-and-seek: no fern to hide it when it pops out
-    ...HIDE_TREES.map((t) => ({ x: t.x, z: t.z, r: 4.2 })),
+    ...ALL_HIDE_TREES.map((t) => ({ x: t.x, z: t.z, r: 4.2 })),
     // round each pine of its ways and where he stands to see it waiting: open needle litter,
     // no fern in front of a squirrel on a low stub (each fern also costs the picture ~8k
     // triangles, which the view over this wood cannot spare: measured 2026-10-03)
