@@ -23,7 +23,7 @@ import * as THREE from 'three';
 import { Actor, type ActorEnv, type Lead } from './actors';
 import { acornGeometry, acornMaterial } from './acorn';
 import {
-  SQ, anticPlan, barkRadius, climbPlan, dashDirectPlan, dashPlan, digBob, dismountPlan, flick, hold, leapPlan, mountPlan, planTime,
+  SQ, anticPlan, barkRadius, climbPlan, dashDirectPlan, dashPlan, digBob, dismountPlan, flick, hold, leapPlan, mountPlan, planTime, runPlan,
   poseAt, settlePlan, sqStream, tailAt, trunkPose, turn, wrap, type AnticKind, type OnTrunk, type Segment, type SqPose, type Trunk,
 } from './squirrel-math';
 
@@ -304,9 +304,10 @@ export class Squirrel extends Actor {
   goLeap(tree: SquirrelTree, face?: number): Promise<boolean> {
     return this.run(this.leapToPlan(tree, face), { kind: 'branch', tree });
   }
-  /** Run to a stump and hop up onto it, facing `face`. */
-  goStump(x: number, z: number, top: number, r: number, face: number): Promise<boolean> {
-    return this.run(this.toStumpPlan(x, z, top, r, face), { kind: 'stump', top, x, z });
+  /** Run to a stump and hop up onto it, facing `face`. Run 7 (ek-day, additive): `full` —
+   *  in one run without its stops to look (squirrel-math `runPlan`): home ahead of him. */
+  goStump(x: number, z: number, top: number, r: number, face: number, full = false): Promise<boolean> {
+    return this.run(this.toStumpPlan(x, z, top, r, face, full), { kind: 'stump', top, x, z });
   }
   /** One quick dash to (x, z) on the ground. Run 7 (additive): `full` — at its full run
    *  (`SQ.run`, never faster), for a show that keeps a child's pace (the squirrel's visits
@@ -660,12 +661,12 @@ export class Squirrel extends Actor {
   }
 
   /** Up onto a stump's top (x, z, top height) and sit up there facing `face`. */
-  toStumpPlan(x: number, z: number, top: number, r: number, face: number): Segment[] {
+  toStumpPlan(x: number, z: number, top: number, r: number, face: number, full = false): Segment[] {
     const plan = [...this.downPlan()];
     const g = poseAtEnd(plan, this.pose);
     const d = Math.hypot(g.x - x, g.z - z) || 1;
     const foot = { x: x + ((g.x - x) / d) * (r + 0.3), z: z + ((g.z - z) / d) * (r + 0.3) };
-    plan.push(...dashPlan(g, foot.x, foot.z, this.rnd, this.lens(), this.avoid()));
+    plan.push(...(full ? runPlan(g, foot.x, foot.z, this.lens(), this.avoid()) : dashPlan(g, foot.x, foot.z, this.rnd, this.lens(), this.avoid())));
     const a = poseAtEnd(plan, g);
     const on: SqPose = { x, z, alt: top, yaw: face, pitch: 0, roll: 0, act: 'sit' };
     plan.push({ dur: 0.36, len: Math.hypot(x - a.x, z - a.z), act: 'leap', at: (u) => ({

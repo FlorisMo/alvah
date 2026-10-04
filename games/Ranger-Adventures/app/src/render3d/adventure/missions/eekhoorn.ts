@@ -105,6 +105,9 @@ const HIDE2 = { most: 1, round: HIDE.round * 0.6 } as const;
  *  `grace` s more at most, sits up facing him and runs on. Lying in the sun it lies along
  *  its stub, turned `lie` rad from the way the stub points. */
 const ANTIC = { first: 0.25, again: 2.2, near: SEE_D + 0.2, lie: 0, grace: 1.1 } as const;
+/** After a find it runs home to its stump: his keys are his this long (s) after it is off,
+ *  so it stays ahead of him (it runs at its full run, ~2.4 m/s; he walks a little slower). */
+const RUN_LEAD = 0.7;
 /** He has stood right by it (within SEE_D + 0.6 m) this long (s): it runs on, whatever the
  *  lens shows of it (ek-finds review: a wait that never finished). */
 const BY_WAIT = 5;
@@ -577,7 +580,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       k.stats.verr_fall_s = Math.round(inFall * 100) / 100;
       // (how long it reads where it lies)
       const e = home.coneEnds();
-      const a = e && ndcOf(e[0], e[0].y - k.ctx.groundY(e[0].x, e[0].z)), b = e && ndcOf(e[1], e[1].y - k.ctx.groundY(e[1].x, e[1].z));
+      const a = e && ndcOf(e[0], e[0].y - k.ctx.groundY(e[0].x, e[0].z))?.clone(), b = e && ndcOf(e[1], e[1].y - k.ctx.groundY(e[1].x, e[1].z))?.clone();
       if (a && b) k.stats.verr_px = Math.round(Math.hypot((a.x - b.x) * (k.ctx.canvas.clientWidth || 1280), (a.y - b.y) * H) / 2);
       if (settings.geluid) Sound.dig();
       k.say(c.plof);
@@ -1092,17 +1095,38 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   await k.wait(0.3);
   const m = k.ranger();
   const pop = run.pop;
-  await k.guard(sq.run(sq.dashTo(pop.x, pop.z, headingTo(pop, m), run.side)));
+  const runPlan = sq.dashTo(pop.x, pop.z, headingTo(pop, m), run.side);
+  {
+    // (dev read: how its real way goes in his picture — the most it comes back toward the
+    // lens (m), and how near his feet it passes)
+    const L = lens();
+    let far = -Infinity, toward = 0, nearMe = Infinity;
+    for (const sgm of runPlan) for (let u = 0; u <= 1.001; u += 0.1) {
+      const q = sgm.at(Math.min(1, u)), dq = dist(L, q);
+      toward = Math.max(toward, far - dq); far = Math.max(far, dq);
+      if (q.alt < 0.3) nearMe = Math.min(nearMe, dist(q, m));
+    }
+    Object.assign(k.stats, {
+      run_toward: Math.round(toward * 100) / 100, run_near_me: Math.round(nearMe * 100) / 100,
+      run_mx: Math.round(m.x * 100) / 100, run_mz: Math.round(m.z * 100) / 100, run_h: Math.round(m.heading * 100) / 100, run_face: Math.round(run.face * 100) / 100,
+      run_lx: Math.round(L.x * 100) / 100, run_lz: Math.round(L.z * 100) / 100, run_sx: Math.round(sq.x * 100) / 100, run_sz: Math.round(sq.z * 100) / 100,
+      run_px: Math.round(pop.x * 100) / 100, run_pz: Math.round(pop.z * 100) / 100, run_side: Math.round(run.side * 100) / 100, run_ang: Math.round(sqAng * 100) / 100,
+    });
+  }
+  await k.guard(sq.run(runPlan));
   chatter();
   await k.wait(0.7);
   sq.flick();
   await k.wait(1.1);
   await dropYoung();
 
-  // into its glade: down the pine and over the ground onto its stump by the store
+  // into its glade: over the ground onto its stump by the store, in one run (review r1:
+  // dashing with its stops to look, he walked after it faster than it went, overtook it and
+  // it passed under the lens) — and his keys are his a moment after it is off, so it stays
+  // ahead of him
   k.say(c.weer);
   const stumpFace = headingTo(STUMP, P.stand);
-  const toStump = k.guard(sq.goStump(STUMP.x, STUMP.z, STUMP.top, STUMP.r, stumpFace));
+  const toStump = k.guard(sq.goStump(STUMP.x, STUMP.z, STUMP.top, STUMP.r, stumpFace, true));
   toStump.catch(() => {}); // (a stop during the walk: the walk throws, this one is let go)
   // (on its stump it waits for him: it chatters now and then, the warm light on its outline)
   let onStump = false;
@@ -1151,6 +1175,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     await k.wait(1.8);
     if (walkingIn) k.say(c.weer);
   };
+  await k.wait(RUN_LEAD);
   await k.walk({
     name: 'open-plek', to: P.stand, r: 1.6, line: c.weer, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 18,
     tick: () => {

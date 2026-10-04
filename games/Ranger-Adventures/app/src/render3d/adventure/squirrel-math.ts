@@ -208,6 +208,22 @@ export function dashDirectPlan(from: SqPose, tx: number, tz: number): Segment[] 
   return out;
 }
 
+/** Run 7 (ek-day, additive): one run to (tx, tz) without its stops to look — a dash home
+ *  that keeps ahead of a boy walking after it: the corners of its dash (round the lens and
+ *  round him, `dashPath`), each leg one bound at its full run (`dashDirectPlan`, never
+ *  faster than `SQ.run`). */
+export function runPlan(from: SqPose, tx: number, tz: number, lens?: { x: number; z: number }, avoid?: { x: number; z: number; r: number }): Segment[] {
+  const pts = dashPath(from, tx, tz, lens, avoid);
+  const out: Segment[] = [];
+  let p = from;
+  for (let k = 1; k < pts.length; k++) {
+    const leg = dashDirectPlan(p, pts[k].x, pts[k].z);
+    out.push(...leg);
+    p = leg[leg.length - 1].at(1);
+  }
+  return out;
+}
+
 /** The corner points of a dash: straight, or bent out sideways when the straight line
  *  would bring it nearer the lens than where it starts (and ends). */
 export function dashPath(

@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  SQ, ANTIC_KINDS, anticPlan, barkRadius, climbPlan, dashDirectPlan, dashPath, dashPlan, dismountPlan, flick, leapPlan, lineClear, mountPlan,
+  SQ, ANTIC_KINDS, anticPlan, barkRadius, climbPlan, dashDirectPlan, dashPath, dashPlan, dismountPlan, flick, leapPlan, lineClear, mountPlan, runPlan,
   patPlan, planTime, poseAt, settlePlan, sqStream, tailAt, topSpeeds, trunkOutline, trunkPose, trunkUpright, type Segment, type SqPose, type Trunk,
 } from './squirrel-math.ts';
 
@@ -104,6 +104,22 @@ test('it never runs over the ranger\'s feet: a dash past him goes round him', ()
   }
   // running to where he stands (the script asks it to come close) is not bent
   assert.equal(dashPath({ x: -4, z: 0 }, 1.5, 0.1, undefined, me).length, 2);
+});
+
+test('a run home (ek-day): along its dash\'s corners in one go — no stops to look, never faster than its full run, still round the lens', () => {
+  const lens = { x: 0, z: -2.2 };
+  const from = { x: -3, z: 0 }, to = { x: 3, z: 0 };
+  const plan = runPlan(sitting(from.x, from.z), to.x, to.z, lens);
+  const end = poseAt(plan, planTime(plan));
+  assert.ok(Math.hypot(end.x - to.x, end.z - to.z) < 1e-6, 'it gets there');
+  // (a turn to the next leg may take its moment; a stop where it only sits is ≤ 0.1 s)
+  for (const g of plan) if (g.act === 'sit' && Math.abs(g.at(0).yaw - g.at(1).yaw) < 1e-6) assert.ok(g.dur <= 0.1, `no stop to look (${g.dur.toFixed(2)} s)`);
+  assert.ok(topSpeeds(plan).run <= SQ.run + 1e-9, 'never faster than its full run');
+  const floor = Math.min(Math.hypot(from.x, from.z + 2.2), Math.hypot(to.x, to.z + 2.2));
+  for (let t = 0; t <= planTime(plan); t += 0.02) assert.ok(Math.hypot(poseAt(plan, t).x, poseAt(plan, t).z + 2.2) >= floor - 0.2, 'never nearer the lens');
+  // (far quicker than its dash with stops)
+  assert.ok(planTime(plan) < planTime(dashPlan(sitting(from.x, from.z), to.x, to.z, sqStream(5), lens)) * 0.75);
+  assert.ok(worstJump(plan) < 0.06, 'every frame follows on from the last');
 });
 
 test('a leap is a low arc from branch to bark: above both ends, never a flicker', () => {

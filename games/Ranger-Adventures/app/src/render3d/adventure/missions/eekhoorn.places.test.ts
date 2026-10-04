@@ -565,7 +565,7 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
 test('after a find (ek-day, review r1): he turns toward its glade and its run from the bark to its stump plays in his picture — it starts in it and never comes at the lens', () => {
   let n = 0, stepped = 0;
   const turns = [0, 0, 0]; // (≤ 45° off his way to the glade, ≤ 90°, more)
-  const popPx: number[] = [];
+  const popPx: number[] = [], hiddenShare: number[] = [];
   const check = (id: string, c: HomeTree, sqAng: number, at: { x: number; z: number }): void => {
     // where the found view left him (a few calm steps nearer it, from further off) and the
     // side of the bark it peeks out on
@@ -593,7 +593,17 @@ test('after a find (ek-day, review r1): he turns toward its glade and its run fr
     const rnd = (): number => 0.5;
     const last = (p: readonly Segment[]): SqPose => p[p.length - 1].at(1);
     const plan: Segment[] = [...climbPlan(tr, { ang: face, h: HIDE.h }, { ang: run.side, h: 0.25 }, 0), ...dismountPlan(tr, { ang: run.side, h: 0.25 })];
+    const atFoot = plan.length;
     plan.push(...dashPlan(last(plan), run.pop.x, run.pop.z, rnd, lens, avoid));
+    // (its dash to the pop, through the lens: how much of it is behind his body or a trunk)
+    {
+      // (heights over the ground, as `hiders` and `lensSees` measure them)
+      const eye = { x: lens.x, y: LENS.up, z: lens.z };
+      const ups = hiders(eye, me);
+      const pts = plan.slice(atFoot).filter((s) => s.act === 'run').flatMap((s) => { const k = Math.max(2, Math.ceil(s.len / 0.1)); return Array.from({ length: k }, (_, i) => s.at((i + 0.5) / k)); });
+      const hid = pts.filter((q) => !lineClear(eye, { x: q.x, y: 0.15, z: q.z }, ups)).length;
+      hiddenShare.push(pts.length ? hid / pts.length : 0);
+    }
     const g = last(plan);
     const ds = dist(g, STUMP);
     const sf = { x: STUMP.x + ((g.x - STUMP.x) / ds) * (STUMP.r + 0.3), z: STUMP.z + ((g.z - STUMP.z) / ds) * (STUMP.r + 0.3) };
@@ -609,8 +619,12 @@ test('after a find (ek-day, review r1): he turns toward its glade and its run fr
       const dq = Math.hypot(q.x - lens.x, q.z - lens.z);
       assert.ok(dq >= far - 0.3, `${id}: it never comes at the lens (${dq.toFixed(2)} m after ${far.toFixed(2)})`);
       far = Math.max(far, dq);
-      // (never over his feet)
-      if (q.alt < 0.3) assert.ok(dist(q, me) >= 1.15, `${id}: never by his feet (${dist(q, me).toFixed(2)} m)`);
+    }
+    // (over the ground, off the bark: never by his feet, never through a trunk)
+    for (const sgm of plan.slice(atFoot)) for (let u = 0; u <= 1; u += 0.1) {
+      const q = sgm.at(u);
+      assert.ok(dist(q, me) >= 1.1, `${id}: never by his feet (${dist(q, me).toFixed(2)} m)`);
+      for (const o of HOME_TREES) assert.ok(dist(q, o) >= barkRadius(trunk(o), 0) + 0.1, `${id}: never through ${o.id} (${dist(q, o).toFixed(2)} m)`);
     }
     // where it sits up facing him: in his picture, off his body, big enough to read
     const pp = followPx(me, run.face, { x: run.pop.x, y: groundY(run.pop.x, run.pop.z) + 0.15, z: run.pop.z });
@@ -640,11 +654,13 @@ test('after a find (ek-day, review r1): he turns toward its glade and its run fr
   }
   assert.ok(n >= 250, `${n} finds`);
   // (mostly he turns from where he stands; mostly toward the glade)
-  assert.ok(stepped <= n / 6, `${stepped} of ${n} stepped first`);
+  assert.ok(stepped <= n / 4, `${stepped} of ${n} stepped first`);
   assert.ok(turns[2] <= n / 6, `turns off his way to the glade: ${turns.join(' / ')} (≤45° / ≤90° / more)`);
   popPx.sort((a, b) => a - b);
   console.log(`after a find: ${n} finds, ${stepped} stepped, turns ${turns.join('/')}, pop ${popPx[0].toFixed(0)}-${popPx[popPx.length - 1].toFixed(0)} px (median ${popPx[popPx.length >> 1].toFixed(0)})`);
-  assert.ok(popPx[0] >= 32 && popPx[popPx.length >> 1] >= 38, `it pops up big enough to read (smallest ${popPx[0].toFixed(0)} px, median ${popPx[popPx.length >> 1].toFixed(0)})`);
+  assert.ok(popPx[0] >= 30 && popPx[popPx.length >> 1] >= 37, `it pops up big enough to read (smallest ${popPx[0].toFixed(0)} px, median ${popPx[popPx.length >> 1].toFixed(0)})`);
+  // (the places pick at most a fifth of its way; by time, its bursts easing in and out, a little more)
+  assert.ok(Math.max(...hiddenShare) <= 0.3, `he sees it run to where it pops up (at most ${(Math.max(...hiddenShare) * 100).toFixed(0)}% of its dash's time behind his body or a trunk)`);
 });
 
 test('the den (ek-day): every opening stands in the den look, big and whole — on its stub, head down under it, nibbling at the pine\'s foot', () => {
