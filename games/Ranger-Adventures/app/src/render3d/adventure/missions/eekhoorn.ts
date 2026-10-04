@@ -711,20 +711,21 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   out.catch(() => {});
   const rr = barkRadius(hideTree.trunk, HIDE.h) + 0.08;
   const sqAt = { x: cT.x + Math.sin(face) * rr, z: cT.z + Math.cos(face) * rr };
-  await k.frame(foundView(cT, face, at0), { face: headingTo(at0, sqAt) });
+  await k.frame(foundView(cT, face, at0, !!young), { face: headingTo(at0, sqAt) });
   await out;
   sqAng = face;
   sq.flick();
   chatter();
   // run 7 (the rare young one): it was hiding with ours, round the back of the trunk; now
-  // a little head peeks round the wood, and out it comes onto the ground at the trunk's
-  // foot and sits up facing him ("Gevonden! En nog een kleintje!"); once he has seen it, it
-  // runs up the trunk and round the back, out of the picture
+  // a little head peeks round the wood, and out it comes onto the ground, out past the
+  // pine's root spurs, and sits up facing him ("Gevonden! En nog een kleintje!"); once he
+  // has seen it, it runs up the trunk and round the back, out of the picture. (The found
+  // view of a play with it holds it whole too: eekhoorn.places foundView/youngPeek.)
   let youngGone: Promise<boolean> | null = null;
   let youngSeen: { off(): void; readonly seen: boolean } | null = null;
   if (young && (await k.guard(young.ready.then(() => !!young.body)))) {
     const cam = k.world.camera.position;
-    const y = youngPeek(cT, at0, { x: cam.x, z: cam.z });
+    const y = youngPeek(cT, at0, { x: cam.x, z: cam.z }, face);
     young.placeOnTrunk(hideTree, y.start, false);
     young.group.visible = true;
     youngSeen = seenFor(k, home, 'eekhoorn.jonge-eekhoorn', squirrelSight(young), { px: 38, secs: 1, stat: 'jong' });

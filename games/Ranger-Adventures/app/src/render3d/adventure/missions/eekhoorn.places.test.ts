@@ -29,7 +29,7 @@ import { biomeAt, heightAt as groundY, VEN_CENTER, VEN_SHORE_R } from '../../Bio
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
 import { dist, headingTo, toLocal, segDist, offCentre } from '../places.ts';
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
-import { SQ, barkRadius, lineClear, trunkFadeUpright, trunkUpright, type Trunk, type Upright } from '../squirrel-math.ts';
+import { SQ, barkRadius, lineClear, trunkFadeUpright, trunkOutline, trunkUpright, type Trunk, type Upright } from '../squirrel-math.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import { newPlay } from '../../../core/play.ts';
 
@@ -467,7 +467,9 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
     for (const t of HOME_TREES) assert.ok(segDist(t, at, me) > trunkClear(t) - 0.35 || dist(at, me) < 0.01, `${rid}: his steps nearer clear ${t.id}`);
     const face = foundFace(c, sqAng, me);
     assert.ok(Math.abs(wrapA(face - sqAng)) < 1.6, `${rid}: it comes out a short way round from where it was`);
-    const f = foundView(c, face, me);
+    // (a play with the rare young one frames the view that holds it too: the same rules)
+    for (const young of [false, true]) {
+    const f = foundView(c, face, me, young);
     const cam = fitLens(f);
     const rr = barkRadius(trunk(c), HIDE.h) + 0.08;
     const sq = { x: c.x + Math.sin(face) * rr, z: c.z + Math.cos(face) * rr };
@@ -480,7 +482,7 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
     assert.ok(off >= (15 * Math.PI) / 180, `${rid}: the lens ${deg(off)}° off his line to it`);
     // big: its 0.33 m (with its tail) at least 60 px tall, in the picture, off the middle
     const top = px(cam, sq, HIDE.h + 0.33), bot = px(cam, sq, HIDE.h);
-    assert.ok(!top.behind && Math.abs(bot.y - top.y) >= 60, `${rid}: it is ${Math.abs(bot.y - top.y).toFixed(0)} px tall (him ${dist(me, sq).toFixed(1)} m from it)`);
+    assert.ok(!top.behind && Math.abs(bot.y - top.y) >= 60, `${rid}${young ? ' (young)' : ''}: it is ${Math.abs(bot.y - top.y).toFixed(1)} px tall (him ${dist(me, sq).toFixed(1)} m from it; turn ${deg(Math.abs(wrapA(f.heading - headingTo(me, sq))))}°, lens ${camD.toFixed(2)} m)`);
     assert.ok(top.x > 40 && top.x < W - 40 && top.y > 110 && bot.y < H - 80, `${rid}: it is in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)})`);
     assert.ok(Math.abs(top.x - W / 2) >= 0.2 * (W / 2), `${rid}: well off the middle (${top.x.toFixed(0)} px; turn ${deg(Math.abs(wrapA(f.heading - headingTo(me, sq))))}°, him ${dist(me, sq).toFixed(1)} m, sqAng ${sqAng.toFixed(2)})`);
     // him: whole in the picture, no pine of the home between the lens and him or it
@@ -493,6 +495,7 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
       if (t !== c) assert.ok(lineClear(cam.position, { ...sq, y: groundY(sq.x, sq.z) + HIDE.h + 0.12 }, bark), `${rid}: ${t.id} is not in front of the squirrel`);
     }
     assert.ok(lineClear(cam.position, { ...sq, y: groundY(sq.x, sq.z) + HIDE.h + 0.12 }, [{ ...trunkUpright(trunk(c), groundY(c.x, c.z)), r: (y: number) => barkRadius(trunk(c), Math.max(0, y - groundY(c.x, c.z))) }]), `${rid}: its own trunk is not in front of it`);
+    }
   };
   for (const rid of ROUTE_IDS) {
     const c = ROUTES[rid].hide;
@@ -942,56 +945,89 @@ test('the dark visitor at the den: it comes down out of sight onto the bark abov
   assert.ok(n >= 18);
 });
 
-test('the young one in the found view: it hides behind the trunk, peeks round its outline, sits up at its foot away from him — whole in the picture, big enough, clear of the bark and of him — and runs up out of the picture', () => {
-  let n = 0;
-  for (const rid of ROUTE_IDS) {
-    const c = ROUTES[rid].hide;
+test('the young one in the found view: it hides behind the trunk, peeks round its outline, sits up on open ground past the root spurs, away from him — whole in the picture, big enough, clear of the bark\'s outline and of him — and runs up out of the picture', () => {
+  let n = 0, sides = 0;
+  const check = (rid: string, c: HomeTree, sqAng: number, at: { x: number; z: number }, tag: string): void => {
     const gc = groundY(c.x, c.z);
     const tr = trunk(c);
     const bark: Upright = { ...trunkUpright(tr, gc), r: (y: number) => barkRadius(tr, Math.max(0, y - gc)) };
+    // (what hides it on the ground: the trunk out to its ridged outline, root spurs and all —
+    // played 2026-10-04, seed 45: sat 1.0 m from the axis it sat INSIDE a root spur, ~25 px
+    // of fragments showing while 'Gevonden! En nog een kleintje!' was said)
+    const outline = trunkUpright(tr, gc);
     const onBark = (a: { ang: number; h: number }, out = 0.1): { x: number; y: number; z: number } => {
       const r = barkRadius(tr, a.h) + out;
       return { x: c.x + Math.sin(a.ang) * r, y: gc + a.h, z: c.z + Math.cos(a.ang) * r };
     };
-    for (let a = -Math.PI; a < Math.PI; a += Math.PI / 4) for (const d of [1.4, 2.4, 3.4]) {
+    const face0 = foundFace(c, sqAng, at);
+    const me = foundStand(c, face0, at);
+    const face = foundFace(c, sqAng, me);
+    const cam = fitLens(foundView(c, face, me, true));
+    const lens = { x: cam.position.x, z: cam.position.z };
+    const y = youngPeek(c, me, lens, face);
+    n += 1;
+    assert.ok(!lineClear(cam.position, onBark(y.start, 0.06), [bark]), `${tag}: it starts behind the trunk from the lens`);
+    // out past the root spurs by its own length: never in among them
+    const out = dist(y.sit, c), need = trunkOutline(tr, 0) + YOUNG.len;
+    assert.ok(out >= need - 1e-9, `${tag}: it sits ${out.toFixed(2)} m from the axis (the root spurs reach ${trunkOutline(tr, 0).toFixed(2)} m, + its length ${YOUNG.len}: want ${need.toFixed(2)})`);
+    // sitting up there: whole in the picture and big enough
+    const H0 = 0.33 * YOUNG.scale;
+    const top = px(cam, y.sit, H0), bot = px(cam, y.sit, 0);
+    assert.ok(!top.behind && top.x > 40 && top.x < W - 40 && top.y > 110 && bot.y < H - 30, `${tag}: it sits in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)}-${bot.y.toFixed(0)})`);
+    assert.ok(bot.y - top.y >= 40, `${tag}: ${(bot.y - top.y).toFixed(0)} px tall`);
+    // whole: its foot, middle and head, and either side of it, clear of the trunk's outline
+    // (root spurs and all), of the other pines and of him
+    const g = groundY(y.sit.x, y.sit.z);
+    const others: Upright[] = HOME_TREES.filter((o) => o !== c).map((o) => trunkUpright(trunk(o), groundY(o.x, o.z)));
+    const boy: Upright = { x: me.x, z: me.z, y0: groundY(me.x, me.z), y1: groundY(me.x, me.z) + RANGER_STAND_HEIGHT * 1.1, r: () => 0.25 };
+    const across = headingTo(lens, y.sit) + Math.PI / 2;
+    for (const k of [0.1, 0.45, 0.85]) for (const u of [-0.08, 0, 0.08]) {
+      const pt = { x: y.sit.x + Math.sin(across) * u, y: g + H0 * k, z: y.sit.z + Math.cos(across) * u };
+      assert.ok(lineClear(cam.position, pt, [outline, boy, ...others]), `${tag}: it is seen whole (${k}, ${u})`);
+    }
+    // on dry, clear ground at the foot: off his feet, off every other pine's outline
+    assert.ok(dist(y.sit, me) > 1.0, `${tag}: not at his feet (${dist(y.sit, me).toFixed(2)} m)`);
+    assert.ok(HOME_TREES.every((o) => o === c || dist(o, y.sit) > trunkOutline(trunk(o), 0) + YOUNG.len), `${tag}: off the other pines`);
+    assert.equal(biomeAt(y.sit.x, y.sit.z), 'bos', `${tag}: in the wood`);
+    assert.ok(Math.abs(g - gc) < 0.4, `${tag}: on the ground by its tree (${(g - gc).toFixed(2)} m)`);
+    // it runs out across the picture, not at the lens: from the trunk's edge to its sit it
+    // comes at most a step nearer the lens
+    const edgeAt = onBark(y.edge, 0.06);
+    assert.ok(dist(edgeAt, lens) - dist(y.sit, lens) <= YOUNG.toLens, `${tag}: it comes ${(dist(edgeAt, lens) - dist(y.sit, lens)).toFixed(2)} m nearer the lens`);
+    // away from him in the picture: him, ours on the bark, the little one on the ground — or,
+    // where a pine stands in front of all of that side, past him on his side (ours, him, it)
+    const tx = px(cam, c, 0.6).x, bx = px(cam, me, 0.9).x;
+    if (y.side === 1) assert.ok(Math.sign(top.x - tx) === -Math.sign(bx - tx), `${tag}: on the far side of the trunk from him (${top.x.toFixed(0)} | trunk ${tx.toFixed(0)} | him ${bx.toFixed(0)})`);
+    else {
+      sides += 1;
+      assert.ok(Math.abs(top.x - bx) > 60, `${tag}: on his side, apart from him (${top.x.toFixed(0)} | him ${bx.toFixed(0)} | trunk ${tx.toFixed(0)})`);
+    }
+    const ours = px(cam, onBark({ ang: face, h: HIDE.h }, 0.08), HIDE.h);
+    assert.ok(Math.hypot(ours.x - top.x, ours.y - top.y) > 60, `${tag}: apart from ours in the picture`);
+    // its way up ends out of the picture
+    const upTop = px(cam, onBark(y.up, 0.06), y.up.h);
+    assert.ok(upTop.y < 0 || upTop.behind || !lineClear(cam.position, onBark(y.up, 0.06), [bark]), `${tag}: it runs up out of the picture`);
+  };
+  for (const rid of ROUTE_IDS) {
+    const c = ROUTES[rid].hide;
+    // where a perfect player finds it (from his last wait's side)…
+    const from = headingTo(c, comesFrom(ROUTES[rid], ROUTES[rid].waits.length - 1));
+    for (let k = -6; k <= 6; k += 3) for (const d of [1.8, 2.6, 3.4]) {
+      const start = { x: c.x + Math.sin(from + k * 0.17) * d, z: c.z + Math.cos(from + k * 0.17) * d };
+      if (dist(start, seatOf(c)) > SEE_D || HOME_TREES.some((o) => dist(o, start) < trunkClear(o))) continue;
+      const res = playHide(c, start, `${rid} young`);
+      if (res.found) check(rid, c, res.sqAng, res.me, `${rid} played from ${deg(from + k * 0.17)}° ${d} m`);
+    }
+    // …and anywhere round the tree, either side of it, near or as far as he may find it from
+    for (let a = -Math.PI; a < Math.PI; a += Math.PI / 6) for (const d of [1.2, 1.4, 2.2, 2.4, 3.2, 3.4, FIND_R]) {
       const at = { x: c.x + Math.sin(a + 0.5) * d, z: c.z + Math.cos(a + 0.5) * d };
       if (HOME_TREES.some((o) => dist(o, at) < trunkClear(o))) continue;
-      const face0 = foundFace(c, a, at);
-      const me = foundStand(c, face0, at);
-      const face = foundFace(c, a, me);
-      const cam = fitLens(foundView(c, face, me));
-      const lens = { x: cam.position.x, z: cam.position.z };
-      const y = youngPeek(c, me, lens);
-      n += 1;
-      const tag = `${rid} ${deg(a)}° ${d} m`;
-      assert.ok(!lineClear(cam.position, onBark(y.start, 0.06), [bark]), `${tag}: it starts behind the trunk from the lens`);
-      // sitting up at the trunk's foot: whole in the picture and big enough
-      const H0 = 0.33 * YOUNG.scale;
-      const top = px(cam, y.sit, H0), bot = px(cam, y.sit, 0);
-      assert.ok(!top.behind && top.x > 40 && top.x < W - 40 && top.y > 110 && bot.y < H - 30, `${tag}: it sits in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)}-${bot.y.toFixed(0)})`);
-      assert.ok(bot.y - top.y >= 40, `${tag}: ${(bot.y - top.y).toFixed(0)} px tall`);
-      // clear of the bark, of the other pines and of him (the lens sees its middle and its head)
-      const g = groundY(y.sit.x, y.sit.z);
-      const others: Upright[] = HOME_TREES.filter((o) => o !== c).map((o) => trunkUpright(trunk(o), groundY(o.x, o.z)));
-      const boy: Upright = { x: me.x, z: me.z, y0: groundY(me.x, me.z), y1: groundY(me.x, me.z) + RANGER_STAND_HEIGHT * 1.1, r: () => 0.25 };
-      for (const k of [0.45, 0.85]) {
-        const pt = { x: y.sit.x, y: g + H0 * k, z: y.sit.z };
-        assert.ok(lineClear(cam.position, pt, [bark, boy, ...others]), `${tag}: it is seen (${k})`);
-      }
-      // on dry, clear ground at the foot: off his feet, off every other pine
-      assert.ok(dist(y.sit, me) > 1.0, `${tag}: not at his feet (${dist(y.sit, me).toFixed(2)} m)`);
-      assert.ok(HOME_TREES.every((o) => o === c || dist(o, y.sit) > barkRadius(trunk(o), 0) + 0.35), `${tag}: off the other pines`);
-      // away from him in the picture: him, ours on the bark, the little one at the foot
-      const tx = px(cam, c, 0.6).x, bx = px(cam, me, 0.9).x;
-      assert.ok(Math.sign(top.x - tx) === -Math.sign(bx - tx), `${tag}: on the far side of the trunk from him (${top.x.toFixed(0)} | trunk ${tx.toFixed(0)} | him ${bx.toFixed(0)})`);
-      const ours = px(cam, onBark({ ang: face, h: HIDE.h }, 0.08), HIDE.h);
-      assert.ok(Math.hypot(ours.x - top.x, ours.y - top.y) > 60, `${tag}: apart from ours in the picture`);
-      // its way up ends out of the picture
-      const upTop = px(cam, onBark(y.up, 0.06), y.up.h);
-      assert.ok(upTop.y < 0 || upTop.behind || !lineClear(cam.position, onBark(y.up, 0.06), [bark]), `${tag}: it runs up out of the picture`);
+      check(rid, c, a, at, `${rid} ${deg(a)}° ${d} m`);
     }
   }
-  assert.ok(n >= 30, `${n} finds`);
+  assert.ok(n >= 150, `${n} finds`);
+  // (his side is the exception, where a pine stands in front of the far one)
+  assert.ok(sides <= n * 0.1, `${sides} of ${n} on his side`);
 });
 
 test('a play\'s finds: the nest tree and the dining spot from forks of their own (the way, the pattern and the neighbours do not move), replayed by the seed, each comes', () => {

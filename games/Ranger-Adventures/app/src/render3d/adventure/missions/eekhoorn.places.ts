@@ -27,7 +27,7 @@ import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { atLocal, dist, headingTo, segDist, uniformLocal, type Frame } from '../places.ts';
-import { barkRadius } from '../squirrel-math.ts';
+import { barkRadius, trunkOutline } from '../squirrel-math.ts';
 import type { TreeStub } from '../../world/Forest.ts';
 
 /** The eekhoorn marker: the bos anchor it has always had (the test checks it). */
@@ -552,7 +552,11 @@ export const FOUND = { turns: [75, 60, 45, 30].map((d) => (d * Math.PI) / 180), 
  *  that shows past the bark is still hiding from him (played 2026-10-03: a bot walked 20 m
  *  round and "found" it from the glade, 11 m off, and the held view lost them both). */
 export const FIND_R = 4.2;
-export function foundView(tree: HomeTree, sqAng: number, me: Spot): {
+/** How far back from the found view's middle its lens stands (m, level: the fit's nearest
+ *  try, 3 m along a 4° pitch — measured on every found view, eekhoorn.places.test), and a
+ *  little either side: a view for the young one keeps it whole from each. */
+const FOUND_YOUNG_BACK = [2.8, 3.0, 3.3];
+export function foundView(tree: HomeTree, sqAng: number, me: Spot, young = false): {
   at: Spot; heading: number; halfW: number; halfD: number; tall: number; pitchDeg: number; insetTop: number; insetBottom: number;
   include: { x: number; z: number; h: number; r: number }[];
 } {
@@ -577,10 +581,15 @@ export function foundView(tree: HomeTree, sqAng: number, me: Spot): {
       return segDist(t, cam, me) > rr && (t === tree || segDist(t, cam, sq) > rr);
     });
   };
+  // (a play with the rare young one: a view that holds it whole too, sitting up on the ground
+  // past the root spurs — no pine of the home in front of it — wherever the lens fits back
+  // along that heading; else the view all the same, and it comes out where it can)
+  const youngFits = (h: number, a: Spot): boolean => FOUND_YOUNG_BACK.every((b) => youngPeek(tree, me, { x: a.x - Math.sin(h) * b, z: a.z - Math.cos(h) * b }, sqAng).whole);
   let heading = toSq - pref * FOUND.turns[0];
   let at = middle(FOUND.turns[0]);
-  find: for (const turn of FOUND.turns) for (const side of [pref, -pref]) {
-    if (clear(toSq - side * turn, middle(turn))) { heading = toSq - side * turn; at = middle(turn); break find; }
+  find: for (const want of young ? [true, false] : [false]) for (const turn of FOUND.turns) for (const side of [pref, -pref]) {
+    const h = toSq - side * turn, a = middle(turn);
+    if (clear(h, a) && (!want || youngFits(h, a))) { heading = h; at = a; break find; }
   }
   return { at, heading, halfW: 0.3, halfD: 0.25, tall: 1.3, pitchDeg: 4, insetTop: 96, insetBottom: 36,
     include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT, r: 0.25 }] };
@@ -750,29 +759,66 @@ export function denVisitor(lens: Spot): { start: { ang: number; h: number }; mee
  * The rare young squirrel in the found view (design §6.7): it hides on the far side of the
  * trunk from the found view's lens (`start`, low), comes round the bark head first to the
  * trunk's outline (`edge`: a little head peeks round the wood), runs down and out onto the
- * ground at the trunk's foot and sits up there facing him (`sit`): on the side of the trunk
- * away from him in the picture, so the three of them read left to right — him, ours on the
- * bark, the little one at the foot. Sitting up is a squirrel's own shape (played
- * 2026-10-03: clinging to the bark beside ours a small one showed its back like ours, and
- * at the trunk's outline it sat against the wood behind, a squirrel on a stump far off).
- * Once he has seen it, it runs up its side of the trunk (`climb`) and on round the back and
- * up, out of the picture (`up`). `me`: where he stands; `lens`: the found view's lens.
+ * ground and sits up there facing him (`sit`): on the side of the trunk away from him in the
+ * picture, so the three of them read left to right — him, ours on the bark, the little one
+ * on the ground. Sitting up is a squirrel's own shape (played 2026-10-03: clinging to the
+ * bark beside ours a small one showed its back like ours).
+ * It sits OUT PAST THE ROOT SPURS by its own length (`len`): the pine's root flare reaches
+ * `trunkOutline(tree, 0)` from the axis (≈ 1.2 m), and played 2026-10-04 (seed 45) a sit
+ * spot 1.0 m out put it inside a spur — ~25 px of fragments while "Gevonden! En nog een
+ * kleintje!" was said. Its turn round the trunk from the lens is the first of `sitAngs` that
+ * keeps it whole in the picture: no other pine (out to its root spurs) and not him between
+ * the lens and it, a little nearer the lens than ours on the bark (`ours`: its angle round
+ * the trunk) — the found view holds ours ≥ 60 px, so the little one (0.7 of it) reads ≥ 40 —
+ * and from the trunk's edge out to it at most `toLens` m nearer the lens (it runs out across
+ * the picture, never at it). Where another pine stands in front of all of those (the middle way's hide tree, found
+ * from its neighbour's side: the found view's lens stands just past that pine), it comes out
+ * round HIS side of the trunk instead, past him in the picture (`side` −1: him between ours
+ * and the little one). Once he has seen it, it runs up its side of the trunk (`climb`) and on
+ * round the back and up, out of the picture (`up`). `me`: where he stands; `lens`: the found
+ * view's lens.
  */
-export const YOUNG = { scale: 0.7, startH: 0.55, edgeAng: 1.5, edgeH: 0.4, sitAng: 0.8, sitOut: 0.34, climbH: 1.0, upH: 6 } as const;
-export function youngPeek(tree: HomeTree, me: Spot, lens: Spot): {
+export const YOUNG = {
+  scale: 0.7, startH: 0.55, edgeAng: 1.5, edgeH: 0.4, sitAngs: [1.0, 1.2, 0.8, 1.4], len: 0.3, toLens: 0.6, climbH: 1.0, upH: 6,
+} as const;
+export function youngPeek(tree: HomeTree, me: Spot, lens: Spot, ours: number): {
   start: { ang: number; h: number }; edge: { ang: number; h: number }; sit: Spot; climb: { ang: number; h: number }; up: { ang: number; h: number };
+  /** 1: the far side of the trunk from him (as it should be), −1: his side, past him */
+  side: 1 | -1;
+  /** whether a spot was found that keeps it whole (else the first, all the same) */
+  whole: boolean;
 } {
   const camAng = headingTo(tree, lens);
-  // (his side of the trunk, round from the lens; the little one comes out on the other)
-  const s = -(Math.sign(wrapA(headingTo(tree, me) - camAng)) || 1);
-  const sitAng = camAng + s * YOUNG.sitAng;
-  const r = barkRadius({ x: tree.x, z: tree.z, H: tree.h, species: tree.species }, 0) + YOUNG.sitOut;
+  // (the far side of the trunk from him, round from the lens)
+  const far = -(Math.sign(wrapA(headingTo(tree, me) - camAng)) || 1);
+  const tr = { x: tree.x, z: tree.z, H: tree.h, species: tree.species };
+  const r = Math.max(trunkOutline(tr, 0), barkRadius(tr, 0)) + YOUNG.len;
+  const er = barkRadius(tr, YOUNG.edgeH) + 0.06;
+  const at = (a: number, rr: number): Spot => ({ x: tree.x + Math.sin(a) * rr, z: tree.z + Math.cos(a) * rr });
+  const oursD = dist(at(ours, barkRadius(tr, HIDE.h) + 0.08), lens);
+  const whole = (s: number, turn: number): boolean => {
+    const p = at(camAng + s * turn, r);
+    if (dist(p, lens) > oursD - 0.1 || dist(p, me) <= 1.1 || segDist(me, lens, p) <= 0.45) return false;
+    if (dist(at(camAng + s * YOUNG.edgeAng, er), lens) - dist(p, lens) > YOUNG.toLens) return false;
+    return HOME_TREES.every((o) => {
+      if (o === tree) return true;
+      const ot = { x: o.x, z: o.z, H: o.h, species: o.species };
+      const reach = Math.max(trunkOutline(ot, 0), barkRadius(ot, 0));
+      return dist(o, p) > reach + YOUNG.len && segDist(o, lens, p) > reach + 0.25;
+    });
+  };
+  let side: 1 | -1 = 1, turn: number = YOUNG.sitAngs[0], ok = false;
+  pick: for (const sd of [1, -1] as const) for (const t of YOUNG.sitAngs) if (whole(far * sd, t)) { side = sd; turn = t; ok = true; break pick; }
+  const s = far * side;
+  const sitAng = camAng + s * turn;
   return {
     start: { ang: camAng + s * 2.5, h: YOUNG.startH },
     edge: { ang: camAng + s * YOUNG.edgeAng, h: YOUNG.edgeH },
-    sit: { x: tree.x + Math.sin(sitAng) * r, z: tree.z + Math.cos(sitAng) * r },
+    sit: at(sitAng, r),
     climb: { ang: sitAng, h: YOUNG.climbH },
     up: { ang: camAng + Math.PI, h: YOUNG.upH },
+    side,
+    whole: ok,
   };
 }
 
