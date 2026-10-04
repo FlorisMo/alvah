@@ -49,7 +49,7 @@ import {
   CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, FIND_R, GLADE_VIEW, HEAP, HEAP_GRAB, AT_IT, HIDE, HOME_TREES, ROUTES, RUN_ON_WAIT, RUN_ON_X, SEAT_STOP, SEE_D, SEEN_X, STUMP,
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
-  DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, nestWatch, youngPeek,
+  DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestFace, nestPeek, nestTrees, nestWatch, youngPeek,
 } from './eekhoorn.places';
 import { ontdekking } from '../../../content/ontdekkingen';
 
@@ -470,7 +470,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   let lastMove = false;
   /** while it waits in its nest (and peeks out of it): the spot to see it from, and which
    *  leg of the way there he is on (to the spot; the step that turns him to the nest) */
-  let nestWait: { watch: ReturnType<typeof nestWatch>; leg: 'go' | 'look' } | null = null;
+  let nestWait: { watch: ReturnType<typeof nestWatch>; leg: 'go' | 'look' | 'face'; face?: Spot & { stop: number } } | null = null;
   const hop = async (name: string, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
     k.say(line);
     lastMove = false;
@@ -498,6 +498,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       // a point beside the nest — it turns him, and the lens, to it — and there he stands)
       if (nestWait) {
         const w = nestWait.watch, d = dist(k.ranger(), w);
+        // (it peeks out, seen on his way: a short step that turns him to it, and there he stands
+        // while it looks at him and its line plays)
+        if (nestWait.leg === 'face' && nestWait.face) return { x: nestWait.face.x, z: nestWait.face.z, r: nestWait.face.stop, tag: 'nest-face' };
         if (nestWait.leg === 'go' && d <= NEST_WATCH.r) nestWait.leg = 'look';
         else if (nestWait.leg === 'look' && d > NEST_WATCH.r + NEST_WATCH.step + 0.8) nestWait.leg = 'go';
         if (nestWait.leg === 'look') return { x: w.aim.x, z: w.aim.z, r: w.stop, tag: 'nest-look' };
@@ -572,7 +575,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     // into it (the ball of twigs hides it; a bit of tail may show)
     if (!(await sq.moveTo({ x: n.x, z: n.z, alt: n.world.y - k.ctx.groundY(n.x, n.z) - NEST.r * 0.55, yaw: n.ang, pitch: 0, roll: 0, act: 'sit' }, 0.45))) return false;
     /** the nest in his picture now: big enough, well inside it (not at its edge), under the
-     *  line card, mostly clear of the trunks (not the ones the camera fades) and of his head */
+     *  line card and out of the chips' corner, mostly clear of the trunks (not the ones the
+     *  camera fades) and of his head */
     const nestInView = (): boolean => {
       const me = k.ranger();
       if (dist(me, n) > NEST_SEE.near) return false;
@@ -581,8 +585,10 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       const cam = k.world.camera;
       const g = k.ctx.groundY(me.x, me.z);
       const hiders = [...home.trunks(cam.position, me), { x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 }];
-      const pic = pictureOf(cam, k.ctx.canvas.clientHeight || 800, k.ctx.canvas.clientWidth || 1280, t0.box, t0.pts, hiders);
-      const ok = pic.inside && Math.abs(pic.cx) <= NEST_SEE.x && pic.px >= NEST_SEE.px && pic.clear >= 0.5;
+      const W = k.ctx.canvas.clientWidth || 1280;
+      const pic = pictureOf(cam, k.ctx.canvas.clientHeight || 800, W, t0.box, t0.pts, hiders);
+      const underHud = ((pic.cx + 1) / 2) * W < NEST_SEE.hud.w && pic.cy < NEST_SEE.hud.h;
+      const ok = pic.inside && !underHud && Math.abs(pic.cx) <= NEST_SEE.x && pic.px >= NEST_SEE.px && pic.clear >= 0.5;
       if (ok) { k.stats.nest_px = Math.round(pic.px); k.stats.nest_x = Math.round(pic.cx * 100) / 100; }
       return ok;
     };
@@ -600,6 +606,13 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       return under >= NEST_PEEK.nearWait;
     }, NEST_PEEK.wait).then(() => clock.seen);
     k.stats.nest_wait_s = Math.round((k.now - t0) * 10) / 10;
+    // (seen on his way to the spot: the way on is one short step toward it — it turns him to
+    // it, and the lens comes round behind him — and there he stands while it peeks; seen as
+    // the last step turns him to it: he finishes that step)
+    if (seen && nestWait.leg === 'go') {
+      const me = k.ranger(), f = nestFace(n, me, k.stats.nest_x ?? 0);
+      nestWait = { ...nestWait, leg: 'face', face: { ...f, stop: Math.max(0.4, dist(me, f) - NEST_WATCH.face) } };
+    }
     const pk = nestPeek(n, k.ranger());
     sq.glow(true);
     const out = sq.moveTo({ x: pk.x, z: pk.z, alt: pk.y, yaw: pk.yaw, pitch: 0, roll: 0, act: 'sit' }, 0.5);
@@ -609,7 +622,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       await k.wait(0.25);
       k.say(c.nestKijk);
       k.stats.nest_peek = 1;
-      k.discover('eekhoorn.nest');
+      k.discover('eekhoorn.nest', { first: true }); // (its card next: with its moment, before a find that waits)
     }
     if (!(await out)) { nestWait = null; return false; }
     chatter();

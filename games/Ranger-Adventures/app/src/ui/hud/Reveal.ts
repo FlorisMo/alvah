@@ -66,9 +66,9 @@ const queue = new RevealQueue<Item>({ now: () => performance.now(), quiet: quiet
 /** A NEW discovery: its reveal waits for a quiet moment, then shows once. Its picture is
  *  made now (the real model, ui/veldgids/portrait.ts), so it is ready when the moment comes.
  *  `heard`: he met it by its call (a bird he heard): the card says "Dat hoorde je!". */
-export function revealDiscovery(o: Ontdekking, opts: { heard?: boolean } = {}): void {
+export function revealDiscovery(o: Ontdekking, opts: { heard?: boolean; first?: boolean } = {}): void {
   if (o.model) void portrait(o.model);
-  queue.push({ id: o.id, o, heard: !!opts.heard });
+  queue.push({ id: o.id, o, heard: !!opts.heard }, !!opts.first); // (`first`: the find of the moment, before what waits)
   if (!raf) raf = requestAnimationFrame(tick);
 }
 

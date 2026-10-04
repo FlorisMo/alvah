@@ -92,8 +92,9 @@ export interface FlowHooks {
   /** the pause card is up (the mission clock stands still) */
   paused(): boolean;
   /** run 7 (§4.4): a NEW discovery's calm reveal (queued; it waits for a quiet moment);
-   *  `heard` (ree-discover, additive): he met it by its call alone ("Dat hoorde je!") */
-  reveal?(o: Ontdekking, opts?: { heard?: boolean }): void;
+   *  `heard` (ree-discover, additive): he met it by its call alone ("Dat hoorde je!");
+   *  `first` (ek-finds, additive): the find of the moment, before what waits */
+  reveal?(o: Ontdekking, opts?: { heard?: boolean; first?: boolean }): void;
   /** ree-discover (additive): how many reveals wait or show now (none when not wired) */
   revealsWaiting?(): number;
 }
@@ -393,15 +394,17 @@ export class AdventureKit {
    * Returns whether it was new. Once a play: a second call for the same id in this play
    * records nothing (safe to call from a tick). An id missing from content/ontdekkingen.ts
    * is a bug: it warns and records nothing. `heard` (ree-discover, additive): he met it by
-   * its call alone (a cuckoo in the trees): its reveal says "Dat hoorde je!".
+   * its call alone (a cuckoo in the trees): its reveal says "Dat hoorde je!". `first`
+   * (ek-finds, additive): it is the find of the moment he is in (its line just said): its
+   * reveal goes before the ones that wait, so the card comes with its moment.
    */
-  discover(id: string, opts: { quiet?: boolean; heard?: boolean } = {}): boolean {
+  discover(id: string, opts: { quiet?: boolean; heard?: boolean; first?: boolean } = {}): boolean {
     const row = ontdekking(id);
     if (!row) { console.warn(`[adventure] k.discover: no discovery "${id}" in content/ontdekkingen.ts`); return false; }
     if (this.found.has(id)) return false; // (once a play: "times seen" counts plays, not frames)
     this.found.add(id);
     const fresh = store.discover(id);
-    if (fresh && !opts.quiet) this.hooks.reveal?.(row, opts.heard ? { heard: true } : undefined);
+    if (fresh && !opts.quiet) this.hooks.reveal?.(row, opts.heard || opts.first ? { ...(opts.heard ? { heard: true } : {}), ...(opts.first ? { first: true } : {}) } : undefined);
     return fresh;
   }
 

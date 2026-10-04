@@ -647,27 +647,39 @@ export function nestOf(route: Route, i: number): NestSpot {
  * the spot he walks at a point `aside` m beside the nest (toward its stub: where the
  * squirrel goes next), about `step` m on — he turns to it, the follow lens comes round
  * behind him, and the nest stands off the middle of his picture (a find, never dead
- * centre). From the spot and from wherever that step leaves him the nest stands at least
+ * centre); seen on his way there, it is a short step (`face` m) from where he is toward a
+ * point `faceAside` m beside the nest (nestFace: he turns a little to it, it stays in view). From the spot and from wherever that step leaves him the nest stands at least
  * NEST_SEE.px + a margin tall in his picture, under the line card, no trunk and not his
  * head in front of it (eekhoorn.places.test, for every nest tree of every way). `under`:
  * nearer the nest than this he is under it (m).
  * Played 2026-10-04 (seeds 3, 45, a zuid play): the hint walked him on past the nest to its
  * foot, or away to the stub's watch spot while the line played, and the moment was lost.
  */
-export const NEST_WATCH = { d: [3.2, 2.9, 3.5, 3.8], turns: [0.25, 0, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, 1.25, -1.0], r: 0.5, aside: 2.0, step: 1.0, under: 1.8 } as const;
+export const NEST_WATCH = { d: [3.2, 2.9, 3.5, 3.8], turns: [0.25, 0, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, 1.25, -1.0], r: 0.5, aside: 1.4, step: 1.0, face: 0.5, faceAside: 0.8, under: 1.8 } as const;
 /** He has SEEN the nest (its moment: it peeks out, "Kijk, zijn nest!", and into his
  *  veldgids): within `near` m of it, at least `px` tall in his picture (its box, as
  *  eekhoorn.home pictureOf measures it), its middle within `x` of the half-width from the
  *  picture's middle (well in it, not at its edge: played 2026-10-04, seed 3, it peeked out
- *  at the very right edge while he walked past) and under the line card, mostly clear of
- *  the trunks and his head — for `secs` in a row (SeenClock). The runtime and the places
- *  test read this one row. */
-export const NEST_SEE = { px: 44, x: 0.7, secs: 0.5, near: 5.5 } as const;
+ *  at the very right edge while he walked past), under the line card and out of the top
+ *  left corner where the chips and a reveal card sit (`hud`: px at 1280×800; seed 2, it
+ *  peeked out behind "De kale dennenappels"), mostly clear of the trunks and his head — for
+ *  `secs` in a row (SeenClock). The runtime and the places test read this one row. */
+export const NEST_SEE = { px: 44, x: 0.7, hud: { w: 400, h: 250 }, secs: 0.5, near: 5.5 } as const;
 /** The point the hint's last step walks at: `aside` m beside the nest, toward its stub. */
 export function nestAim(n: NestSpot): Spot {
   const toStub = Math.sign(wrapA(n.tree.branch!.ang - n.ang)) || 1;
   const a = n.ang + toStub * (Math.PI / 2);
   return { x: n.x + Math.sin(a) * NEST_WATCH.aside, z: n.z + Math.cos(a) * NEST_WATCH.aside };
+}
+/** Seen on his way to the spot to see it from (anywhere): the point his short step walks
+ *  at — `faceAside` m beside the nest across his line to it, on the side away from where
+ *  the nest stands in his picture now (`side`: −1 it is left of the middle, 1 right), so
+ *  the step turns him a little toward it and it stays where he saw it, off the middle. */
+export function nestFace(n: Spot, me: Spot, side: number): Spot {
+  // (a heading turned up is to the left in his picture: the point goes to the right of a nest
+  // on the left, so he looks a little right of it and it stays on the left)
+  const a = headingTo(me, n) + (Math.sign(side) || 1) * (Math.PI / 2);
+  return { x: n.x + Math.sin(a) * NEST_WATCH.faceAside, z: n.z + Math.cos(a) * NEST_WATCH.faceAside };
 }
 /** Where the hint's last step leaves him, from `from` (within NEST_WATCH.r of the spot):
  *  walking at `aim`, `stop` m short of it (or where he is, nearer than that already). */

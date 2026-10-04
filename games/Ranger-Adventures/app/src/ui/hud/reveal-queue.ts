@@ -55,10 +55,16 @@ export class RevealQueue<T extends { id: string }> {
     this.o = { showMs: REVEAL_SHOW_MS, settleMs: REVEAL_SETTLE_MS, gapMs: REVEAL_GAP_MS, minMs: REVEAL_MIN_MS, holding: () => false, ...o };
   }
 
-  /** A new discovery to reveal (one already waiting or showing is not queued twice). */
-  push(item: T): void {
-    if (this.cur?.id === item.id || this.q.some((x) => x.id === item.id)) return;
-    this.q.push(item);
+  /** A new discovery to reveal (one already waiting or showing is not queued twice).
+   *  `first` (eekhoorn ek-finds, additive): it is the find of the moment he is in (a nest a
+   *  squirrel just peeked out of, its line just said): it goes before what waits, so its
+   *  card comes with its moment, not after an older one. */
+  push(item: T, first = false): void {
+    if (this.cur?.id === item.id) return;
+    const at = this.q.findIndex((x) => x.id === item.id);
+    if (at >= 0 && !first) return;
+    if (at >= 0) this.q.splice(at, 1);
+    if (first) this.q.unshift(item); else this.q.push(item);
   }
 
   /** Call often (every frame or so): what to show or take away now, if anything. */

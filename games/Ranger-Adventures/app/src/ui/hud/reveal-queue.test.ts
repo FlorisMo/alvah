@@ -37,6 +37,27 @@ test('one at a time, in order, each ~4 s, with a rest between', () => {
   assert.equal(r.q.waiting, 0);
 });
 
+test('the find of the moment goes before what waits (ek-finds: the nest\'s card comes with its peek), never twice', () => {
+  const r = rig();
+  r.setCalm(false);
+  r.q.push({ id: 'kegels' });
+  r.q.push({ id: 'nest' }, true);
+  r.q.push({ id: 'nest' }); // (already waiting: not twice, and it keeps its place)
+  r.setCalm(true);
+  r.run(12_000);
+  assert.deepEqual(r.log, ['500 show nest', '4500 hide nest', '5500 show kegels', '9500 hide kegels']);
+  // one already waiting, pushed again as the find of the moment: it moves to the front
+  const s = rig();
+  s.setCalm(false);
+  s.q.push({ id: 'a' });
+  s.q.push({ id: 'b' });
+  s.q.push({ id: 'b' }, true);
+  s.setCalm(true);
+  s.run(3_000);
+  assert.deepEqual(s.log, ['500 show b']);
+  assert.equal(s.q.waiting, 1, 'a still waits (once)');
+});
+
 test('it waits for a quiet moment that lasts (not a breath between two lines)', () => {
   const r = rig();
   r.setCalm(false);

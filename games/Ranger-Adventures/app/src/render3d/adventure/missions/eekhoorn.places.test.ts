@@ -21,7 +21,7 @@ import {
   seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
-  NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
+  NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, nestFace, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
 } from './eekhoorn.places.ts';
 import { STUB_TILT } from '../../world/Forest.ts';
@@ -766,7 +766,7 @@ function followPx(me: { x: number; z: number }, heading: number, p: { x: number;
 /** A box through the follow lens behind him (as eekhoorn.home `pictureOf` measures a find):
  *  how tall it stands (px), its middle across the picture (−1…1), its top (px from the top),
  *  and whether its middle is inside the picture at all. */
-function followBox(me: { x: number; z: number }, heading: number, box: THREE.Box3): { px: number; cx: number; top: number; inside: boolean } {
+function followBox(me: { x: number; z: number }, heading: number, box: THREE.Box3): { px: number; cx: number; cy: number; top: number; inside: boolean } {
   const g = groundY(me.x, me.z);
   const cam = new THREE.PerspectiveCamera(FOV, W / H, 0.1, 400);
   cam.position.set(me.x - Math.sin(heading) * LENS.back, g + LENS.up, me.z - Math.cos(heading) * LENS.back);
@@ -774,12 +774,12 @@ function followBox(me: { x: number; z: number }, heading: number, box: THREE.Box
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (let i = 0; i < 8; i++) {
     const v = new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
-    if (v.clone().applyMatrix4(cam.matrixWorldInverse).z > -0.2) return { px: 0, cx: 9, top: 0, inside: false };
+    if (v.clone().applyMatrix4(cam.matrixWorldInverse).z > -0.2) return { px: 0, cx: 9, cy: -1, top: 0, inside: false };
     v.project(cam);
     minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x); minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y);
   }
   const cx = (minX + maxX) / 2, cy = (1 - (minY + maxY) / 2) * 0.5 * H;
-  return { px: (maxY - minY) * 0.5 * H, cx, top: (1 - maxY) * 0.5 * H, inside: Math.abs(cx) <= 0.92 && cy >= 96 && cy <= H - 8 };
+  return { px: (maxY - minY) * 0.5 * H, cx, cy, top: (1 - maxY) * 0.5 * H, inside: Math.abs(cx) <= 0.92 && cy >= 96 && cy <= H - 8 };
 }
 /** How tall (px) something `size` m across reads at `d` m through a 55° lens on 800 px. */
 const pxAt = (size: number, d: number): number => (size / (2 * d * Math.tan((FOV / 2) * Math.PI / 180))) * H;
@@ -857,8 +857,9 @@ test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1
         assert.ok(dist(st, nest) > NEST_WATCH.under, `${tag}: not under it`);
         const q = followBox(st, st.h, box);
         assert.ok(q.inside && Math.abs(q.cx) <= NEST_SEE.x - 0.1 && q.top >= 104, `${tag}: well in his picture, under the line card (x ${q.cx.toFixed(2)}, top ${q.top.toFixed(0)} px)`);
+        assert.ok(((q.cx + 1) / 2) * W >= NEST_SEE.hud.w + 40 || q.cy >= NEST_SEE.hud.h + 40, `${tag}: out of the chips' corner`);
         // (where the step leaves him: the nest off the middle of his picture)
-        if (st.tag !== 'at the spot') assert.ok(Math.abs(q.cx) >= 0.15, `${tag}: off the middle of his picture (x ${q.cx.toFixed(2)})`);
+        if (st.tag !== "at the spot") assert.ok(Math.abs(q.cx) >= 0.1, `${tag}: off the middle of his picture (x ${q.cx.toFixed(2)})`);
         assert.ok(q.px >= NEST_SEE.px + 6, `${tag}: it stands ${q.px.toFixed(0)} px tall (the moment wants ${NEST_SEE.px})`);
         const gs = groundY(st.x, st.z);
         const eye = { x: st.x - Math.sin(st.h) * LENS.back, y: gs + LENS.up, z: st.z - Math.cos(st.h) * LENS.back };
@@ -904,6 +905,18 @@ test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1
     });
   }
   assert.ok(n >= 6, `${n} nests`);
+});
+
+test('the nest seen on his way: the short step turns him a little toward it, the nest kept on the side of his picture it was on', () => {
+  const n = { x: 0, z: 0 };
+  for (let a = -Math.PI; a < Math.PI; a += Math.PI / 8) for (const d of [1.5, 2.5, 4, 5.5]) for (const side of [-1, 1]) {
+    const me = { x: Math.sin(a) * d, z: Math.cos(a) * d };
+    const f = nestFace(n, me, side);
+    const off = wrapA(headingTo(me, f) - headingTo(me, n));
+    assert.ok(Math.abs(off) > 0.1 && Math.abs(off) < 0.6, `${deg(a)}° ${d} m: ${deg(off)}° off his line to it`);
+    // (a heading turned up looks further left: he looks right of a nest on the left, −1)
+    assert.equal(Math.sign(off), side, `${deg(a)}° ${d} m side ${side}: the nest stays on its side of his picture`);
+  }
 });
 
 test('the dining spots: in the wood, off every way, out of the hide-and-seek rings and the glade; each way passes two, and he sees each for a moment as he goes', () => {

@@ -849,7 +849,8 @@ const viewW = (): number => (typeof window !== 'undefined' ? window.innerWidth :
  *  stands in the picture (px), whether it is in the picture (its middle in front of the
  *  lens, inside the picture's width and under the line card at the top), and the share of
  *  its points no trunk of the home hides (`trunks`). */
-export interface Picture { px: number; across: number; inside: boolean; clear: number; /** its middle across the picture (−1 the left edge … 1 the right) */ cx: number }
+export interface Picture { px: number; across: number; inside: boolean; clear: number;
+  /** its middle across the picture (−1 the left edge … 1 the right), and down it (px) */ cx: number; cy: number }
 const CORNER = new THREE.Vector3();
 export function pictureOf(cam: THREE.Camera, h: number, w: number, box: THREE.Box3, pts: readonly THREE.Vector3[], trunks: readonly Upright[]): Picture {
   cam.updateMatrixWorld();
@@ -860,11 +861,11 @@ export function pictureOf(cam: THREE.Camera, h: number, w: number, box: THREE.Bo
     CORNER.project(cam);
     minX = Math.min(minX, CORNER.x); maxX = Math.max(maxX, CORNER.x); minY = Math.min(minY, CORNER.y); maxY = Math.max(maxY, CORNER.y);
   }
-  if (behind) return { px: 0, across: 0, inside: false, clear: 0, cx: 9 };
+  if (behind) return { px: 0, across: 0, inside: false, clear: 0, cx: 9, cy: -1 };
   const cx = (minX + maxX) / 2, cy = (1 - (minY + maxY) / 2) * 0.5 * h;
   const inside = Math.abs(cx) <= 0.92 && cy >= 96 && cy <= h - 8;
   const clear = pts.length ? pts.filter((p) => lineClear(cam.position, p, trunks)).length / pts.length : 0;
-  return { px: (maxY - minY) * 0.5 * h, across: (maxX - minX) * 0.5 * w, inside, clear, cx };
+  return { px: (maxY - minY) * 0.5 * h, across: (maxX - minX) * 0.5 * w, inside, clear, cx, cy };
 }
 
 /** A colour with a little of the stream's own variety (every twig, every flake its own). */
