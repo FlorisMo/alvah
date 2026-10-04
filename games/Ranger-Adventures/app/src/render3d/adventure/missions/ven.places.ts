@@ -564,6 +564,23 @@ export function adderView(a: Spot, me: Spot): ViewSpec {
   };
 }
 
+/** How far (rad) he stands turned off her in her hold, toward the water (`adderHoldHeading`). */
+export const ADDER_ASIDE = 0.32;
+/** His heading in her hold. The hold's lens is his walk lens behind him (so his turn keys
+ *  turn him: review r3 of ven-world), and straight behind him his body hid her coiled on the
+ *  path ahead (ven-life: she showed only as a head beside his shoulder as she reared). Turned
+ *  `ADDER_ASIDE` toward the water, in that picture she lies beside him on the heather side,
+ *  where she slides off, away from him; walking on as he faces still brings him into her
+ *  reach. */
+export function adderHoldHeading(me: Spot, a: Spot): number {
+  const h = headingTo(me, a);
+  const heath = adderHeather(a);
+  // (the picture's right of a lens looking along h: (−cos h, sin h); a larger heading turns
+  // him to the left, so she moves to the right of his body)
+  const onRight = (heath.x - a.x) * -Math.cos(h) + (heath.z - a.z) * Math.sin(h) > 0;
+  return h + (onRight ? ADDER_ASIDE : -ADDER_ASIDE);
+}
+
 /** The soft moss across the path and down to the water at a station: a strip `2a` wide from
  *  `top` (above the path, on the heather side) down to `low` (the water's edge); its frame
  *  (`u` along the path, `v` down the bank toward the water) at its middle, `b` half long. */

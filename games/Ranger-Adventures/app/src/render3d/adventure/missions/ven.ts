@@ -51,7 +51,7 @@ import { Seen, boxOf } from './ven.finds';
 import type { MoodId } from '../../Moods';
 import {
   ADDER_NEAR, ADDER_WARN, APPROACH, BAYS, BAY_IDS, CARPET_A, CARPET_SEEN, CARPET_WET, CHORUS_KEYS, FROG_H, FROG_LEN, GO_AWAY, HINT_RING, MISSION, VARIANT_KEY,
-  VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderView, between, carpetAt, frogOf, decoySlots, hintRingOf, lastVenVariants, pointAt,
+  VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderHoldHeading, adderView, between, carpetAt, frogOf, decoySlots, hintRingOf, lastVenVariants, pointAt,
   padGoal, project, route, singOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type VenLaid, type WayStep,
 } from './ven.places';
 
@@ -514,10 +514,11 @@ async function adderMoment(k: AdventureKit, rust: ChoiceRun, home: VenHome, laid
   k.say(enc.vraag);
   await k.wait(Math.max(1.8, enc.vraag.split(/\s+/).length * 0.42));
   home.adderLift(0);
-  // the lens comes calmly back behind him, her coiled ahead on the path, and his feet are
-  // free: he may wait, or walk round her on the heather side — the follow camera, so his
+  // the lens comes calmly back behind him, her coiled ahead on the path beside his body (he
+  // stands turned a little toward the water: straight behind him he hid her), and his feet
+  // are free: he may wait, or walk round her on the heather side — the follow camera, so his
   // turn keys turn him (in the held side shot they turned a lens that was held: review r3)
-  k.world.faceRanger(headingTo(k.ranger(), a));
+  k.world.faceRanger(adderHoldHeading(k.ranger(), a));
   await k.behind();
   const feetFree = (): void => { k.free(); };
   feetFree();
@@ -562,7 +563,7 @@ async function adderMoment(k: AdventureKit, rust: ChoiceRun, home: VenHome, laid
         const back = { x: a.x + ((m.x - a.x) / away) * (ADDER_NEAR + 1.6), z: a.z + ((m.z - a.z) / away) * (ADDER_NEAR + 1.6) };
         await k.wait(0.5);
         await k.walkRanger(back.x, back.z, 0.1);
-        k.world.faceRanger(headingTo(k.ranger(), a));
+        k.world.faceRanger(adderHoldHeading(k.ranger(), a));
         await k.wait(0.4);
         home.adderLift(0.3);
         feetFree();

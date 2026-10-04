@@ -34,7 +34,7 @@ import {
   EDGE_H, HINT_RING,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
   above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet, underBoy,
-  hintRingOf, lastVenVariants, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
+  adderHeather, adderHoldHeading, headingAt, hintRingOf, lastVenVariants, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
   type BayId, type FrogSpot, type Side, type ViewSpec,
 } from './ven.places.ts';
 import type { Spot } from '../types.ts';
@@ -450,6 +450,58 @@ test('the stations: the path runs through the moss, a dry way round it above, no
       assert.ok(above(round) > 0.2 && !blocked(round) && dist(round, a) >= 3.2 && dist(round, a) > ADDER_NEAR, 'a dry way round her');
     }
   }
+});
+
+test('in her hold he sees her: the walk lens behind him, she lies beside his body on the heather side, in the picture; walking on still reaches her', () => {
+  // (ven-life: straight behind him his body hid her — only her head showed by his shoulder
+  // as she reared. The hold's lens is kit `behind()`: 4.6 m back, 2.4 m up, looking 1.6 m
+  // ahead of him at 0.9 m; his walk to her ends within 0.9 m of its spot, on the path or a
+  // step off it)
+  const hair = (cam: THREE.Camera, p: Spot): { x0: number; x1: number; y0: number; y1: number } => {
+    const g = groundY(p.x, p.z);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < 16; i++) for (const [k, r] of [[0, 0.14], [RANGER_STAND_HEIGHT * 0.7, 0.2], [RANGER_STAND_HEIGHT * 0.8, 0.28], [RANGER_STAND_HEIGHT + 0.08, 0.24]] as const) {
+      const v = new THREE.Vector3(p.x + Math.cos((i / 16) * Math.PI * 2) * r, g + k, p.z + Math.sin((i / 16) * Math.PI * 2) * r).project(cam);
+      const x = ((v.x + 1) / 2) * W, y = ((1 - v.y) / 2) * H;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    return { x0, x1, y0, y1 };
+  };
+  let worst = Infinity;
+  for (const { bay, st } of allStations()) for (const side of SIDES) {
+    const l = route(bay, side);
+    for (const sh of [-ADDER_SHIFT, 0, ADDER_SHIFT]) for (const turn of [-0.6, 0.6]) {
+      const a = adderAt(bay, side, stationsOf(bay, side)[st.i], sh, turn);
+      const end = a.s - ADDER_BEFORE;
+      for (const back of [0, 0.45, 0.9]) for (const off of [-0.4, 0, 0.4]) {
+        const p0 = pointAt(l, end - back), hd = headingAt(l, end - back);
+        const me = { x: p0.x - Math.cos(hd) * off, z: p0.z + Math.sin(hd) * off };
+        if (above(me) < 0.05) continue; // (never in the water)
+        const h = adderHoldHeading(me, a);
+        const f = { x: Math.sin(h), z: Math.cos(h) };
+        const g = groundY(me.x, me.z);
+        const cam = new THREE.PerspectiveCamera(FOV, W / H, 0.1, 400);
+        const to = { x: me.x - f.x * 4.6, z: me.z - f.z * 4.6 };
+        cam.position.set(to.x, Math.max(g + 2.4, groundY(to.x, to.z) + 1.4), to.z);
+        cam.lookAt(me.x + f.x * 1.6, g + 0.9, me.z + f.z * 1.6);
+        cam.updateMatrixWorld(true);
+        const her = boxOf(cam, a, 0.47, 0.25), him = hair(cam, me);
+        const name = `${bay}${side}.S${st.i + 1} shift ${sh} turn ${turn} (${back} m short, ${off} m aside)`;
+        assert.ok(her.x0 > 60 && her.x1 < W - 60 && her.y0 > 120 && her.y1 < H - 60, `${name}: she lies in the picture (${her.x0.toFixed(0)}-${her.x1.toFixed(0)}, ${her.y0.toFixed(0)}-${her.y1.toFixed(0)})`);
+        const gap = Math.max(her.x0 - him.x1, him.x0 - her.x1);
+        worst = Math.min(worst, gap);
+        assert.ok(gap >= 16, `${name}: she lies beside him in the picture, not behind his body (${gap.toFixed(0)} px apart)`);
+        // she lies on the heather side of him there, so she slides off away from him
+        const heath = adderHeather(a), right = { x: -Math.cos(h), z: Math.sin(h) };
+        const heathRight = (heath.x - a.x) * right.x + (heath.z - a.z) * right.z > 0;
+        assert.equal(her.x0 > him.x1, heathRight, `${name}: she lies on the heather side of him`);
+        // walking on as he faces brings him into her reach (the impulse is still there)
+        const d = dist(me, a), along = (a.x - me.x) * f.x + (a.z - me.z) * f.z;
+        assert.ok(along > 0 && Math.sqrt(Math.max(0, d * d - along * along)) < ADDER_NEAR - 0.5, `${name}: walking on he passes her within her reach`);
+      }
+    }
+  }
+  assert.ok(worst < 400, `(the closest she came to his body: ${worst.toFixed(0)} px)`);
 });
 
 test('every order of the three moments fits on the way to every cove and side; the dry path is never first; band 1 listens twice', () => {
