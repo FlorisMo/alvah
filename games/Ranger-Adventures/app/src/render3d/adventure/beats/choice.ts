@@ -145,7 +145,9 @@ export class ChoiceRun {
   private readonly run: DagnachtRun;
   private readonly k: AdventureKit;
   private readonly step: number;
-  private readonly tempo: RustTempo;
+  /** this beat's holds (run 7 growth, additive: readable, so a home's own body moment — the
+   *  frisling's tired-piglet walk — goes as long as a hold wants now and tells it a reach) */
+  readonly tempo: RustTempo;
   /** the level's rustkracht knobs (a go moment's wait) */
   private readonly knobs: RustKnobs;
   /** the two answers' places on a card (position never cues the answer; seeded) */

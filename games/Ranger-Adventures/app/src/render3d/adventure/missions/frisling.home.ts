@@ -377,7 +377,7 @@ export class FrislingHome implements HomeDressing {
     const w = WAYS[DEFAULT_WAY];
     this.lay(DEFAULT_WAY, {
       nook: 0, pose: 0, trial: this.distractors, glimpse,
-      spots: assignSpots(w.decoySpots.map((_, i) => i), w.decoySpots, this.distractors.map(kindOf)),
+      spots: assignSpots(w.decoySpots.map((_, i) => i), w.decoySpots, this.distractors.map(kindOf), w.nearNook?.[0]),
     });
   }
 
