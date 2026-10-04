@@ -222,8 +222,8 @@ export class Frog extends Actor {
   }
 }
 
-/** Beyond this far (m) from the lens a frog's body rests (a 23 cm frog is ~6 px there). */
-const FROG_DRAWN_M = 22;
+/** Beyond this far (m) from the lens a frog's body rests (a 23 cm frog is ~8 px there). */
+const FROG_DRAWN_M = 18;
 
 /** The adventure's `actor` hook: every heikikker of the home is a Frog. */
 export function venBody(spec: ResidentSpec, env: ActorEnv, height: number, dressing: HomeDressing | null): Actor | null {
@@ -279,6 +279,12 @@ const MOSS = { green: '#8fbf47', sheen: '#bfe07a', wet: '#55613a', mud: '#4a3b26
 /** The adder is drawn this much over the scale table's coil (0.15 m high, 0.47 m long →
  *  0.2 m, 0.6 m: a big adder, still a real one): a child sees her on the path. */
 const ADDER_SCALE = 1.3;
+/** The coves' things (sedge, cotton-grass, clods, the look-alikes) are drawn while the lens
+ *  is within `COVES_NEAR` m of the middle cove, rest beyond `COVES_FAR` (Residents
+ *  `detail`; the hide and the marker are ~30 m off, cove A ~11 m nearer). */
+const COVES_NEAR = 24;
+const COVES_FAR = 30;
+
 /** How far (m) she draws her coil back from him after a hiss. */
 const ADDER_DRAW_BACK = 0.22;
 
@@ -392,9 +398,14 @@ export class VenHome implements HomeDressing {
     heather.computeBoundingSphere();
     heather.castShadow = false;
 
+    /* -- the coves' things rest together from the middle cove when the lens is far (the
+       three coves lie within ~11 m of it): from the hide, the marker or the wildcamera's
+       wood they are specks, and the views there have no draw calls to spare -- */
+    const coves = env.detail(BAYS.B.frame, { near: COVES_NEAR, far: COVES_FAR });
+
     /* -- the coves: sedge tussocks (one field over all three) -- */
     const clumps: Clump[] = BAY_IDS.flatMap((id) => coveClumps(BAYS[id]));
-    this.cover = new CoverField({ parent: this.group, groundY: g, clumps, seed: 61 });
+    this.cover = new CoverField({ parent: coves, groundY: g, clumps, seed: 61 });
     this.built = this.cover.stems.map((s) => ({ h: s.h, lx: s.lx, lz: s.lz, r: s.r }));
 
     /* -- veenmos: each cove's moss, its cushion and patches (into the one ground mesh) -- */
@@ -436,7 +447,7 @@ export class VenHome implements HomeDressing {
       // (a cotton-grass head under each of the cove's butterfly slots: it sits on one)
       for (const q of b.slots.butterflies) cotton.push({ ...q, s: 1, rot: rnd() * 6.28 });
     });
-    const cottonMesh = keep(new THREE.InstancedMesh(cottonGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, emissive: '#3c3b35' }), cotton.length));
+    const cottonMesh = keep(new THREE.InstancedMesh(cottonGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, emissive: '#3c3b35' }), cotton.length), coves);
     cottonMesh.name = 'ven-cotton-grass';
     cotton.forEach((c, i) => cottonMesh.setMatrixAt(i, m4.compose(p3.set(c.x, g(c.x, c.z) - 0.01, c.z), q4.setFromAxisAngle(UP, c.rot), s3.set(c.s, c.s, c.s))));
     cottonMesh.instanceMatrix.needsUpdate = true;
@@ -451,8 +462,7 @@ export class VenHome implements HomeDressing {
     const clodGeo = clodGeometry();
     const clodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
     this.made.push({ geometry: clodGeo, material: clodMat });
-    // (resting from the middle cove: the three coves lie within ~11 m of it)
-    const detail = env.detail(BAYS.B.frame, { near: 26, far: 32 });
+    const detail = coves;
     const spots = BAY_IDS.flatMap((id) => clodSpots(BAYS[id]));
     const clods = new THREE.InstancedMesh(clodGeo, clodMat, spots.length);
     clods.name = 'ven-clods';
