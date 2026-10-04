@@ -749,7 +749,7 @@ export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
  * stump's side first), and on to its stump as its dash plans it (round him and round the
  * lens: squirrel-math `dashPath`) — never comes nearer the lens than it has been by more
  * than `toward` m, never through a trunk's foot nor within `feet` m of his, and its first `runIn` m on from the pop
- * stay in the picture, and at most `hid` of its dash from off the bark to the pop (and of
+ * stay in the picture (above `low` of it, where −1 is its bottom edge, as the pop), and at most `hid` of its dash from off the bark to the pop (and of
  * that run on) is behind his body or a trunk (squirrel-math `lineClear`), never its last
  * `seeLast` m into the pop. The pop is in the picture too, off his body, off every trunk's foot.
  * Where no heading from where he stands does it, a few calm steps first (`steps` m, the way
@@ -757,7 +757,7 @@ export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
  */
 export const FOUND_RUN = {
   back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, face: (75 * Math.PI) / 180, toward: 0.25, front: 3.0, feet: 1.15,
-  step: (2.5 * Math.PI) / 180, runIn: 2, hid: 0.2, seeLast: 0.5,
+  step: (2.5 * Math.PI) / 180, runIn: 2, hid: 0.2, seeLast: 0.5, low: -0.75,
   pops: [[1.6, 0.7], [1.6, 0.9], [1.9, 0.6], [1.9, 0.8], [2.3, 0.5], [2.3, 0.7], [1.9, 1.0], [2.7, 0.45], [2.7, 0.65], [3.2, 0.4], [3.2, 0.6], [1.6, 1.2], [2.3, 1.1], [3.0, 0.9]] as readonly (readonly [number, number])[],
   sides: [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2, 1.5, -1.5],
   steps: [0.6, 1.0, 1.4, 1.8],
@@ -813,6 +813,13 @@ export function lensBehind(me: Spot, h: number, back: number = FOUND_RUN.back): 
 function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: Spot; side: number } | null {
   const lens = lensBehind(me, h);
   const off = (q: Spot): number => Math.abs(wrapA(headingTo(lens, q) - h));
+  // (how far down the picture a spot on the ground is: −1 its bottom edge, 0 its middle — the
+  // follow lens 2.4 m up looks down at 0.65 of his height on him)
+  const pitch = Math.atan2(2.4 - 0.65 * RANGER_STAND_HEIGHT, FOUND_RUN.back);
+  const yOf = (q: Spot): number => {
+    const along = (q.x - lens.x) * Math.sin(h) + (q.z - lens.z) * Math.cos(h);
+    return along <= 0.3 ? -9 : -Math.tan(Math.atan2(2.4 - 0.1, along) - pitch) / Math.tan((55 / 2) * Math.PI / 180);
+  };
   const rOf = (t: HomeTree): number => barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, 1) + 0.3;
   const footOf = (t: HomeTree): number => trunkOutline({ x: t.x, z: t.z, H: t.h, species: t.species }, 0.15) + 0.05;
   const sq = barkSpot(tree, sqAng);
@@ -828,17 +835,35 @@ function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: 
   // (what hides it from the lens, heights over the ground: the trunks — but the ones the
   // follow camera fades between the lens and him — and his own body)
   const eye = { x: lens.x, y: 2.4, z: lens.z };
-  const hiders: Upright[] = [...HOME_TREES.map((t) => ({ x: t.x, z: t.z, H: t.h, species: t.species })).filter((t) => {
-    const f = trunkFadeUpright(t, 0);
+  const fadeOk = (t: HomeTree): boolean => {
+    const f = trunkFadeUpright({ x: t.x, z: t.z, H: t.h, species: t.species }, 0);
     return lineClear(eye, { ...me, y: RANGER_STAND_HEIGHT }, [f]) && lineClear(eye, { ...me, y: 0.9 }, [f]);
-  }).map((t) => trunkUpright(t, 0)), { x: me.x, z: me.z, y0: 0, y1: RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 }];
-  for (const [d, turn] of FOUND_RUN.pops) for (const s of [toStump, -toStump]) {
-    const pop = { x: me.x + Math.sin(h + s * turn) * d, z: me.z + Math.cos(h + s * turn) * d };
-    if (HOME_TREES.some((t) => dist(t, pop) < footOf(t) + 0.35) || off(pop) > FOUND_RUN.half) continue;
-    if (off(pop) < FOUND_RUN.body && dist(lens, pop) > dist(lens, me) - 0.3) continue;
-    for (const k of FOUND_RUN.sides) {
-      const side = sqAng + k;
-      if (Math.abs(wrapA(headingTo(tree, lens) - side)) > FOUND_RUN.face) continue;
+  };
+  const body: Upright = { x: me.x, z: me.z, y0: 0, y1: RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 };
+  const hiders: Upright[] = [...HOME_TREES.filter(fadeOk).map((t) => trunkUpright({ x: t.x, z: t.z, H: t.h, species: t.species }, 0)), body];
+  // (on its own bark: the other trunks and his body; its own pine hides it only round the back)
+  const others: Upright[] = [...HOME_TREES.filter((t) => t !== tree && fadeOk(t)).map((t) => trunkUpright({ x: t.x, z: t.z, H: t.h, species: t.species }, 0)), body];
+  const hiddenAt = (q: Spot): boolean => !lineClear(eye, { x: q.x, y: 0.15, z: q.z }, hiders);
+  const tr = { x: tree.x, z: tree.z, H: tree.h, species: tree.species };
+  const r0 = barkRadius(tr, 0) + 0.35;
+  for (const k of FOUND_RUN.sides) {
+    const side = sqAng + k;
+    // (it comes down the bark round to `side` where he sees it: that side of the bark toward
+    // the lens all the way down, clear of his body and the other trunks, and where it comes
+    // off the bark too)
+    const down = [0, 0.5, 1].map((u) => ({ a: sqAng + wrapA(side - sqAng) * u, y: HIDE.h + (0.25 - HIDE.h) * u }));
+    if (down.some((q) => Math.abs(wrapA(headingTo(tree, lens) - q.a)) > FOUND_RUN.face)) continue;
+    if (down.some((q) => { const r = barkRadius(tr, q.y) + 0.1; return !lineClear(eye, { x: tree.x + Math.sin(q.a) * r, y: q.y + 0.12, z: tree.z + Math.cos(q.a) * r }, others); })) continue;
+    const foot = { x: tree.x + Math.sin(side) * r0, z: tree.z + Math.cos(side) * r0 };
+    if (!lineClear(eye, { ...foot, y: 0.15 }, others)) continue;
+    // where it sits up facing him: at the foot of its pine there, or out on the ground in front
+    // of him (the stump's side first)
+    const pops: Spot[] = [foot, ...FOUND_RUN.pops.flatMap(([d, turn]) => [toStump, -toStump].map((s2) => ({ x: me.x + Math.sin(h + s2 * turn) * d, z: me.z + Math.cos(h + s2 * turn) * d })))];
+    for (const pop of pops) {
+      const atFoot = pop === foot;
+      if (HOME_TREES.some((t) => !(atFoot && t === tree) && dist(t, pop) < footOf(t) + 0.35) || off(pop) > FOUND_RUN.half || yOf(pop) < FOUND_RUN.low) continue;
+      // (level with him or ahead of him, never between him and the lens; off his body)
+      if (off(pop) < FOUND_RUN.body || (pop.x - me.x) * Math.sin(h) + (pop.z - me.z) * Math.cos(h) < -0.5) continue;
       const way = foundRunPath(me, tree, sqAng, side, pop, lens);
       let far = -Infinity, bad = false;
       for (const q of along(way.pts)) {
@@ -847,20 +872,18 @@ function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: 
         far = Math.max(far, dq);
       }
       if (bad) continue;
-      // (over the ground: never through a trunk's foot — its own pine's only once it is off it
-      // — nor over his feet)
-      // (its own pine: never back in past where it comes off the bark — round it, not through it)
+      // (over the ground: never through a trunk's foot — its own pine's: never back in past
+      // where it comes off the bark, round it, not through it — nor by his feet)
       const dash = along(way.pts.slice(way.foot));
       const off0 = Math.min(dist(tree, way.pts[way.foot]), footOf(tree)) - 0.02;
       if (dash.some((q) => dist(q, me) < FOUND_RUN.feet || HOME_TREES.some((t) => dist(t, q) < (t === tree ? off0 : footOf(t))))) continue;
       // (its first `runIn` m on from the pop in the picture: it runs off where he sees it)
       let run = 0, prev = pop;
       const on = along(way.pts.slice(way.pop)).filter((q) => { run += dist(prev, q); prev = q; return run <= FOUND_RUN.runIn; });
-      if (on.some((q) => off(q) > FOLLOW_HALF)) continue;
-      // (and he sees it run: from off the bark to there, at most `hid` of its way behind his
-      // body or a trunk, and never its last `seeLast` m into the pop — played 2026-10-04: its
+      if (on.some((q) => off(q) > FOLLOW_HALF || yOf(q) < FOUND_RUN.low)) continue;
+      // (and he sees it run: at most `hid` of its dash to the pop, and of that run on, behind
+      // his body or a trunk, never its last `seeLast` m into the pop — played 2026-10-04: its
       // dash across in front of him went behind his legs and the trunk, gone for 1.5 s)
-      const hiddenAt = (q: Spot): boolean => !lineClear(eye, { x: q.x, y: 0.15, z: q.z }, hiders);
       const toPop = along(way.pts.slice(way.foot, way.pop + 1)).map(hiddenAt);
       const runOn = on.map(hiddenAt);
       const last = toPop.length - Math.ceil(FOUND_RUN.seeLast / 0.1);

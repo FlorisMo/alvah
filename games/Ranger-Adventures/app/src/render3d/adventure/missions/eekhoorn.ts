@@ -105,6 +105,8 @@ const HIDE2 = { most: 1, round: HIDE.round * 0.6 } as const;
  *  `grace` s more at most, sits up facing him and runs on. Lying in the sun it lies along
  *  its stub, turned `lie` rad from the way the stub points. */
 const ANTIC = { first: 0.25, again: 2.2, near: SEE_D + 0.2, lie: 0, grace: 1.1 } as const;
+/** How he turns on the spot after a find (rad/s at most, s at least). */
+const TURN = { rate: 3.2, min: 0.35 } as const;
 /** After a find it runs home to its stump: his keys are his this long (s) after it is off,
  *  so it stays ahead of him (it runs at its full run, ~2.4 m/s; he walks a little slower). */
 const RUN_LEAD = 0.7;
@@ -380,6 +382,19 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   };
   void fam;
   const sight = (): Sight => sightOf(k, sq, home.trees);
+  /** He turns on the spot to `h` — calmly, in the held picture (at most `TURN.rate` rad/s, at
+   *  least `TURN.min` s; at once under reduced motion) — before the lens comes round behind
+   *  him (his heading set at once was a jump of his whole body in the held view). */
+  const turnRanger = async (h: number): Promise<void> => {
+    const from = k.ranger().heading, turn = wrap(h - from);
+    const secs = k.reduced ? 0 : Math.max(TURN.min, Math.abs(turn) / TURN.rate);
+    if (secs > 0) {
+      let t = 0;
+      const off = k.onTick((dt) => { t = Math.min(secs, t + dt); const u = t / secs; k.world.faceRanger(from + turn * u * u * (3 - 2 * u)); });
+      try { await k.wait(secs); } finally { off(); }
+    }
+    k.world.faceRanger(h);
+  };
   /** the stats a playtest reads (`__ranger.adventure().stats`): how tall it is now (px) */
   const measure = (): Sight => { const s = sight(); k.stats.sq_px = Math.round(s.px); k.stats.sq_seen = s.seen ? 1 : 0; return s; };
   /** while it hides: could any of it show in his picture, edge and all? (the stats too) */
@@ -1055,7 +1070,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       await k.walkRanger(turn.at.x, turn.at.z, 0.05);
     }
     const me0 = k.ranger();
-    k.world.faceRanger(turn.face);
+    await turnRanger(turn.face);
     await k.behind();
     k.stats.hide2_go = 1;
     await k.guard(sq.goTrunk(tree2, { ang: headingTo(t2, me0), h: HIDE.h + 0.25 }));
@@ -1090,7 +1105,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     k.stats.run_step = Math.round(dist(run.at, k.ranger()) * 10) / 10;
     await k.walkRanger(run.at.x, run.at.z, 0.05);
   }
-  k.world.faceRanger(run.face);
+  await turnRanger(run.face);
   await k.behind();
   await k.wait(0.3);
   const m = k.ranger();
@@ -1181,6 +1196,16 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     tick: () => {
       if (onStump && k.now - lastChatter > 3.2) chatter();
       if (onStump) measure();
+      else if (sq.body) {
+        // (dev read, its run home: how near the lens it came, and whether it was ever at the
+        // picture's bottom edge)
+        const L = lens();
+        k.stats.home_near = Math.round(Math.min(k.stats.home_near ?? 99, dist(L, sq)) * 10) / 10;
+        const cam = k.world.camera;
+        cam.updateMatrixWorld();
+        const c0 = BOX.setFromObject(sq.body).getCenter(V2);
+        if (V1.copy(c0).applyMatrix4(cam.matrixWorldInverse).z < -0.3 && V1.copy(c0).project(cam).y < -0.8 && Math.abs(V1.x) < 1) k.stats.home_low = 1;
+      }
       if (verrDone) return;
       const m = k.ranger();
       if (verr === 'gaai') {
