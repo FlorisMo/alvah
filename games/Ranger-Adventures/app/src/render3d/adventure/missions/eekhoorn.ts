@@ -93,10 +93,13 @@ const SWEEP_DIG = 0.25;
  *  song and a great tit's short pump give the same listening tempo, whoever came today. */
 const CALL_CAP: readonly [number, number] = [0.6, 1.2];
 /** The jay's own cache (run 7, ek-day): it acts once he is within `near` m of it (and not
- *  nearer than `close`) and it is in his picture. The drum roll comes once he is within
+ *  nearer than `close`) and it is in his picture (played 2026-10-04: from 7.5 m it was a
+ *  speck some 20 px tall, its acorn unseen). The drum roll comes once he is within
  *  DRUM_NEAR m of the bird on the store pine's bark (it is awake and in sight from there). */
-const JAY_SEE = { near: 7.5, close: 2.2 } as const;
+const JAY_SEE = { near: 5.0, close: 2.2 } as const;
 const DRUM_NEAR = 11;
+/** The cone drops where he will be this many seconds on (about its fall: he walks on). */
+const CONE_LEAD_S = 1.2;
 /** The second hide (run 7, ek-day): a short one — it slips round at most `most` times, and
  *  stays once he has walked `round` rad round its pine. */
 const HIDE2 = { most: 1, round: HIDE.round * 0.6 } as const;
@@ -544,7 +547,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     if (verrDone || verr !== 'denappel') return;
     const m = k.ranger();
     if (m.speed < 0.8 || k.now - walkFrom < 1.5) return;
-    const spot = coneDrop(m, m.heading);
+    // (it lands ahead of where he will be by then: he sees it fall and lie beside his way)
+    const spot = coneDrop(m, m.heading, Math.min(3, m.speed * CONE_LEAD_S));
     if (!spot || !inPicture(spot, 0.1, 0.65)) return;
     verrDone = true;
     k.stats.verr_go = 1;

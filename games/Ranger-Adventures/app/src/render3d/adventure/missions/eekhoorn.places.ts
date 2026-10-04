@@ -284,13 +284,14 @@ export const BURY_AT: Spot = g(-2.0, 0.75);
  * Run 7 (ek-day, the surprise `gaai`): where the jay buries an acorn of its own on a play
  * with that surprise — on the needles at the glade's edge, ahead of him and beside his
  * way as he walks from the pine he found the squirrel round to the glade (3.5-8.5 m on,
- * off his straight line: he walks past it), off the caching spots, the store and the
+ * off his straight line, 1.1-3.5 m: he walks past it, near enough that it acts), off the
+ * caching spots, the store and the
  * trunks (the places test, from wherever he may have found it). It waits there from the
  * briefing (a jay foraging on the ground), and when he comes it pushes its acorn into the
  * needles, looks at him and flies up to the glade oak — where it waits for the store.
  */
 export const JAY_CACHE: Readonly<Record<RouteId, Spot>> = {
-  midden: { x: 15.0, z: -56.5 }, noord: { x: 15.0, z: -56.5 }, zuid: { x: 17.25, z: -60.75 },
+  midden: { x: 15.0, z: -56.5 }, noord: { x: 15.0, z: -56.5 }, zuid: { x: 16.75, z: -59.75 },
 };
 /** It acts only while its flight up to the glade oak goes off across his picture or away
  *  from him, never back at him: the flight's heading within `fly` rad of his way to it. */
@@ -303,11 +304,14 @@ export function jayFliesAway(me: Spot, at: Spot = JAY_CACHE.midden): boolean {
  * Run 7 (ek-day, the surprise `denappel`): where a pine cone drops beside his path as he
  * walks under a pine of the squirrel's wood: `ahead` m in front of him, `side` m to one
  * side (never on him), under a home pine's crown (`under`: within that of its trunk, but
- * out past its root spurs `clear`) — the first that fits, or null. `heading`: his way.
+ * out past its root spurs `clear`) — the first that fits, or null. `heading`: his way;
+ * `lead`: m further on (where he will be as it lands: played 2026-10-04, a cone dropped
+ * where he was going landed beside him or behind, and he walked past it unseen).
  */
 export const CONE_DROP = { ahead: [2.6, 3.3, 4.0], side: [1.4, 1.8], under: 2.8, clear: 1.25, from: 6.5 } as const;
-export function coneDrop(me: Spot, heading: number): (Spot & { tree: HomeTree }) | null {
-  for (const a of CONE_DROP.ahead) for (const sd of CONE_DROP.side) for (const s of [1, -1]) {
+export function coneDrop(me: Spot, heading: number, lead = 0): (Spot & { tree: HomeTree }) | null {
+  for (const a0 of CONE_DROP.ahead) for (const sd of CONE_DROP.side) for (const s of [1, -1]) {
+    const a = a0 + lead;
     const p = { x: me.x + Math.sin(heading) * a + Math.cos(heading) * sd * s, z: me.z + Math.cos(heading) * a - Math.sin(heading) * sd * s };
     const tree = HOME_TREES.find((t) => t.species === 'prop-pine-scots' && dist(t, p) <= CONE_DROP.under && dist(t, p) >= CONE_DROP.clear);
     if (!tree || HOME_TREES.some((t) => dist(t, p) < CONE_DROP.clear)) continue;
@@ -1144,34 +1148,38 @@ const SYM_LETTER: Record<FieldSym, string> = { recht: 'r', 'spiegel-u': 'u', 'sp
 const DEN_LETTER: Record<DenKind, string> = { tak: 't', omlaag: 'o', voet: 'v', spiraal: 's' };
 const EINDE_LETTER: Record<Einde, string> = { eet: 'e', begraaf: 'b', poets: 'p' };
 const VERR_LETTER: Record<Verrassing, string> = { geen: 'x', denappel: 'd', gaai: 'g', roffel: 'r' };
+const ANTIC_LETTER: Record<Antic, string> = { kijken: 'k', poetsen: 'p', knabbelen: 'n', zonnen: 'z', mopperen: 'm' };
 const byLetter = <T extends string>(m: Record<T, string>, l: string): T => (Object.keys(m) as T[]).find((k) => m[k] === l)!;
 
 /** The variant as the history keeps it: way, pattern, trio ('n-u-kgr'); run 7 (ek-day), with
- *  its day: the nest's tree, the den, the ending, the surprise and the second hide
- *  ('n-u-kgr-1obg2'), so the next play's day is drawn against it. ≤ 16 characters: after the
- *  mood and a rare it still fits the history's 60 (the places test). */
+ *  its day: the nest's tree, the den, the ending, the surprise, the second hide and the
+ *  antic at each wait ('n-u-kgr-1obg2pkm'), so the next play's day is drawn against it.
+ *  ≤ 16 characters: after the mood and a rare it still fits the history's 60 (the places
+ *  test). */
 export function variantOf(p: Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> & Partial<Pick<EekhoornPlay, 'nest' | 'day'>>): string {
   const base = `${ROUTE_LETTER[p.route]}-${SYM_LETTER[p.veld]}-${trioCode(p.buren)}`;
   if (!p.day || p.nest === undefined) return base;
   const d = p.day;
-  return `${base}-${p.nest}${DEN_LETTER[d.den]}${EINDE_LETTER[d.einde]}${VERR_LETTER[d.verrassing]}${d.verstop2 ? 2 : 1}`;
+  return `${base}-${p.nest}${DEN_LETTER[d.den]}${EINDE_LETTER[d.einde]}${VERR_LETTER[d.verrassing]}${d.verstop2 ? 2 : 1}${d.antics.map((a) => ANTIC_LETTER[a]).join('')}`;
 }
 
 /** A last play as the draw reads it: its way, pattern and trio, and (when the history kept
  *  it) the tree its nest was on (`nest`: its index in that way's nest trees) and its day's
  *  den, ending, surprise and second hide. */
 export type Drawn = Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> & Partial<Pick<EekhoornPlay, 'nest'>>
-  & Partial<Pick<Day, 'den' | 'einde' | 'verrassing' | 'verstop2'>>;
+  & Partial<Pick<Day, 'den' | 'einde' | 'verrassing' | 'verstop2' | 'antics'>>;
 
 export function parseVariant(v: string): Drawn | null {
-  const m = /^([mnz])-([ruvo])-([a-z]{3})(?:-(\d)([tovs])([ebp])([xdgr])([12]))?$/.exec(v);
+  const m = /^([mnz])-([ruvo])-([a-z]{3})(?:-(\d)([tovs])([ebp])([xdgr])([12])([kpnzm]{0,3}))?$/.exec(v);
   if (!m) return null;
   const route = ROUTE_IDS.find((r) => ROUTE_LETTER[r] === m[1])!;
   const veld = FIELD_SYMS.find((s) => SYM_LETTER[s] === m[2])!;
   const buren = trioOf(m[3]);
   if (!buren) return null;
   if (m[4] === undefined) return { route, veld, buren };
-  return { route, veld, buren, nest: Number(m[4]), den: byLetter(DEN_LETTER, m[5]), einde: byLetter(EINDE_LETTER, m[6]), verrassing: byLetter(VERR_LETTER, m[7]), verstop2: m[8] === '2' };
+  const day = { nest: Number(m[4]), den: byLetter(DEN_LETTER, m[5]), einde: byLetter(EINDE_LETTER, m[6]), verrassing: byLetter(VERR_LETTER, m[7]), verstop2: m[8] === '2' };
+  // (its antics, kept since ek-day's review: a variant from before reads without them)
+  return m[9] ? { route, veld, buren, ...day, antics: [...m[9]].map((l) => byLetter(ANTIC_LETTER, l)) } : { route, veld, buren, ...day };
 }
 
 /** The squirrel's game's last plays' variants, newest first (at most `n`), from the save's
@@ -1216,19 +1224,27 @@ type Forks = { fork(label: string): { pick<T>(l: readonly T[]): T; int(a: number
 /**
  * The squirrel's day (pure, ek-day, design §6.8), each choice from a fork of its own: its
  * den (never one of the last two plays'; with the rare dark visitor at the den, one that
- * ends on its stub, where the visitor meets it), an antic per wait of the way (none twice;
- * lying in the sun only in `SUN_MOODS`), a surprise in about 2 of 3 plays (never the last
+ * ends on its stub, where the visitor meets it), an antic per wait of the way (none twice,
+ * none at the wait it held last play; lying in the sun only in `SUN_MOODS`), a surprise in about 2 of 3 plays (never the last
  * play's; the drum roll only with the great spotted woodpecker on the bark), a second
  * hide in about 1 of 3 (the third play surely, after two without), its ending (never one of
  * the last two plays': three plays, three endings).
  */
 export function drawDay(play: Forks, o: { route: RouteId; buren: Trio; mood?: string; rare?: string | null; recent: readonly Drawn[] }): Day {
   const dens = o.rare === 'eekhoorn.donkere-eekhoorn' || o.rare === 'donkere-eekhoorn' ? DEN_KINDS.filter((d) => d === 'tak' || d === 'spiraal') : DEN_KINDS;
-  const known = (k: 'den' | 'einde' | 'verrassing' | 'verstop2') => o.recent.filter((r) => r[k] !== undefined);
+  const known = (k: 'den' | 'einde' | 'verrassing' | 'verstop2' | 'antics') => o.recent.filter((r) => r[k] !== undefined);
   const den = freshPick(play.fork('den'), dens, known('den').map((r) => r.den!));
   // (nibbling a cone at its den already: not again at a wait)
   const pool = ANTICS.filter((a) => (a !== 'zonnen' || SUN_MOODS.includes(o.mood ?? '')) && (a !== 'knabbelen' || den !== 'voet'));
-  const antics = play.fork('antics').shuffle(pool).slice(0, ROUTES[o.route].waits.length);
+  // (in a shuffled order, wait by wait: never the one that wait had last play — three plays in
+  // a row, the third wait grooming every time, read alike — where the pool leaves another)
+  const lastAntics = known('antics')[0]?.antics ?? [];
+  const order = play.fork('antics').shuffle(pool);
+  const antics: Antic[] = [];
+  for (let w = 0; w < ROUTES[o.route].waits.length; w++) {
+    const free = order.filter((a) => !antics.includes(a));
+    antics.push(free.find((a) => a !== lastAntics[w]) ?? free[0]);
+  }
   const vf = play.fork('verrassing');
   const can = SURPRISES.filter((s) => s !== 'roffel' || o.buren.stam === 'grote-bonte-specht');
   const lastSurprise = known('verrassing')[0]?.verrassing;

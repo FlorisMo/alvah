@@ -644,7 +644,9 @@ test('the surprises (ek-day): the jay\'s cache lies ahead of him and beside his 
       const dd = dist(st, J), off = Math.abs(wrapA(headingTo(st, J) - headingTo(st, P.stand)));
       // (where it acts its flight up to the glade oak goes off across his picture or away
       // from him, never back at him: the runtime asks the same, jayFliesAway)
-      if (dd >= 3.5 && dd <= 8.5 && off <= (55 * Math.PI) / 180 && segDist(J, st, P.stand) >= 1.1 && jayFliesAway(st, J)) ok += w;
+      // (and he passes it near enough that it acts — within 5 m, the runtime's JAY_SEE)
+      const pass = segDist(J, st, P.stand);
+      if (dd >= 3.5 && dd <= 8.5 && off <= (55 * Math.PI) / 180 && pass >= 1.1 && pass <= 3.5 && jayFliesAway(st, J)) ok += w;
     }
     assert.ok(ok / n >= 0.65, `${rid}: ahead of him and beside his way from ${ok} of ${n} places he may have found it`);
   }
@@ -654,16 +656,19 @@ test('the surprises (ek-day): a pine cone drops beside his path under a pine, ne
   let n = 0;
   for (let x = 10; x <= 27; x += 0.5) for (let z = -62; z <= -42; z += 0.5) for (let h = 0; h < Math.PI * 2; h += Math.PI / 4) {
     const me = { x, z };
-    const c = coneDrop(me, h);
+    // (`lead`: where he will be as it lands, walking)
+    for (const lead of [0, 1.6, 2.6]) {
+    const c = coneDrop(me, h, lead);
     if (!c) continue;
     n += 1;
-    const ahead = (c.x - me.x) * Math.sin(h) + (c.z - me.z) * Math.cos(h);
+    const ahead = (c.x - me.x) * Math.sin(h) + (c.z - me.z) * Math.cos(h) - lead;
     const side = Math.abs((c.x - me.x) * Math.cos(h) - (c.z - me.z) * Math.sin(h));
     assert.ok(ahead >= 2.5 && ahead <= 4.1 && side >= 1.35, `beside his way (${ahead.toFixed(2)} ahead, ${side.toFixed(2)} aside)`);
     assert.ok(dist(c, c.tree) <= CONE_DROP.under, 'under a pine');
     for (const t of HOME_TREES) assert.ok(dist(t, c) >= CONE_DROP.clear, `not on ${t.id}`);
+    }
   }
-  assert.ok(n > 200, `${n} drops`);
+  assert.ok(n > 600, `${n} drops`);
 });
 
 test('the den look turns to the side the squirrel will lead him', () => {
@@ -841,7 +846,9 @@ test('a play\'s draw: from its own forks, replayed by its seed, never the last p
   for (let s = 1; s <= 30; s++) {
     const a = drawEekhoornPlay(newPlay('eekhoorn', s, 1), null), b = drawEekhoornPlay(newPlay('eekhoorn', s, 1), null);
     assert.deepEqual(a, b, `seed ${s} replays`);
-    assert.deepEqual(parseVariant(variantOf(a)), { route: a.route, veld: a.veld, buren: a.buren, nest: a.nest, den: a.day.den, einde: a.day.einde, verrassing: a.day.verrassing, verstop2: a.day.verstop2 }, 'its variant reads back');
+    assert.deepEqual(parseVariant(variantOf(a)), { route: a.route, veld: a.veld, buren: a.buren, nest: a.nest, den: a.day.den, einde: a.day.einde, verrassing: a.day.verrassing, verstop2: a.day.verstop2, antics: a.day.antics }, 'its variant reads back');
+    // (a day kept before its antics were: it reads without them)
+    assert.equal(parseVariant(variantOf(a).slice(0, -a.day.antics.length))?.antics, undefined, 'a day without its antics reads back');
     assert.deepEqual(parseVariant(variantOf({ route: a.route, veld: a.veld, buren: a.buren })), { route: a.route, veld: a.veld, buren: a.buren }, 'an older play\'s variant (no day) reads back');
   }
   // plays in a row, each after the last two: three in a row are three ways, three
@@ -917,7 +924,7 @@ test('the squirrel\'s day (ek-day): from its own forks, replayed by its seed; th
     const d = p.day;
     // read back from the history line (as the next play reads it)
     const back = parseVariant(variantOf(p))!;
-    assert.deepEqual([back.den, back.einde, back.verrassing, back.verstop2, back.nest], [d.den, d.einde, d.verrassing, d.verstop2, p.nest]);
+    assert.deepEqual([back.den, back.einde, back.verrassing, back.verstop2, back.nest, back.antics], [d.den, d.einde, d.verrassing, d.verstop2, p.nest, d.antics]);
     // the den: never one of the last two plays'; with the dark visitor one that ends on its stub
     if (rare) assert.ok(d.den === 'tak' || d.den === 'spiraal', `play ${s}: the dark visitor meets it on its stub (${d.den})`);
     else for (const r of recent) assert.notEqual(d.den, r.den, `play ${s}: another den than lately`);
@@ -928,6 +935,9 @@ test('the squirrel\'s day (ek-day): from its own forks, replayed by its seed; th
     assert.equal(new Set(d.antics).size, d.antics.length, `play ${s}: no antic twice`);
     if (!SUN_MOODS.includes(mood)) assert.ok(!d.antics.includes('zonnen'), `play ${s}: no sunning in the ${mood}`);
     if (d.den === 'voet') assert.ok(!d.antics.includes('knabbelen'), `play ${s}: it nibbled at its den, not again at a wait`);
+    // never the antic a wait had last play (where the light and the den leave a fourth)
+    const pool = ANTICS.filter((a) => (a !== 'zonnen' || SUN_MOODS.includes(mood)) && (a !== 'knabbelen' || d.den !== 'voet'));
+    if (recent[0]?.antics && pool.length > d.antics.length) for (const [w, a] of d.antics.entries()) assert.notEqual(a, recent[0].antics[w], `play ${s}: wait ${w + 1} does something new`);
     // a surprise: never the last play's; the drum only with the great spotted woodpecker
     if (d.verrassing !== 'geen') { surprises += 1; if (recent[0]?.verrassing && recent[0].verrassing !== 'geen') assert.notEqual(d.verrassing, recent[0].verrassing, `play ${s}: another surprise`); }
     if (d.verrassing === 'roffel') assert.equal(p.buren.stam, 'grote-bonte-specht');

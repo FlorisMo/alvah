@@ -133,7 +133,7 @@ const PECK_S = 1.2;
 const DRUM_S = 0.85;
 /** A pine cone dropping from a crown: from how high (m), how fast it gathers speed (a cone
  *  through pine twigs, m/s²: a little slower than a stone), how much of it the one bounce keeps. */
-const CONE_FALL = { from: 6.5, g: 7.5, bounce: 0.3 } as const;
+const CONE_FALL = { from: 6.5, g: 6, bounce: 0.3 } as const; // (a fall of ~1.5 s: seen coming down)
 const SEEDLING_SEE = { within: 6, px: 30, secs: 1 } as const;
 /** How fast the nest fades when the lens comes by it (s), like a crown. */
 const NEST_FADE_S = 0.25;
@@ -285,7 +285,7 @@ export class EekhoornHome implements HomeDressing {
     /* -- run 7 (ek-day): a pine cone that may drop beside his path (one mesh) -- */
     this.cone.name = 'dropped-pine-cone';
     this.cone.visible = false;
-    this.cone.scale.setScalar(1.4); // (a little generous: a child sees it drop a few metres off)
+    this.cone.scale.setScalar(1.8); // (generous, like the acorn: a child sees it drop a few metres off)
     this.group.add(this.cone);
 
     /* -- run 7 (ek-day): the scales of a cone it nibbles (one mesh) -- */
