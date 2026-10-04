@@ -758,7 +758,7 @@ export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
  */
 export const FOUND_RUN = {
   back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, face: (75 * Math.PI) / 180, toward: 0.25, front: 3.0, feet: 1.15,
-  step: (2.5 * Math.PI) / 180, runIn: 2, hid: 0.2, seeLast: 0.5, low: -0.75, lensD: 3.0,
+  step: (2.5 * Math.PI) / 180, runIn: 2, hid: 0.2, seeLast: 0.5, low: -0.75, lensD: 3.0, roomy: 4.5,
   pops: [[1.6, 0.7], [1.6, 0.9], [1.9, 0.6], [1.9, 0.8], [2.3, 0.5], [2.3, 0.7], [1.9, 1.0], [2.7, 0.45], [2.7, 0.65], [3.2, 0.4], [3.2, 0.6], [1.6, 1.2], [2.3, 1.1], [3.0, 0.9]] as readonly (readonly [number, number])[],
   sides: [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2, 1.5, -1.5],
   steps: [0.6, 1.0, 1.4, 1.8],
@@ -904,15 +904,24 @@ function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: 
  *  turns to (and, where he must, a few calm steps first) so that its run to its stump plays
  *  in his picture (FOUND_RUN). */
 export function foundRun(me: Spot, sqAng: number, tree: HomeTree): { at: Spot; face: number; pop: Spot; side: number; ok: boolean } {
+  // (the turn nearest his way to the glade that does it — and, where one does it with its pine
+  // `roomy` m off the lens or more, the nearest such: not its pine at the picture's edge right
+  // by the lens, the squirrel coming down low in the picture)
+  const sq = barkSpot(tree, sqAng);
   const turnFrom = (at: Spot): { face: number; pop: Spot; side: number } | null => {
     const want = headingTo(at, wayTo(at, STAND));
+    let first: { face: number; pop: Spot; side: number } | null = null;
     for (let a = 0; a <= Math.PI + 1e-9; a += FOUND_RUN.step) {
       for (const s of a === 0 ? [1] : [1, -1]) {
-        const r = foundRunAt(at, tree, sqAng, want + s * a);
-        if (r) return { face: wrapA(want + s * a), ...r };
+        const h = want + s * a;
+        if (first && dist(lensBehind(at, h), sq) < FOUND_RUN.roomy) continue;
+        const r = foundRunAt(at, tree, sqAng, h);
+        if (!r) continue;
+        if (dist(lensBehind(at, h), sq) >= FOUND_RUN.roomy) return { face: wrapA(h), ...r };
+        first ??= { face: wrapA(h), ...r };
       }
     }
-    return null;
+    return first;
   };
   const here = turnFrom(me);
   if (here) return { at: me, ...here, ok: true };
