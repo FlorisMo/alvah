@@ -285,6 +285,9 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
     });
   } finally { offHint(); }
 
+  // (found: the heath blue and the stonechat fly off, the cove is the frog's now)
+  home.flyOff();
+
   /* 8 · the raaf: he sits still, so the birds don't see him */
   await k.fact(0);
 

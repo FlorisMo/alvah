@@ -253,6 +253,8 @@ interface CoveBits {
   bird: THREE.Group;
   /** a poked butterfly or bird flits up (s left) */
   flit: { o: THREE.Object3D | null; base: number; t: number }[];
+  /** once the frog is found the heath blue and the stonechat fly off (s into it; < 0 not) */
+  away: number;
 }
 
 /** The adder on the path (a play's): coiled, her head lifted when he comes near, sliding off. */
@@ -284,6 +286,9 @@ const ADDER_SCALE = 1.3;
  *  `detail`; the hide and the marker are ~30 m off, cove A ~11 m nearer). */
 const COVES_NEAR = 24;
 const COVES_FAR = 30;
+
+/** Where the stonechat perches on its stalk (the stalk leans 0.07 rad, 0.62 m tall). */
+const PERCH_X = -Math.sin(0.07) * 0.62;
 
 /** How far (m) she draws her coil back from him after a hiss. */
 const ADDER_DRAW_BACK = 0.22;
@@ -491,7 +496,7 @@ export class VenHome implements HomeDressing {
     bird.name = 'ven-bird';
     bird.visible = false;
     detail.add(bird);
-    const bits: CoveBits = { clods, first, clodAt, wobble: spots.map(() => 0), anchors, butterfly, bird, flit: [{ o: null, base: 0, t: 0 }, { o: null, base: 0, t: 0 }] };
+    const bits: CoveBits = { clods, first, clodAt, wobble: spots.map(() => 0), anchors, butterfly, bird, flit: [{ o: null, base: 0, t: 0 }, { o: null, base: 0, t: 0 }], away: -1 };
     this.bits = bits;
     // the butterfly sits on a cotton-grass head (0.33 m), the stonechat on a dry stalk
     void env.spawnModel('heideblauwtje', { idle: false }).then((sp) => {
@@ -510,7 +515,7 @@ export class VenHome implements HomeDressing {
     void env.spawnModel('roodborsttapuit', { idle: false }).then((sp) => {
       if (!sp || this.disposed) { sp?.dispose(); return; }
       const r = sp.root as THREE.Object3D;
-      r.position.set(-Math.sin(0.07) * stalkH, stalkH - 0.012, 0);
+      r.position.set(PERCH_X, stalkH - 0.012, 0);
       bird.add(r);
       this.spawned.push(sp);
       bits.flit[1] = { o: r, base: r.position.y, t: 0 };
@@ -684,6 +689,9 @@ export class VenHome implements HomeDressing {
     bits.clods.computeBoundingSphere();
     bits.anchors.forEach((a, i) => { a.visible = on.has(i); });
     bits.wobble.fill(0);
+    // (the heath blue and the stonechat back on their perches for a new play)
+    bits.away = -1;
+    bits.flit.forEach((f, i) => { if (f.o) { f.o.visible = true; f.o.position.set(i ? PERCH_X : 0, f.base, 0); } });
     const stand = p ? BAYS[p.laid.bay].stands[p.laid.side] : null;
     for (const [k, grp] of [['butterfly', bits.butterfly], ['bird', bits.bird]] as const) {
       const d = p?.decoys.find((q) => q.k === k);
@@ -694,6 +702,17 @@ export class VenHome implements HomeDressing {
       }
     }
   }
+
+  /** The frog is found: the heath blue flutters up and away, the stonechat flies off its
+   *  stalk (calmly, up and out over the water, never toward the lens); the stalk stays. */
+  flyOff(): void {
+    const p = this.laid;
+    if (!p || this.bits.away !== -1) return;
+    this.bits.away = 0;
+    const h = BAYS[p.laid.bay].views.search[p.laid.side].heading; // (the way the lens looks: away from it)
+    this.awayDir = { x: Math.sin(h), z: Math.cos(h) };
+  }
+  private awayDir: Spot = { x: 0, z: 1 };
 
   private wobble(bits: CoveBits, i: number): void { bits.wobble[i] = 0.9; }
   private flit(bits: CoveBits, k: 0 | 1): void { bits.flit[k].t = 1.1; }
@@ -849,8 +868,24 @@ export class VenHome implements HomeDressing {
       dirty = true;
     });
     if (dirty) bits.clods.instanceMatrix.needsUpdate = true;
+    if (bits.away >= 0) {
+      bits.away += dt;
+      const k = reduced ? 1 : Math.min(1, bits.away / 1.6);
+      const e = k * k;
+      // (each flies a little up and away from the lens, out over the water: it recedes)
+      for (const [i, f] of bits.flit.entries()) {
+        if (!f.o) continue;
+        const grp = i ? bits.bird : bits.butterfly;
+        const c = Math.cos(-grp.rotation.y), sn = Math.sin(-grp.rotation.y);
+        const far = e * (i ? 3.2 : 2.4);
+        const lx = this.awayDir.x * c + this.awayDir.z * sn, lz = -this.awayDir.x * sn + this.awayDir.z * c;
+        f.o.position.set((i ? PERCH_X : 0) + lx * far, f.base + e * (i ? 0.7 : 0.5), lz * far);
+        f.o.visible = k < 1;
+      }
+      if (k >= 1) bits.away = -2; // (gone for this play)
+    }
     for (const f of bits.flit) {
-      if (!f.o || f.t <= 0) continue;
+      if (!f.o || f.t <= 0 || bits.away !== -1) continue;
       f.t = Math.max(0, f.t - dt);
       const k = reduced ? 0 : Math.sin((1 - f.t / 1.1) * Math.PI);
       f.o.position.y = f.base + k * 0.18;
@@ -920,18 +955,18 @@ function cottonGeometry(): THREE.BufferGeometry {
  *  and moss, dark below, red-brown and mossy on top with darker flecks — the frog's own
  *  colours, a look-alike between the sedge. Vertex colours. */
 function clodGeometry(): THREE.BufferGeometry {
-  const geo = new THREE.IcosahedronGeometry(1, 2);
+  const geo = new THREE.IcosahedronGeometry(1, 3);
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const col = new Float32Array(pos.count * 3);
   const low = new THREE.Color('#4a3626'), mid = new THREE.Color('#94684a'), top = new THREE.Color('#7d6f44'), fleck = new THREE.Color('#4a3424');
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const lump = 1 + 0.14 * Math.sin(x * 5.1 + z * 3.3) * Math.cos(y * 4.2 - x * 2.1);
+    const lump = 1 + 0.1 * Math.sin(x * 3.6 + z * 2.4) * Math.cos(y * 3.1 - x * 1.7);
     pos.setXYZ(i, x * 0.12 * lump, (Math.max(-0.25, y) + 0.25) * 0.1 * lump, z * 0.095 * lump);
     const k = (y + 1) / 2;
     c.copy(low).lerp(mid, Math.min(1, k * 1.5));
-    if (k > 0.75) c.lerp(top, ((k - 0.75) / 0.25) * (0.35 + 0.35 * Math.sin(x * 9 + z * 7)));
+    if (k > 0.62) c.lerp(top, ((k - 0.62) / 0.38) * (0.45 + 0.35 * Math.sin(x * 9 + z * 7)));
     if (Math.sin(x * 23 + z * 17) * Math.cos(z * 19 - x * 11) > 0.55) c.lerp(fleck, 0.7); // (flecks, like the frog's spots)
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
