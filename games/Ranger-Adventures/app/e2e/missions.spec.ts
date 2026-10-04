@@ -554,11 +554,13 @@ for (const mission of missions) {
       const fam = await homeOf(page, mission.id);
       if (fam) log.soft(fam.state === 'before' && fam.actors.some((a) => a.visible), `the story's animals are in the world before the mission (${fam.state})`);
       await start(log, mission);
-      const watch = mission.id === 'ree-niet-aanraken' ? reeWatch(log) : mission.id === 'frisling' ? frislingWatch(log) : null;
+      // (a mission's own soft checks: the ree's also reads its finds' cards once it is over)
+      const watch: { observe: (adv: { beat: string; stats?: Record<string, number> } | null) => Promise<void>; report: () => unknown; cards?: () => Promise<void> } | null =
+        mission.id === 'ree-niet-aanraken' ? reeWatch(log) : mission.id === 'frisling' ? frislingWatch(log) : null;
       await playSteps(log, mission, undefined, watch?.observe);
       await watch?.report();
       await finish(log, mission);
-      await watch?.cards();
+      await watch?.cards?.();
       await worldReacted(log, mission, marker, before);
       log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
     } finally {
