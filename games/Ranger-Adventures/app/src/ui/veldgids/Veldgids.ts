@@ -35,6 +35,10 @@ const SOORT_ICON: Record<OntdekSoort, IconName> = { dier: 'paw', zeldzaam: 'paw'
 /** The page he looked at last on this page load (the gids opens there again). */
 let lastHome: string | null = null;
 
+/** Tiles to a row on a page of eight finds or fewer (two rows fit under the title at
+ *  1280×800; a page with more lays them closer: `.vg-many`). */
+const VG_ROW_MAX = 4;
+
 /** How long a pointer rests on a tile before it is read (as the menus: no chatter). */
 const DWELL_MS = 450;
 
@@ -116,6 +120,12 @@ export function showVeldgids(back: () => void): void {
       .map((e) => `<span class="vg-dot${e.found ? ' on' : ''}${e.rare ? ' rare' : ''}"></span>`)
       .join('');
     grid.innerHTML = page.entries.map((e) => tileHtml(e, nieuwNu.has(e.o.id))).join('');
+    // (a page with more than eight finds lays them five or six to a row: two rows, all in
+    // view at 1280×800 — veldgids.css .vg-many; a page of eight or fewer stays as it was)
+    const many = page.entries.length > VG_ROW_MAX * 2;
+    grid.classList.toggle('vg-many', many);
+    if (many) grid.style.setProperty('--vg-cols', String(Math.min(6, Math.ceil(page.entries.length / 2))));
+    else grid.style.removeProperty('--vg-cols');
     if (!opening && !prefersReducedMotion()) {
       grid.classList.remove('vg-turn');
       void grid.offsetWidth; // (restart the soft fade-in)
