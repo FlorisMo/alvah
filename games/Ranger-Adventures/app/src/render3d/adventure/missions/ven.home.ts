@@ -27,6 +27,7 @@ import { refitWindow, type Built } from './ree.window';
 import { groundDecal, groundStrip } from '../decal';
 import { atLocal, dist, headingTo, stream } from '../places';
 import { heatherGeometry, plantMaterial } from '../../world/Plants';
+import { calmGate } from '../../ProceduralMotion';
 import { WATER_LEVEL } from '../../Biomes';
 import {
   BAYS, BAY_IDS, CUSHION, FLOAT_SINK, FROG_H, FROG_LEN, PATH, PATH_HALF, HIDE, BENCH, MARKER,
@@ -97,7 +98,7 @@ export class Frog extends Actor {
       // (in the ven it floats, its back above the water; it swims there: no shore holds it)
       groundY: (x, z) => Math.max(env.groundY(x, z), WATER_LEVEL - FLOAT_SINK) + (self.frog?.lift ?? 0),
       limits: { ...env.limits, blocked: undefined },
-    }, { height });
+    }, { height, recipe: FROG_SITS });
     self.frog = this;
     this.home = home;
     // its throat: a pale bubble swelling under its chin and out in front of it, there only
@@ -221,6 +222,11 @@ export class Frog extends Actor {
     super.dispose();
   }
 }
+
+/** How a heikikker sits: dead still, only a soft breath (no idle hop: the species' marker
+ *  gait hops 16 cm every 3 s, and a hidden frog that hops up out of its sedge is no hidden
+ *  frog; a call is its throat, a hop or a leap the script's own). */
+const FROG_SITS = calmGate({ gait: 'breathe', bobAmp: 0, swayAmp: 0, rotAmp: 0, breathAmp: 0.015, hz: 0.3 });
 
 /** Beyond this far (m) from the lens a frog's body rests (a 23 cm frog is ~8 px there). */
 const FROG_DRAWN_M = 18;

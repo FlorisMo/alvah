@@ -25,7 +25,7 @@ import type { Spawned, SpawnOpts } from '../play/types';
 import { lieDown, fawnSpots, LEG_SHARE } from '../play/pose';
 import { contactShadow } from '../play/kit';
 import { resolveMove, type MoveLimits, type Obstacle } from '../CharacterController';
-import { gaitFor, motionAt, REST } from '../ProceduralMotion';
+import { gaitFor, motionAt, REST, type MotionRecipe } from '../ProceduralMotion';
 import { modelFor } from '../play/spawn';
 import {
   stepToward, followSpot, followSpeed, trot, strideOf, rootDip, turnToward, wrap, bodyLength, type Pose,
@@ -126,7 +126,9 @@ export class Actor {
   /** what frees its coat (a calf's spots) */
   private readonly undress: (() => void)[] = [];
 
-  constructor(key: string, animal: string, env: ActorEnv, opts: { height: number; len?: number }) {
+  /** `recipe` (run 7, additive): its body motion at rest, when not its species' own (a
+   *  hidden frog sits dead still: no idle hop; default the species' gait, as before). */
+  constructor(key: string, animal: string, env: ActorEnv, opts: { height: number; len?: number; recipe?: MotionRecipe }) {
     this.key = key;
     this.animal = animal;
     this.env = env;
@@ -134,7 +136,7 @@ export class Actor {
     // (its length from the scale table: a roe is about as long as it is tall)
     this.len = opts.len ?? bodyLength((SIZE as Record<string, { h: number; len?: number }>)[animal], opts.height);
     this.pace = PACE[animal] ?? PACE_DEFAULT;
-    this.recipe = gaitFor(modelFor(animal));
+    this.recipe = opts.recipe ?? gaitFor(modelFor(animal));
     this.group.name = `actor-${key}`;
     this.pivot.position.z = -this.len * 0.45;
     this.gaitNode.position.z = this.len * 0.45;
