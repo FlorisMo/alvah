@@ -293,6 +293,30 @@ test('the late hint rings the same at every nook: on open water straight out in 
   assert.ok(Math.max(...gaps) / Math.min(...gaps) < 1.5, `the ring's distance from him in the picture differs at most half again over the nooks (${Math.min(...gaps).toFixed(0)}-${Math.max(...gaps).toFixed(0)} px)`);
 });
 
+test('the late hint never rings round a look-alike: no slot (a clod, the heath blue on its head, the stonechat up its stalk) nor an empty nook within 60 px of a nook\'s rings in its picture', () => {
+  // (review r3 of ven-world: at B4 the stonechat's stalk stood in the middle of his rings, so
+  // the hint circled the bird instead of the water in front of the frog)
+  for (const id of BAY_IDS) {
+    const b = BAYS[id];
+    for (const f of b.nooks) {
+      const cam = lensOf(b.views.search[f.side]);
+      const r = hintRingOf(b, f);
+      const q = screenAt(cam, r, WATER_LEVEL - groundY(r.x, r.z));
+      const gap = (p: Spot, hs: readonly number[]): number => Math.min(...hs.map((h) => { const s = screenAt(cam, p, h); return Math.hypot(s.x - q.x, s.y - q.y); }));
+      const spots: [string, Spot, readonly number[]][] = [
+        ...b.slots.clods.map((p, i): [string, Spot, readonly number[]] => [`clod slot ${i}`, p, [0, CLOD_H]]),
+        ...b.nooks.filter((n) => n.nook !== f.nook).map((p): [string, Spot, readonly number[]] => [`empty nook ${p.nook}`, p, [0, CLOD_H]]),
+        ...b.slots.butterflies.map((p, i): [string, Spot, readonly number[]] => [`heath blue slot ${i}`, p, [0, 0.18, 0.36]]),
+        ...b.slots.birds.map((p, i): [string, Spot, readonly number[]] => [`stonechat slot ${i}`, p, [0, 0.15, 0.3, 0.45, 0.62, 0.72]]),
+      ];
+      for (const [what, p, hs] of spots) {
+        if (underBoy(b, f.side, p)) continue; // (never laid in that play)
+        assert.ok(gap(p, hs) >= 60, `cove ${id} nook ${f.nook}: the ${what} at ${at(p)} stands ${gap(p, hs).toFixed(0)} px from his rings (want ≥ 60)`);
+      }
+    }
+  }
+});
+
 test('every moss clod (in an empty nook or on the open moss) is seen — at least half the frog\'s share — and the frog still shows the level\'s share', () => {
   for (const id of BAY_IDS) {
     const b = BAYS[id];

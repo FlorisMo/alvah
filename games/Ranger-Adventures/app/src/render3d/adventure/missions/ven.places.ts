@@ -223,8 +223,8 @@ export const COVES: Readonly<Record<BayId, CoveSpec>> = {
       { u: 0.6, v: 0.21, side: 1, turn: -0.9, px: [777, 421] }, { u: -0.65, v: 0.53, side: -1, turn: 0.9, px: [464, 420] },
       { u: 1.2, v: 0.24, side: -1, turn: -0.9, px: [804, 277] }, { u: 1.8, v: 0.19, side: -1, turn: 0.9, px: [890, 234] },
     ],
-    clods: [{ u: 0.8, v: -0.2 }, { u: 0.8, v: 0.7 }, { u: -0.6, v: -0.7 }, { u: 0.6, v: -0.7 }, { u: -0.4, v: 0.1 }],
-    butterflies: [{ u: -1.0, v: 0.9 }, { u: -0.8, v: -0.2 }],
+    clods: [{ u: 0.8, v: -0.2 }, { u: 0.3, v: 0.75 }, { u: -0.6, v: -0.7 }, { u: 0.6, v: -0.7 }, { u: -0.4, v: 0.1 }],
+    butterflies: [{ u: -1.2, v: 0.0 }, { u: -0.8, v: -0.2 }],
     birds: [{ u: 0.0, v: -0.7 }, { u: 0.0, v: 0.4 }],
   },
   B: {
@@ -235,7 +235,7 @@ export const COVES: Readonly<Record<BayId, CoveSpec>> = {
     ],
     clods: [{ u: -0.6, v: -0.7 }, { u: -0.4, v: 0.1 }, { u: 0.5, v: -0.7 }, { u: -0.3, v: -0.4 }, { u: 0.5, v: -0.1 }],
     butterflies: [{ u: -0.8, v: -0.2 }, { u: 0.8, v: -0.3 }],
-    birds: [{ u: 0.0, v: -0.7 }, { u: 0.0, v: 0.8 }],
+    birds: [{ u: 0.0, v: -0.7 }, { u: 1.25, v: -0.2 }],
   },
   C: {
     nooks: [
@@ -244,7 +244,7 @@ export const COVES: Readonly<Record<BayId, CoveSpec>> = {
       { u: 0.15, v: 0.55, side: -1, turn: 0.9, px: [589, 292] }, { u: 1.2, v: 0.36, side: -1, turn: -0.9, px: [774, 203] },
     ],
     clods: [{ u: -1.2, v: 0.4 }, { u: -0.4, v: 0.2 }, { u: -0.6, v: -0.7 }, { u: 0.5, v: -0.7 }, { u: -0.3, v: -0.4 }],
-    butterflies: [{ u: 0.9, v: 0.7 }, { u: 0.8, v: -0.3 }],
+    butterflies: [{ u: 1.1, v: 0.0 }, { u: 0.8, v: -0.3 }],
     birds: [{ u: 0.0, v: -0.7 }, { u: -0.8, v: -0.2 }],
   },
 };
@@ -396,10 +396,6 @@ export function edgeOf(b: Bay, frog: FrogSpot): FrogSpot {
   if (v - fl.v < 0.1) return frog;
   return { ...atLocal(b.frame, u, v), yaw: frog.yaw, side: frog.side, nook: frog.nook };
 }
-
-/** The singing frog's rings spread from under him over the water at his feet (the same at
- *  every nook: he always sings at the very edge, `EDGE_H` over the water, the water a short
- *  step out — the low lens over the water sees them either side of him and in front). */
 
 /**
  * The song (after the find): he stays where he searched; the frog sings at the water's edge
