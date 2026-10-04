@@ -1109,7 +1109,11 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   }
   await turnRanger(run.face);
   await k.behind();
-  await k.wait(0.3);
+  // (the follow lens takes over from there — the same spot, it only looks down at him a
+  // little more — so the picture its run is planned in is the one he walks on with:
+  // eekhoorn.places foundRun; under the held lens it ran lower in the picture, along its edge)
+  k.lockFollow();
+  await k.wait(0.6);
   const m = k.ranger();
   const pop = run.pop;
   const runPlan = sq.dashTo(pop.x, pop.z, headingTo(pop, m), run.side);

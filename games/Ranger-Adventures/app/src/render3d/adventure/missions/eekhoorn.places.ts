@@ -815,7 +815,8 @@ function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: 
   const lens = lensBehind(me, h);
   const off = (q: Spot): number => Math.abs(wrapA(headingTo(lens, q) - h));
   // (how far down the picture a spot on the ground is: −1 its bottom edge, 0 its middle — the
-  // follow lens 2.4 m up looks down at 0.65 of his height on him)
+  // follow lens 2.4 m up looks down at 0.65 of his height on him; eekhoorn.ts hands the lens
+  // back to it as soon as it has come round behind him, before the squirrel comes down)
   const pitch = Math.atan2(2.4 - 0.65 * RANGER_STAND_HEIGHT, FOUND_RUN.back);
   const yOf = (q: Spot): number => {
     const along = (q.x - lens.x) * Math.sin(h) + (q.z - lens.z) * Math.cos(h);
