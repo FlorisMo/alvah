@@ -16,7 +16,8 @@ import * as THREE from 'three';
 import { heightAt as groundY, WATER_LEVEL } from '../../Biomes.ts';
 import { fitFrame } from '../../play/frame-fit.ts';
 import { dist } from '../places.ts';
-import { newPlay } from '../../../core/play.ts';
+import { compactVariant, newPlay } from '../../../core/play.ts';
+import { ONTDEKKINGEN } from '../../../content/ontdekkingen.ts';
 import { MOOD_IDS, type MoodId } from '../../Moods.ts';
 import {
   BAYS, BAY_IDS, PATH, PATH_HALF, SIDES, above, answerView, edgeOf, pathR, polarOf, pointAt, project, singOf, underBoy,
@@ -24,7 +25,7 @@ import {
 } from './ven.places.ts';
 import {
   BLUE_AWAY, BUTTERFLY_MOODS, BUTTERFLY_TH, DRAGONFLY_MOODS, DRAGONFLY_RANGE, DRAGONFLY_TH, DUCK_LOOPS, DUCKLINGS, FEATHER_TH, PLOP_NEAR, PLOP_PASS,
-  blueOf, butterflySpot, clearOfStations, dragonflyHome, dragonflyHomesFor, featherSpot, lastLifeOf, lifeTag, onEveryWay, onLoop, plopSpot, trailLength, venLife,
+  BLUE_ID, blueOf, butterflySpot, clearOfStations, dragonflyHome, dragonflyHomesFor, featherSpot, lastLifeOf, lifeTag, onEveryWay, onLoop, plopSpot, trailLength, venLife,
 } from './ven.life.ts';
 import type { Spot } from '../types.ts';
 
@@ -209,4 +210,15 @@ test('a play\'s life: drawn from its own forks, deterministic, never the last pl
   assert.deepEqual(lastLifeOf('B1-apm+0.2/e5nf2'), { loop: 0, count: 5, veer: 2 });
   assert.equal(lastLifeOf('B1-apm+0.2'), null);
   void pointAt;
+});
+
+test('the play\'s noted variant keeps the cove and the ducks in the history in every mood, with the rare too', () => {
+  // (the history keeps 60 characters of a play's notes, in the order noted: the mood, the
+  // rare, the moments' order, then the ven's own — the next play reads the last cove, nook,
+  // duck family and feather back from it)
+  const rare = ONTDEKKINGEN.find((o) => o.home === 'ven' && o.soort === 'zeldzaam')!;
+  assert.equal(rare.id, BLUE_ID);
+  const longestMood = [...MOOD_IDS].sort((a, b) => b.length - a.length)[0];
+  const va = compactVariant({ mood: longestMood, rare: rare.id.slice(rare.id.indexOf('.') + 1), rust: 'amp', ven: 'A5-amp-0.9/e7of2', l: 'e7olv2f2p2' })!;
+  assert.match(va, /(^|,)ven:A5-amp-0\.9\/e7of2(,|$)/, `the ven's note survives: ${va}`);
 });

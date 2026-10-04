@@ -206,6 +206,10 @@ export function venLife(play: Pick<Play, 'fork'>, mood: MoodId, laid: { bay: Bay
   return { ducks: { loop, count, start }, libellen, vlinder, veer, plops, variant };
 }
 
+/** The rare's id: short, so the play's noted variant keeps its cove and life whatever the
+ *  mood (the history keeps 60 characters: `mood:ochtendnevel,rare:blauw,rust:amp,ven:A5-amp-0.9/e7of2`). */
+export const BLUE_ID = 'ven.blauw';
+
 /** The history's key for the life a play brought (noted with the play; the history keeps
  *  it while the variant has room). */
 export const LIFE_KEY = 'l';

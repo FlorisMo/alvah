@@ -46,7 +46,7 @@ import { ARRIVE_RADIUS, bearing, cue as cueAt } from '../../Wayfinding';
 import { WATER_LEVEL } from '../../Biomes';
 import { VenHome, venBody, type Frog } from './ven.home';
 import { ListenCore, StillFor, chorusCalls, listensOf, ringSize } from './ven.listen';
-import { LIFE_KEY, SEEN, blueOf, lastLifeOf, lifeTag, venLife } from './ven.life';
+import { BLUE_ID, LIFE_KEY, SEEN, blueOf, lastLifeOf, lifeTag, venLife } from './ven.life';
 import { Seen, boxOf } from './ven.finds';
 import type { MoodId } from '../../Moods';
 import {
@@ -430,7 +430,7 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
  */
 function watchLife(k: AdventureKit, home: VenHome, laid: VenLaid): void {
   const life = home.life;
-  life.setBlue(k.rare()?.id === 'ven.blauwe-kikker');
+  life.setBlue(k.rare()?.id === BLUE_ID);
   const ll = life.laid?.life;
   if (ll) {
     k.stats.life_ducklings = ll.ducks.count;
@@ -455,7 +455,7 @@ function watchLife(k: AdventureKit, home: VenHome, laid: VenLaid): void {
   seen.watch({ id: 'ven.libel', box: fly, ...SEEN.libel });
   seen.watch({ id: 'ven.heideblauwtje', box: () => (life.butterflyObject ? boxOf(life.butterflyObject) : null), ...SEEN.vlinder });
   seen.watch({ id: 'ven.veer', box: () => (life.featherObject ? boxOf(life.featherObject) : null), ...SEEN.veer });
-  seen.watch({ id: 'ven.blauwe-kikker', box: () => (life.blueFrog?.group.visible ? boxOf(life.blueFrog.group) : null), ...SEEN.blauw });
+  seen.watch({ id: BLUE_ID, box: () => (life.blueFrog?.group.visible ? boxOf(life.blueFrog.group) : null), ...SEEN.blauw });
   const t0 = k.now;
   let visited = false;
   k.onTick((dt) => {

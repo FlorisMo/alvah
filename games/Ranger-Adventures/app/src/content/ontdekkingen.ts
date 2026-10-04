@@ -172,7 +172,7 @@ const VEN: Ontdekking[] = [
     hint: 'Wie zit er op de hei?', model: 'animal-heideblauwtje-butterfly', stemming: ['zonnig', 'gouden-uur'] },
   { id: 'ven.veer', home: 'ven', soort: 'vondst', naam: 'de blauwe veer', naamKnap: 'de spiegelveer van de eend',
     hint: 'Wat ligt er op de oever?', model: 'prop-feather' },
-  { id: 'ven.blauwe-kikker', home: 'ven', soort: 'zeldzaam', naam: 'de blauwe kikker', naamKnap: 'de blauwe heikikker',
+  { id: 'ven.blauw', home: 'ven', soort: 'zeldzaam', naam: 'de blauwe kikker', naamKnap: 'de blauwe heikikker',
     hint: 'Soms is een kikker heel even blauw.', model: 'heikikker-blauw' },
 ];
 
