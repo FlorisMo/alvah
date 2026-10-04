@@ -88,8 +88,19 @@ export class Squirrel extends Actor {
   private eatFrom = -9;
   private eatFor = 1;
 
-  constructor(key: string, env: ActorEnv, opts: { height: number; trees: readonly SquirrelTree[]; seed?: number }) {
-    super(key, 'eekhoorn', env, { height: opts.height, len: opts.height * 1.1 });
+  /** how much warm light its fur catches (the emissive's strength): see `dress` */
+  private readonly warmth: number;
+
+  /**
+   * Run 7 (additive): `animal` — a content id with a coat of its own on the squirrel's model
+   * (the eekhoorn's rare visitor, 'eekhoorn-donker': its dark coat comes from the world's
+   * one dressing, Coat.ts), default 'eekhoorn'; `warmth` — how much of the low sun's warm
+   * light its fur catches (default 0.16; a dark coat less, so it reads brown, not orange).
+   * Its size is `height` (a young one: smaller).
+   */
+  constructor(key: string, env: ActorEnv, opts: { height: number; trees: readonly SquirrelTree[]; seed?: number; animal?: string; warmth?: number }) {
+    super(key, opts.animal ?? 'eekhoorn', env, { height: opts.height, len: opts.height * 1.1 });
+    this.warmth = opts.warmth ?? 0.16;
     this.homeReach = 45; // (it runs home from anywhere round its glade, never a cut in view)
     this.trees = [...opts.trees];
     this.rnd = sqStream(opts.seed ?? 7);
@@ -136,7 +147,7 @@ export class Squirrel extends Actor {
       for (const mat of [m.material].flat() as THREE.MeshStandardMaterial[]) {
         if (!mat.isMeshStandardMaterial) continue;
         mat.emissive.set('#ff9a4a');
-        mat.emissiveIntensity = 0.16;
+        mat.emissiveIntensity = this.warmth;
       }
     });
     // the acorn goes in its mouth: just under its nose (the most forward point of its
@@ -181,7 +192,13 @@ export class Squirrel extends Actor {
     const hingeY = box.min.y + size.y * 0.22;
     const span = size.z * 0.3;
     for (const mat of [m.material].flat() as THREE.MeshStandardMaterial[]) {
-      mat.onBeforeCompile = (shader) => {
+      // (the world's own animal light comes first: AnimalDress gave every animal material
+      // its hooks — the mood's animal fill on the side away from the sun — and the tail's
+      // bend and the rim go on top of them, never instead of them)
+      const prev = mat.onBeforeCompile;
+      const prevKey = mat.customProgramCacheKey();
+      mat.onBeforeCompile = (shader, renderer) => {
+        prev.call(mat, shader, renderer);
         shader.uniforms.uTail = this.tail;
         shader.uniforms.uHinge = { value: new THREE.Vector3(0, hingeY, hingeZ) };
         shader.uniforms.uSpan = { value: span };
@@ -203,7 +220,7 @@ export class Squirrel extends Actor {
           '#include <emissivemap_fragment>\n{ float sqEdge = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);\n' +
           '  totalEmissiveRadiance += vec3(1.0, 0.72, 0.38) * (uRim * 0.9 * pow(sqEdge, 2.0)); }');
       };
-      mat.customProgramCacheKey = () => 'squirrel-tail-rim';
+      mat.customProgramCacheKey = () => `${prevKey}|squirrel-tail-rim`;
       mat.needsUpdate = true;
     }
   }
@@ -291,17 +308,51 @@ export class Squirrel extends Actor {
   /** Round its trunk to `at` (from its branch or the bark of that tree): a quick scurry
    *  round the bark at about the same height — hiding on the far side of the tree from
    *  someone, as red squirrels do. From anywhere else: up the trunk to `at`. */
-  goRound(tree: SquirrelTree, at: OnTrunk, secs?: number): Promise<boolean> {
+  goRound(tree: SquirrelTree, at: OnTrunk, secs?: number, turns = 0, headUp = true): Promise<boolean> {
     const w = this.where;
     if ((w.kind !== 'branch' && w.kind !== 'trunk') || w.tree !== tree) return this.goTrunk(tree, at);
     const plan: Segment[] = [];
     let from: OnTrunk;
     if (w.kind === 'branch') { plan.push(this.offBranch(tree)); from = { ang: tree.branch.ang, h: tree.branch.h - 0.12 }; }
     else from = w.at;
-    // (`secs`: a calm slip round, no quicker than that — hide-and-seek keeps his pace)
-    plan.push(...climbPlan(tree.trunk, from, at, 0, secs));
-    plan.push(hold(trunkPose(tree.trunk, at, true, 'cling'), 0.1, 'cling'));
+    // (`secs`: a calm slip round, no quicker than that — hide-and-seek keeps his pace;
+    // run 7, additive: `turns` whole times round the trunk on the way (two squirrels chasing
+    // round a pine), and `headUp` false: it stays head down where it stops, as it came)
+    plan.push(...climbPlan(tree.trunk, from, at, turns * 2, secs));
+    plan.push(hold(trunkPose(tree.trunk, at, headUp, 'cling'), 0.1, 'cling'));
     return this.run(plan, { kind: 'trunk', tree, at });
+  }
+
+  /** Run 7 (additive): put it at once on the bark of `tree` at `at`, head up or down — a
+   *  visitor laid where he cannot see it, before it comes. */
+  placeOnTrunk(tree: SquirrelTree, at: OnTrunk, headUp = true): void {
+    this.life = null;
+    this.watching = null;
+    this.pose = trunkPose(tree.trunk, at, headUp, 'cling');
+    this.settled = { kind: 'trunk', tree, at };
+    this.plan = [];
+    this.planDone?.(false);
+    this.planDone = null;
+    this.x = this.pose.x; this.z = this.pose.z; this.yaw = this.pose.yaw;
+    this.apply();
+  }
+
+  /** Run 7 (additive): a short calm move straight to pose `p` in `secs` (into its nest, out
+   *  onto the nest's crown), and it stays there. */
+  moveTo(p: SqPose, secs: number): Promise<boolean> {
+    const a = { ...this.pose };
+    // (on its way it is seated by its feet, as on the ground: a climb would press its belly
+    // to a bark that is not there)
+    const act = p.act === 'cling' ? 'climb' : 'run';
+    const seg: Segment = {
+      dur: Math.max(0.1, secs), len: Math.hypot(p.x - a.x, p.z - a.z, p.alt - a.alt), act,
+      at: (u) => {
+        const e = u * u * (3 - 2 * u);
+        return { x: a.x + (p.x - a.x) * e, z: a.z + (p.z - a.z) * e, alt: a.alt + (p.alt - a.alt) * e, yaw: a.yaw + wrap(p.yaw - a.yaw) * e,
+          pitch: a.pitch + (p.pitch - a.pitch) * e, roll: e < 0.5 ? a.roll : p.roll, act: u < 1 ? act : p.act };
+      },
+    };
+    return this.run([seg, hold(p, 0.1, p.act)]);
   }
 
   /** Back off its branch onto the bark under it, head down (the first move down). */

@@ -39,17 +39,19 @@ import { routeBeat } from '../beats/route';
 import { callersBeat, type Caller } from '../beats/callers';
 import { CALL_GLOW, WarmGlow } from '../beats/callers-glow';
 import { Squirrel, type SquirrelTree } from '../squirrel';
-import { barkRadius, lineClear, trunkFadeUpright, trunkUpright, wrap, type Upright } from '../squirrel-math';
+import { barkRadius, lineClear, trunkFadeUpright, trunkPose, trunkUpright, wrap, type Upright } from '../squirrel-math';
 import { dist, headingTo } from '../places';
 import type { Spot } from '../types';
 import { TREE_BASE_H } from '../../world/Forest';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale';
-import { EekhoornHome, homeTreeNear, type Neighbour } from './eekhoorn.home';
+import { EekhoornHome, homeTreeNear, pictureOf, type Neighbour } from './eekhoorn.home';
 import {
   CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, FIND_R, GLADE_VIEW, HEAP, HEAP_GRAB, AT_IT, HIDE, HOME_TREES, ROUTES, RUN_ON_WAIT, RUN_ON_X, SEAT_STOP, SEE_D, SEEN_X, STUMP,
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
+  DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, nestWatch, youngPeek,
 } from './eekhoorn.places';
+import { ontdekking } from '../../../content/ontdekkingen';
 
 /** The squirrel's size (m, sitting up with its tail curled over its back): a little over
  *  the upper end of a red squirrel (≈ 0.3), so a child reads it on a trunk a few metres
@@ -75,6 +77,15 @@ const VISIT = { dig: 0.65, gap: 0.12 } as const;
 /** On a pine it only passes, it waits at most this long (s) for him to turn to it before it
  *  leaps on (the way on shows after RUN_ON_WAIT + 2 s, turning him toward it). */
 const PASS_WAIT = 9;
+/** Its nest (run 7): it peeks out once he has seen the nest (NEST_SEE: big enough in his
+ *  picture for a moment, the threshold the places test pins from the spot to see it from) —
+ *  or, once he has stood still right under it (NEST_WATCH.under) `nearWait` s, or `wait` s
+ *  on in all, it comes out all the same and says nothing of a nest he did not see. While it waits
+ *  in its nest the way on is to the spot to see it from (nestWatch), then a step that turns
+ *  him to it — and he stands there while it peeks out and its line plays (played
+ *  2026-10-04: walked on to the nest's foot, or away to the stub's watch spot while the line
+ *  played, the moment was lost in 2 of 9 plays). */
+const NEST_PEEK = { wait: 16, nearWait: 4 } as const;
 /** Its sweep after a round: each acorn dug up in a quick bob (s). */
 const SWEEP_DIG = 0.25;
 /** Each neighbour's call in the echo game is held to this snippet (s): a blackbird's long
@@ -91,6 +102,9 @@ function lay(world: { residents: Residents }, play: Play): EekhoornPlay | null {
   if (!home) return null;
   const p = drawEekhoornPlay(play, lastVariants(store.get().geschiedenis, 2));
   play.note(VARIANT_KEY, variantOf(p));
+  // (its finds: which of the way's trees carries its nest, where its gnawed cones lie)
+  play.note('nest', nestTrees(ROUTES[p.route])[p.nest].id);
+  play.note('kegels', p.kegels);
   home.layPlay(p, { cosmetic: play.fork('cosmetic').rng, squirrel: play.fork('squirrel').int(1, 0x7fffffff) });
   drawn = { seed: play.seed, p };
   return p;
@@ -116,6 +130,7 @@ export const eekhoornAdventure: Adventure = {
     sq.stumps.push({ x: STUMP.x, z: STUMP.z, top: STUMP.top, r: STUMP.r });
     sq.onDig = (x, z) => dressing.puffAt(x, z, env.reduced());
     dressing.squirrel = sq;
+    dressing.actorEnv = env; // (a play's rare visitor is made the same way)
     return sq;
   },
   prepare(world, _mission, play) {
@@ -163,6 +178,10 @@ async function meetNeighbours(k: AdventureKit, home: EekhoornHome, geluid: boole
     glows.get(id)?.set(CALL_GLOW);
     n.call();
     k.say(names[n.id] ?? null);
+    // into his veldgids, quietly: this meeting (its light, its call, its name) is its moment —
+    // the home's own row, or the open wood's where it is a bird of the whole wood
+    const row = ontdekking(`eekhoorn.${n.id}`) ?? ontdekking(`wereld.${n.id}`);
+    if (row) k.discover(row.id, { quiet: true });
     if (geluid) Sound.callAt(n.id, n.at.x, n.at.z, listenerOf(k.world.camera), 25, CALL_CAP[1]);
     void k.wait(Math.max(1.6, Sound.callDur(n.id, CALL_CAP[1]) + 0.4)).then(() => {
       glows.get(id)?.set(0);
@@ -253,14 +272,63 @@ function sightOf(k: AdventureKit, sq: Squirrel, trees: readonly SquirrelTree[], 
   return { seen: well >= pts.length / 2, glimpse: open > 0, px, x };
 }
 
+/**
+ * He SAW it (design §4.4, the home's finds): while `what` stands in his picture — at least
+ * `px` tall (or `across` wide), inside the picture and under the line card, most of it clear
+ * of the home's trunks (the ones the follow camera fades between the lens and him hide
+ * nothing), within `within` m of him — a clock runs; after `secs` in a row it is his:
+ * `k.discover(id)` once (a new one gets one calm reveal at the next quiet moment, `quiet`:
+ * none). Never a prize: it only counts what was really in his picture. The stats keep how
+ * big it was then (`seen_<stat>`). `off()` stops looking; `seen` says whether it was.
+ */
+function seenFor(k: AdventureKit, home: EekhoornHome, id: string, what: () => { box: THREE.Box3; pts: readonly THREE.Vector3[]; at?: Spot } | null,
+  o: { px?: number; across?: number; secs?: number; within?: number; quiet?: boolean; stat: string }): { off(): void; readonly seen: boolean } {
+  const clock = new SeenClock(o.secs ?? 1);
+  let done = false;
+  const off = k.onTick((dt) => {
+    if (done) return;
+    const t = what();
+    let ok = false;
+    if (t) {
+      const me = k.ranger();
+      const at = t.at ?? { x: (t.box.min.x + t.box.max.x) / 2, z: (t.box.min.z + t.box.max.z) / 2 };
+      if (o.within === undefined || dist(me, at) <= o.within) {
+        const cam = k.world.camera;
+        const pic = pictureOf(cam, k.ctx.canvas.clientHeight || 800, k.ctx.canvas.clientWidth || 1280, t.box, t.pts, home.trunks(cam.position, me));
+        ok = pic.inside && pic.clear >= 0.5 && (o.px === undefined || pic.px >= o.px) && (o.across === undefined || pic.across >= o.across);
+        if (ok) k.stats[`seen_${o.stat}_px`] = Math.round(o.across !== undefined ? pic.across : pic.px);
+      }
+    }
+    if (clock.step(dt, ok)) {
+      done = true;
+      k.stats[`seen_${o.stat}`] = 1;
+      k.discover(id, { quiet: o.quiet });
+      off();
+    }
+  });
+  return { off: () => { done = true; off(); }, get seen() { return clock.seen; } };
+}
+
+/** What he sees of a squirrel (its body's box and a dozen points on it), or null. */
+function squirrelSight(q: Squirrel): (() => { box: THREE.Box3; pts: readonly THREE.Vector3[] } | null) {
+  return () => {
+    if (!q.body || !q.group.visible) return null;
+    const pts = q.bodyPoints();
+    if (!pts.length) return null;
+    return { box: new THREE.Box3().setFromObject(q.body), pts };
+  };
+}
+
 /** A walk that ends on what he SEES (not where he stands) gets its own play hint for
  *  golden: a spot a perfect player walks to straight, with a real radius, read anew each
  *  time he gets there. It replaces the walk's own hint on the walk's first tick, under
  *  its own id (so a reader still holding the walk's own sees it change). */
-function seeHint(k: AdventureKit, name: string, spot: () => Spot & { r?: number }): { tick(): void; off(): void } {
+function seeHint(k: AdventureKit, name: string, spot: () => Spot & { r?: number; tag?: string }): { tick(): void; off(): void } {
   let off: (() => void) | null = null;
   return {
-    tick: () => { off ??= k.hint(() => { const s = spot(); return { id: `walk:${name}:see`, walk: { x: s.x, z: s.z, r: s.r ?? WATCH_R } }; }); },
+    // (`tag`: a leg of its own — the nest's — under its own id, so a reader walking the last
+    // leg sees it change at once)
+    tick: () => { off ??= k.hint(() => { const s = spot(); return { id: `walk:${name}:${s.tag ?? 'see'}`, walk: { x: s.x, z: s.z, r: s.r ?? WATCH_R } }; }); },
     off: () => { off?.(); off = null; },
   };
 }
@@ -291,21 +359,75 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   const inMiddle = (): boolean => { const s = sightOf(k, sq, home.trees, 'peek'); return s.glimpse && Math.abs(s.x) <= RUN_ON_X; };
   k.stats.route = ['midden', 'noord', 'zuid'].indexOf(p.route);
 
+  // run 7 (its finds): this play's rare visitor (k.rare(), rolled at the briefing: a seeded
+  // chance, and surely within about three plays), made now and laid out of his sight where
+  // it comes: the dark-brown one at the den, the young one in the found view
+  const rare = k.rare()?.id ?? null;
+  const visitorSeed = k.play.fork('bezoeker').int(1, 0x7fffffff);
+  const dark = rare === 'eekhoorn.donkere-eekhoorn' ? home.visitor('donker', SQUIRREL_H, visitorSeed) : null;
+  const young = rare === 'eekhoorn.jonge-eekhoorn' ? home.visitor('jong', SQUIRREL_H * YOUNG.scale, visitorSeed) : null;
+  for (const v of [dark, young]) if (v) { v.lensAt = sq.lensAt; v.rangerAt = sq.rangerAt; }
+  /** a visitor's chatter (from where it is) */
+  const chatterOf = (v: Squirrel): void => {
+    if (settings.geluid) Sound.callAt('eekhoorn', v.x, v.z, listenerOf(k.world.camera));
+    v.called();
+  };
+
   // 0 · it sees him coming: up to its branch stub on its pine, and it chatters at him.
   //     The one look of the mission: the lens turns to it over his shoulder (while it
   //     runs up to its stub), so the child meets the squirrel he is going to follow;
-  //     then the follow camera is back.
+  //     then the follow camera is back. (A play with the dark-brown visitor frames it a
+  //     little higher: the two of them meet on the trunk.)
   k.beat = 'den';
   const up = k.guard(sq.goBranch(oak, faceMe(sq.branchPose(oak))));
-  await k.frame(introView(k.ranger(), route.waits[0]), { face: headingTo(k.ranger(), oak.trunk) });
+  await k.frame(introView(k.ranger(), route.waits[0], dark ? DEN_VISITOR.tall : undefined), { face: headingTo(k.ranger(), oak.trunk) });
   await up;
   k.say(c.daar);
   k.stats.den_px = Math.round(measure().px);
   chatter();
   await k.wait(1.5);
   sq.flick();
-  await k.wait(1.1);
-  chatter();
+  if (dark && (await k.guard(dark.ready.then(() => !!dark.body)))) {
+    // the dark-brown squirrel comes down the trunk head first, from above and round the
+    // back of it, to the bark above ours: the two chatter at each other ("Kijk, nog een
+    // eekhoorn!"), chase each other once round the pine, and it runs up the far side and
+    // away through the crown; ours goes back to its stub
+    const cam = k.world.camera.position;
+    const v = denVisitor({ x: cam.x, z: cam.z });
+    dark.placeOnTrunk(oak, v.start, false);
+    dark.group.visible = true;
+    const seen = seenFor(k, home, 'eekhoorn.donkere-eekhoorn', squirrelSight(dark), { px: 40, secs: 1, stat: 'donker' });
+    try {
+      await k.guard(dark.goRound(oak, v.meet, 1.6, 0, false));
+      chatterOf(dark);
+      await k.wait(0.35);
+      k.say(c.nogEen);
+      void sq.look(headingTo(sq, dark), 0.2).catch(() => {});
+      await k.wait(0.9);
+      chatter();
+      await k.wait(0.9);
+      // once round the pine: it first, ours after it (round the bark: never toward the lens)
+      const chase = k.guard(dark.goRound(oak, { ang: v.meet.ang, h: DEN_VISITOR.spiralH }, 1.4, 1, false));
+      await k.wait(0.3);
+      const after = k.guard(sq.goRound(oak, { ang: oak.branch.ang, h: DEN_VISITOR.spiralH - 0.15 }, 1.4, 1, false));
+      await chase;
+      chatterOf(dark);
+      const gone = k.guard(dark.goRound(oak, v.up, 2.4));
+      await after;
+      await k.guard(sq.goBranch(oak, faceMe(sq.branchPose(oak))));
+      chatter();
+      sq.flick();
+      await gone;
+      await k.wait(0.3);
+    } finally {
+      seen.off();
+      k.stats.donker = seen.seen ? 1 : 0;
+      home.dropVisitor();
+    }
+  } else {
+    await k.wait(1.1);
+    chatter();
+  }
   await k.wait(1.2);
   // (out of the picture he turns the way the squirrel will go: the follow camera comes
   // back behind him looking there, and the keys walk him after it)
@@ -337,9 +459,18 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       }
     }
   });
+  // run 7 (its finds): along the way he may see its gnawed cones — into his veldgids once he
+  // really saw them (big enough in his picture, for a moment); its nest goes in with its own
+  // moment (nestMoment), or — when he walked past it without a look — once he does see it
+  let nestSeen = null as { off(): void; readonly seen: boolean } | null;
+  const kegelsSeen = seenFor(k, home, 'eekhoorn.kale-kegels', () => { const q = home.kegelsSight(); return q && { box: q.box, pts: q.pts, at: q.at }; },
+    { across: DINING_SEE.across, within: DINING_SEE.within, secs: DINING_SEE.secs, stat: 'kegels' });
   /** set once the last move to the next wait has begun (a leap through a pine it only
    *  passes comes first) */
   let lastMove = false;
+  /** while it waits in its nest (and peeks out of it): the spot to see it from, and which
+   *  leg of the way there he is on (to the spot; the step that turns him to the nest) */
+  let nestWait: { watch: ReturnType<typeof nestWatch>; leg: 'go' | 'look' | 'hold'; at?: Spot } | null = null;
   const hop = async (name: string, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
     k.say(line);
     lastMove = false;
@@ -363,6 +494,17 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     const spot = watchSpot(t);
     const seat = seatOf(t);
     const hint = seeHint(k, name, () => {
+      // (it waits in its nest: the way is to the spot to see it from, then one step on toward
+      // a point beside the nest — it turns him, and the lens, to it — and there he stands)
+      if (nestWait) {
+        const w = nestWait.watch, d = dist(k.ranger(), w);
+        // (it peeks out: he stands where he saw it, while it looks at him and its line plays)
+        if (nestWait.leg === 'hold' && nestWait.at) return { x: nestWait.at.x, z: nestWait.at.z, r: 1.5, tag: 'nest-hold' };
+        if (nestWait.leg === 'go' && d <= NEST_WATCH.r) nestWait.leg = 'look'; // (and it stays: wandered off, the step brings him back facing it)
+        if (nestWait.leg === 'look') return { x: w.aim.x, z: w.aim.z, r: w.stop, tag: 'nest-look' };
+        const way = wayTo(k.ranger(), w);
+        return way === w ? { x: w.x, z: w.z, r: NEST_WATCH.r * 0.7, tag: 'nest' } : { x: way.x, z: way.z, tag: 'nest' };
+      }
       // (at the spot to see it from — or right by it already — with it on its stub: the way
       // is on toward it, never away from it: walking at it turns him, and the lens, to it,
       // and brings him within SEE_D)
@@ -413,8 +555,104 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     k.stats[`${name}_x`] = Math.round(off.x * 100) / 100;
     sq.glow(false);
   };
+  /**
+   * Its nest (run 7): at the wait whose tree carries it, it runs up into the nest instead
+   * of onto its stub and waits there, chattering from the twigs, while the way on takes him
+   * to the spot to see it from. Once he has SEEN the nest (NEST_SEE: big enough in his
+   * picture, NEST_SEE.secs in a row) it peeks out of it at him ("Kijk, zijn nest!") and the
+   * nest goes into his veldgids — that moment is the find; he stands while it peeks and
+   * flicks its tail, then it comes down to its stub to wait. A child who walks on under it
+   * without a look: it comes out all the same and nothing is said of a nest he did not see
+   * (it is his once he does see it, from then on).
+   */
+  const nestMoment = async (t: HomeTree, wi: number, face: number, line: string): Promise<boolean> => {
+    const n = home.nestNow;
+    if (!n) return sq.goBranch(st(t), face);
+    const tree = st(t);
+    if (!(await sq.goTrunk(tree, { ang: n.ang, h: NEST.h - NEST.r - 0.1 }))) return false;
+    // into it (the ball of twigs hides it; a bit of tail may show)
+    if (!(await sq.moveTo({ x: n.x, z: n.z, alt: n.world.y - k.ctx.groundY(n.x, n.z) - NEST.r * 0.55, yaw: n.ang, pitch: 0, roll: 0, act: 'sit' }, 0.45))) return false;
+    /** the nest in his picture now: big enough, well inside it (not at its edge), under the
+     *  line card and out of the chips' corner, mostly clear of the trunks (not the ones the
+     *  camera fades) and of his head */
+    const nestInView = (): boolean => {
+      const me = k.ranger();
+      if (dist(me, n) > NEST_SEE.near) return false;
+      const t0 = home.nestSight();
+      if (!t0) return false;
+      const cam = k.world.camera;
+      const g = k.ctx.groundY(me.x, me.z);
+      const hiders = [...home.trunks(cam.position, me), { x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 }];
+      const W = k.ctx.canvas.clientWidth || 1280;
+      const pic = pictureOf(cam, k.ctx.canvas.clientHeight || 800, W, t0.box, t0.pts, hiders);
+      const underHud = ((pic.cx + 1) / 2) * W < NEST_SEE.hud.w && pic.cy < NEST_SEE.hud.h;
+      const ok = pic.inside && !underHud && Math.abs(pic.cx) <= NEST_SEE.x && pic.px >= NEST_SEE.px && pic.clear >= 0.5;
+      if (ok) { k.stats.nest_px = Math.round(pic.px); k.stats.nest_x = Math.round(pic.cx * 100) / 100; }
+      return ok;
+    };
+    nestWait = { watch: nestWatch(route, wi), leg: 'go' };
+    const clock = new SeenClock(NEST_SEE.secs);
+    let nextChatter = k.now + 1.5, under = 0, last = k.now, lastYaw = NaN;
+    const look = new THREE.Vector3();
+    const t0 = k.now;
+    const seen = await k.until(() => {
+      const dt = k.now - last;
+      if (dt <= 0) return false; // (no time has passed: nothing to measure)
+      last = k.now;
+      if (k.now >= nextChatter) { nextChatter = k.now + 2.8; chatter(); }
+      // (a steady picture: the lens not swinging round — a nest seen as it swings by is gone
+      // again a moment later)
+      k.world.camera.getWorldDirection(look);
+      const yaw = Math.atan2(look.x, look.z);
+      const steady = Number.isFinite(lastYaw) && Math.abs(wrap(yaw - lastYaw)) / dt <= NEST_SEE.turn;
+      lastYaw = yaw;
+      if (clock.step(dt, steady && nestInView())) return true;
+      // (he stands right under it and does not look up at it: it comes out to him all the same
+      // — standing: on his way out from under it to see it, the clock waits; played
+      // 2026-10-04, seed 2: right by its trunk as it went in, the walk out took 4 s and it
+      // came out without a word)
+      const me = k.ranger();
+      under = dist(me, n) <= NEST_WATCH.under && me.speed < 0.3 ? under + dt : 0;
+      return under >= NEST_PEEK.nearWait;
+    }, NEST_PEEK.wait).then(() => clock.seen);
+    k.stats.nest_wait_s = Math.round((k.now - t0) * 10) / 10;
+    // (seen — in a steady picture: he stands where he saw it while it peeks out at him)
+    if (seen) { const me = k.ranger(); nestWait = { ...nestWait, leg: 'hold', at: { x: me.x, z: me.z } }; }
+    const pk = nestPeek(n, k.ranger());
+    sq.glow(true);
+    const out = sq.moveTo({ x: pk.x, z: pk.z, alt: pk.y, yaw: pk.yaw, pitch: 0, roll: 0, act: 'sit' }, 0.5);
+    out.catch(() => {});
+    if (seen) {
+      // its moment, in his picture: the line as its head comes out, and the nest is his
+      await k.wait(0.25);
+      k.say(c.nestKijk);
+      k.stats.nest_peek = 1;
+      k.discover('eekhoorn.nest', { first: true }); // (its card next: with its moment, before a find that waits)
+    }
+    if (!(await out)) { nestWait = null; return false; }
+    chatter();
+    await k.wait(0.6);
+    sq.flick();
+    await k.wait(1.2);
+    chatter();
+    await k.wait(0.6);
+    if (seen) {
+      // (a little longer in its nest, looking at him: its card comes up now, after its line,
+      // with the nest still in his picture — before the next line, which would hold it back)
+      sq.flick();
+      await k.wait(1.3);
+    }
+    nestWait = null;
+    // (a nest he did not see: his once he does — from here on, as he walks on)
+    if (!seen) nestSeen ??= seenFor(k, home, 'eekhoorn.nest', () => home.nestSight(), { px: NEST_SEE.px, secs: 1, stat: 'nest' });
+    sq.glow(false);
+    k.say(line);
+    // down the bark under its nest, round to its stub
+    if (!(await sq.moveTo(trunkPose(tree.trunk, { ang: n.ang, h: NEST.h - NEST.r - 0.08 }, false, 'cling'), 0.35))) return false;
+    return sq.goBranch(tree, face);
+  };
   /** the hops after the wait before up to and including `w` (a leap or a dash each) */
-  const goTo = (from: number, to: number, face: number): (() => Promise<boolean>) => async () => {
+  const goTo = (from: number, to: number, face: number, nest: { wi: number; line: string } | null = null): (() => Promise<boolean>) => async () => {
     const hops = route.hops.slice(from, to + 1);
     for (const [i, h] of hops.entries()) {
       const last = i === hops.length - 1;
@@ -423,7 +661,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       // 2026-10-03: from the middle way's A, its leap to B lands left of his picture)
       if (i > 0 && !inMiddle()) { chatter(); await k.until(() => inMiddle(), PASS_WAIT); }
       if (last) lastMove = true;
-      const ok = h.how === 'leap' ? await sq.goLeap(st(h.tree), last ? face : undefined) : await sq.goBranch(st(h.tree), last ? face : undefined);
+      const ok = last && nest && h.how === 'dash' ? await nestMoment(h.tree, nest.wi, face, nest.line)
+        : h.how === 'leap' ? await sq.goLeap(st(h.tree), last ? face : undefined) : await sq.goBranch(st(h.tree), last ? face : undefined);
       if (!ok) return false;
       if (!last) await k.wait(0.25);
     }
@@ -433,7 +672,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     let from = 0;
     for (const [wi, t] of route.waits.entries()) {
       const to = route.hops.findIndex((h) => h.tree === t);
-      await hop(`wacht-${wi + 1}`, goTo(from, to, headingTo(t, comesFrom(route, wi))), t, wi === 0 ? c.volg : c.weer);
+      const line = wi === 0 ? c.volg : c.weer;
+      await hop(`wacht-${wi + 1}`, goTo(from, to, headingTo(t, comesFrom(route, wi)), wi === p.nest && wi < route.waits.length - 1 ? { wi, line } : null), t, line);
       from = to + 1;
     }
   } finally {
@@ -510,6 +750,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     hint.off();
   }
   k.stats.hide_round = Math.round((walked * 180) / Math.PI);
+  // (found: a held view now, no walk — a new find's reveal waits for the walk to its glade)
+  k.beat = 'gevonden';
   // found: he stops (a moment with the keys resting) and the lens eases round to hold the
   // two of them, on his side of the tree; the squirrel peeks its head round the bark at
   // him and comes out onto the bark's near face, flicks its tail and chatters — and THEN
@@ -525,18 +767,51 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   out.catch(() => {});
   const rr = barkRadius(hideTree.trunk, HIDE.h) + 0.08;
   const sqAt = { x: cT.x + Math.sin(face) * rr, z: cT.z + Math.cos(face) * rr };
-  await k.frame(foundView(cT, face, at0), { face: headingTo(at0, sqAt) });
+  await k.frame(foundView(cT, face, at0, !!young), { face: headingTo(at0, sqAt) });
   await out;
   sqAng = face;
   sq.flick();
   chatter();
-  await k.wait(0.5);
-  k.say(c.gevonden);
-  const found = measure();
-  k.stats.found_px = Math.round(found.px);
-  k.stats.found_x = Math.round(found.x * 100) / 100;
-  sq.called();
-  await k.wait(1.6);
+  // run 7 (the rare young one): it was hiding with ours, round the back of the trunk; now
+  // a little head peeks round the wood, and out it comes onto the ground, out past the
+  // pine's root spurs, and sits up facing him ("Gevonden! En nog een kleintje!"); once he
+  // has seen it, it runs up the trunk and round the back, out of the picture. (The found
+  // view of a play with it holds it whole too: eekhoorn.places foundView/youngPeek.)
+  let youngGone: Promise<boolean> | null = null;
+  let youngSeen: { off(): void; readonly seen: boolean } | null = null;
+  if (young && (await k.guard(young.ready.then(() => !!young.body)))) {
+    const cam = k.world.camera.position;
+    const y = youngPeek(cT, at0, { x: cam.x, z: cam.z }, face);
+    young.placeOnTrunk(hideTree, y.start, false);
+    young.group.visible = true;
+    youngSeen = seenFor(k, home, 'eekhoorn.jonge-eekhoorn', squirrelSight(young), { px: 38, secs: 1, stat: 'jong' });
+    await k.guard(young.goRound(hideTree, y.edge, 0.8, 0, false));
+    chatterOf(young);
+    await k.wait(0.5);
+    await k.guard(young.run(young.dashTo(y.sit.x, y.sit.z, headingTo(y.sit, at0), y.edge.ang)));
+    young.flick();
+    k.say(c.gevondenJong);
+    const found = measure();
+    k.stats.found_px = Math.round(found.px);
+    k.stats.found_x = Math.round(found.x * 100) / 100;
+    sq.called();
+    await k.wait(0.8);
+    chatterOf(young);
+    await k.wait(1.4);
+    await k.until(() => youngSeen!.seen, 1.6);
+    young.flick();
+    await k.wait(0.4);
+    youngGone = k.guard((async () => (await young.goTrunk(hideTree, y.climb)) && young.goRound(hideTree, y.up, 2))());
+    await k.wait(0.8);
+  } else {
+    await k.wait(0.5);
+    k.say(c.gevonden);
+    const found = measure();
+    k.stats.found_px = Math.round(found.px);
+    k.stats.found_x = Math.round(found.x * 100) / 100;
+    sq.called();
+    await k.wait(1.6);
+  }
   // the lens back behind him; it pours straight down the bark on its side (in his view)
   // and pops up on the ground in front of him, sits up facing him, chatters
   k.lockFollow();
@@ -555,6 +830,13 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   await k.wait(0.7);
   sq.flick();
   await k.wait(1.1);
+  if (youngGone) {
+    // (the young one is up in the crown by now, out of his picture: it goes)
+    await youngGone.catch(() => false);
+    youngSeen?.off();
+    k.stats.jong = youngSeen?.seen ? 1 : 0;
+    home.dropVisitor();
+  }
 
   // into its glade: down the pine and over the ground onto its stump by the store
   k.say(c.weer);
@@ -570,6 +852,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   });
   await toStump;
   sq.glow(false);
+  // (the way is behind him: what he saw of it is his, the rest stays for another visit)
+  nestSeen?.off();
+  kegelsSeen.off();
   k.say(c.plekje);
   chatter();
   // it takes acorns from its store: it starts burying with its cheeks full
@@ -689,6 +974,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   k.say(c.gaaiKomt);
   home.jayDown();
   await k.wait(1.7);
+  // (landed by the store, big in the callers' picture: into his veldgids, quietly — the
+  // line names it)
+  k.discover('eekhoorn.gaai', { quiet: true });
   if (settings.geluid) { const j = home.jayAt(); Sound.callAt('gaai', j.x, j.z, listenerOf(k.world.camera), 25, CALL_CAP[1]); }
   await k.wait(0.9);
   chatter(); // (the squirrel scolds it)

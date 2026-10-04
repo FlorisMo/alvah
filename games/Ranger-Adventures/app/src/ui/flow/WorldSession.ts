@@ -267,6 +267,14 @@ function buildWorld(): World {
  * at the next quiet moment; each one met moves the open world's rare counter.
  */
 function wireSurprises(world: World): void {
+  // run 7: a home's own things he sees in free roam (the squirrel's oak seedling on a later
+  // visit) reach his veldgids the same way: recorded at once, a new one's reveal waits
+  world.residents.setDiscover((id) => {
+    const row = ontdekking(id);
+    if (!row || !store.discover(id)) return false;
+    revealDiscovery(row);
+    return true;
+  });
   world.setSurprises({
     free: () => !!session.host.querySelector('.explore-hud') && !session.host.querySelector('.ra-overlay .briefing')
       && guideSnapshot().active === null,

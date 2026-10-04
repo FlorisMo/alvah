@@ -22,12 +22,14 @@ import type { DressingEnv, HomeDressing } from '../../world/Residents';
 import type { HomeState, Spot } from '../types';
 import { PatchField } from '../patches';
 import { boxObstacle } from '../../CharacterController';
-import type { Trunk } from '../squirrel-math';
-import type { Squirrel, SquirrelTree } from '../squirrel';
+import { lineClear, trunkUpright, type Trunk, type Upright } from '../squirrel-math';
+import { Squirrel, type SquirrelTree } from '../squirrel';
+import type { ActorEnv } from '../actors';
 import { SIZE } from '../../AnimalScale';
 import {
   GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, JAY_GROUND, JAY_WAIT, NEIGHBOURS, PERCH, ROUTES, SEEDLING_AT, SLOTS, SNAG, SPOT_SIZE, STUMP, WOODPECKER,
   EEKHOORN_PLACES, FIRST_TRIO, gladeSpots, type EekhoornPlay, type FieldSym, type HomeTree, type Slot, type Trio,
+  NEST, DINING, STRONK, STAM, SeenClock, diningById, nestOf, nestSolid, type DiningId, type DiningSpot, type NestSpot,
 } from './eekhoorn.places';
 import { headingTo, stream } from '../places';
 import { acornGeometry, acornMaterial } from '../acorn';
@@ -113,6 +115,14 @@ const BIRD_REST_M = 13;
 const BIRD_WAKE_M = 12;
 /** How long a bird takes to fade in or out (s): a calm appearing, never a pop. */
 const BIRD_FADE_S = 0.6;
+/** The oak seedling a forgotten acorn grew into: how tall it stands (m) — a young oak a
+ *  child spots from the glade's edge (≈ 40 px through the follow lens from 6 m) — and when
+ *  he has SEEN it in free roam (run 7: within `SEEDLING_SEE.within` m, `px` tall in his
+ *  picture, for `secs`), it goes into his veldgids. */
+const SEEDLING_H = 0.52;
+const SEEDLING_SEE = { within: 6, px: 30, secs: 1 } as const;
+/** How fast the nest fades when the lens comes by it (s), like a crown. */
+const NEST_FADE_S = 0.25;
 
 /**
  * Which of its trees the forest draws as the real tree (run 7, `homeTreeNear`): the
@@ -167,6 +177,22 @@ export class EekhoornHome implements HomeDressing {
   private way: string[] = ['den'];
   /** the tree of its way it sat on last */
   private wayAt = 0;
+  /** run 7 (its finds): the squirrel's nest on a tree of this play's way (a play lays it;
+   *  none before the first), how solid it stands now (it fades when the lens comes by) */
+  private readonly nest: THREE.Mesh;
+  private nestAt: NestSpot | null = null;
+  private nestShow = 1;
+  /** its dining stumps and logs by the ways, and this play's gnawed cones at one of them:
+   *  one mesh */
+  private readonly dining: THREE.Mesh;
+  private kegelsAt: DiningSpot | null = null;
+  /** the seedling: seen in free roam (its veldgids row), once a page */
+  private readonly eikje = new SeenClock(SEEDLING_SEE.secs);
+  /** set by the adventure's actor factory: the env its squirrel was made with (a visitor
+   *  of a play is made the same way) */
+  actorEnv: ActorEnv | null = null;
+  /** this play's rare visitor (a dark-brown squirrel, a young one), while it is here */
+  private guest: Squirrel | null = null;
 
   constructor(env: DressingEnv) {
     this.env = env;
@@ -219,8 +245,6 @@ export class EekhoornHome implements HomeDressing {
       this.setNeighbours(this.trio);
     });
     env.obstacles.push({ x: SNAG.x, z: SNAG.z, r: 0.35 });
-    // (a stump and a log a child walks round, never through)
-    void boxObstacle;
 
     /* -- the jay on the glade oak's low stub, and the free world's neighbours -- */
     const jayAt = new THREE.Vector3(JAY_WAIT.x, g(JAY_WAIT.x, JAY_WAIT.z) + JAY_WAIT.y, JAY_WAIT.z);
@@ -247,9 +271,25 @@ export class EekhoornHome implements HomeDressing {
     this.seedling = new THREE.Mesh(seedlingGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
     this.seedling.name = 'oak-seedling';
     this.seedling.position.set(sp.x, g(sp.x, sp.z) + 0.01, sp.z);
-    this.seedling.scale.setScalar(1.8); // (≈ 0.32 m: a young oak, big enough to spot from the glade's edge)
+    this.seedling.scale.setScalar(SEEDLING_H / SEEDLING_GEO_H); // (a young oak a child spots from the glade's edge)
     this.seedling.visible = false;
     this.small.add(this.seedling);
+
+    /* -- run 7: its nest (on a tree of a play's way) and its dining stumps and logs -- */
+    this.nest = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
+    this.nest.name = 'eekhoorn-nest';
+    this.nest.visible = false;
+    this.group.add(this.nest);
+    this.dining = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
+    this.dining.name = 'eekhoorn-eettafels';
+    this.group.add(this.dining);
+    this.layDining(null, 0);
+    for (const d of DINING) {
+      // (a stump and a log a child walks round, never through)
+      env.obstacles.push(d.kind === 'stam'
+        ? boxObstacle(d.x, d.z, STAM.len / 2, STAM.r, d.turn, 0.25)
+        : { x: d.x, z: d.z, r: STRONK.r + 0.08, h: STRONK.h });
+    }
   }
 
   /** The glade's caching spots now (this play's pattern). */
@@ -273,10 +313,99 @@ export class EekhoornHome implements HomeDressing {
     this.setNeighbours(p.buren);
     this.cos = streams.cosmetic;
     this.squirrel?.reseed(streams.squirrel);
+    // run 7 (its finds): its nest on this play's tree, its gnawed cones at this play's
+    // dining spot (both stay after the play: another visit, another of its nests)
+    this.layNest(nestOf(ROUTES[p.route], p.nest), p.nestSeed);
+    this.layDining(p.kegels, p.kegelSeed);
+    this.dropVisitor();
     // (under the briefing card: the den and its first pine turn real before he sees them)
     this.way = ['den', ...ROUTES[p.route].hops.map((h) => h.tree.id)];
     this.wayAt = 0;
     this.focus();
+  }
+
+  /* --------------------------------------------- run 7: what he can find ---- */
+
+  /** Its nest on `at` (a play's tree), its look from `seed`; null: none (before any play). */
+  private layNest(at: NestSpot | null, seed: number): void {
+    this.nestAt = at;
+    this.nest.visible = !!at;
+    if (!at) return;
+    this.nest.geometry.dispose();
+    this.nest.geometry = dreyGeometry(seed);
+    this.nest.position.set(at.x, this.env.groundY(at.x, at.z) + at.y, at.z);
+    this.nest.rotation.set(0, at.ang, 0);
+    this.nest.updateMatrixWorld(true);
+    // (it sits up its tree: how high its underside is held above the ground, for the world's
+    // seating probe — a nest is not a thing floating off the ground)
+    this.nest.geometry.computeBoundingBox();
+    const box = this.nest.geometry.boundingBox!.clone().applyMatrix4(this.nest.matrixWorld);
+    this.nest.userData.perch = box.min.y - this.env.groundY((box.min.x + box.max.x) / 2, (box.min.z + box.max.z) / 2);
+  }
+
+  /** Where its nest is now (world; its middle), or null. */
+  get nestNow(): (NestSpot & { world: THREE.Vector3 }) | null {
+    return this.nestAt ? { ...this.nestAt, world: this.nest.position.clone() } : null;
+  }
+
+  /** The nest's box and a few points on it (what he sees of it) — only while it stands
+   *  solid: faded near the lens (nestSolid) there is nothing to see (played 2026-10-04,
+   *  seed 3: the lens trailing him past it had it faded out, 125 px "in view", and it
+   *  peeked out of a nest that was not there). */
+  nestSight(): { box: THREE.Box3; pts: THREE.Vector3[] } | null {
+    if (!this.nestAt || !this.nest.visible || this.nestShow < 0.95) return null;
+    const c = this.nest.position, r = NEST.r;
+    const box = new THREE.Box3(c.clone().subScalar(r), c.clone().addScalar(r));
+    const pts = [[0, 0, 0], [0, 0.6, 0], [0.6, 0.1, 0], [-0.6, 0.1, 0], [0, 0.1, 0.6], [0, 0.1, -0.6], [0, -0.5, 0]]
+      .map(([x, y, z]) => new THREE.Vector3(c.x + x * r, c.y + y * r, c.z + z * r));
+    return { box, pts };
+  }
+
+  /** Its dining stumps and logs (always), and this play's gnawed cones at `kegels`. */
+  private layDining(kegels: DiningId | null, seed: number): void {
+    const g = this.env.groundY;
+    const parts: THREE.BufferGeometry[] = [];
+    DINING.forEach((d, i) => parts.push(...(d.kind === 'stam' ? logGeometry(d, g, stream(0x10c + i * 977)) : stumpGeometry(d, g, stream(0x57b + i * 613)))));
+    this.kegelsAt = kegels ? diningById(kegels) : null;
+    if (this.kegelsAt) parts.push(...conesGeometry(this.kegelsAt, g, stream(seed >>> 0)));
+    this.dining.geometry.dispose();
+    this.dining.geometry = mergeFlat(parts);
+    this.dining.geometry.computeBoundingSphere();
+  }
+
+  /** The gnawed cones' spot now: its box and a few points on it (what he sees of it). */
+  kegelsSight(): { at: DiningSpot; box: THREE.Box3; pts: THREE.Vector3[] } | null {
+    const d = this.kegelsAt;
+    if (!d) return null;
+    const g = this.env.groundY(d.x, d.z);
+    const half = d.kind === 'stam' ? STAM.len / 2 : STRONK.r + 0.35; // (the scales round its foot)
+    const top = d.kind === 'stam' ? STAM.r * 2 : STRONK.h;
+    const box = new THREE.Box3(new THREE.Vector3(d.x - half, g, d.z - half), new THREE.Vector3(d.x + half, g + top, d.z + half));
+    const along = { x: Math.cos(d.turn), z: -Math.sin(d.turn) }; // (three's rotation.y: its local +x)
+    const pts = [[0, 1], [0.6, 0.5], [-0.6, 0.5], [0, 0.2]].map(([u, k]) => new THREE.Vector3(d.x + along.x * u * half, g + top * k, d.z + along.z * u * half));
+    return { at: d, box, pts };
+  }
+
+  /** Run 7: this play's rare visitor — a second squirrel, made as the home's own (laid out
+   *  of his sight by the script, then shown), here for this play only. */
+  visitor(kind: 'donker' | 'jong', height: number, seed: number): Squirrel | null {
+    this.dropVisitor();
+    if (!this.actorEnv) return null;
+    const sq = new Squirrel(`bezoeker-${kind}`, this.actorEnv, {
+      height, trees: this.trees, seed,
+      // (the dark one's coat is the world's dressing, Coat.ts; little of the low sun's warm
+      // light in it, so it reads brown beside ours, never orange)
+      animal: kind === 'donker' ? 'eekhoorn-donker' : 'eekhoorn', warmth: kind === 'donker' ? 0.04 : undefined,
+    });
+    sq.group.visible = false;
+    this.guest = sq;
+    return sq;
+  }
+
+  /** The visitor goes (out of his sight by then). */
+  dropVisitor(): void {
+    this.guest?.dispose();
+    this.guest = null;
   }
 
   /** Which home trees are drawn real now (`homeTreeNear`): see FOCUS. */
@@ -462,6 +591,7 @@ export class EekhoornHome implements HomeDressing {
 
   setState(state: HomeState, fresh = false): void {
     this.state = state;
+    this.dropVisitor(); // (a play's visitor goes with the play: a stop, a finish)
     // after: the bigger store, the jay gone; before: the small store, the jay on its stub.
     // In front of him (a stop, a finish) nothing pops: the jay flies back up to its stub,
     // the store keeps what the squirrel piled (it grows to full once it is done); a
@@ -505,6 +635,30 @@ export class EekhoornHome implements HomeDressing {
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void {
     this.clock += dt;
     this.focus();
+    if (this.guest) this.guest.update(dt, t);
+    const cam = this.env.view?.() ?? null;
+    const me = movers.find((q) => q.ranger);
+    // the nest never fills the lens nor stands between it and him: it fades, like a crown
+    if (this.nestAt && cam && me) {
+      const want = nestSolid(cam.position, this.nest.position, { x: me.x, y: this.env.groundY(me.x, me.z), z: me.z });
+      if (want !== this.nestShow) {
+        this.nestShow = reduced ? want : Math.max(0, Math.min(1, this.nestShow + Math.sign(want - this.nestShow) * (dt / NEST_FADE_S)));
+        fadeBird(this.nest, this.nestShow);
+        this.nest.visible = this.nestShow > 0.01;
+      }
+    }
+    // the oak seedling, on a later visit: once he has seen it, it is in his veldgids
+    if (this.seedling.visible && !this.eikje.seen && this.state === 'after' && cam && me && this.env.discover) {
+      const sp = this.seedling.position;
+      let ok = false;
+      if (Math.hypot(me.x - sp.x, me.z - sp.z) <= SEEDLING_SEE.within) {
+        const box = new THREE.Box3(new THREE.Vector3(sp.x - 0.12, sp.y, sp.z - 0.12), new THREE.Vector3(sp.x + 0.12, sp.y + SEEDLING_H, sp.z + 0.12));
+        const pts = [0.3, 0.6, 0.9].map((k) => new THREE.Vector3(sp.x, sp.y + SEEDLING_H * k, sp.z));
+        const pic = pictureOf(cam, viewH(), viewW(), box, pts, this.trunks(cam.position, me));
+        ok = pic.inside && pic.px >= SEEDLING_SEE.px && pic.clear >= 0.5;
+      }
+      if (this.eikje.step(dt, ok)) this.env.discover('eekhoorn.eikje');
+    }
     this.fieldNow.update(dt, reduced);
     // the store grows: each new cluster pops up in turn (a cut under reduced motion)
     let grew = false;
@@ -626,7 +780,20 @@ export class EekhoornHome implements HomeDressing {
     return new THREE.Vector3(b.base.x + Math.sin(away) * d, b.base.y + 0.25 * Math.sin(Math.min(1, u * 5) * Math.PI / 2) + 7 * u * u, b.base.z + Math.cos(away) * d);
   }
 
+  /** The home's trunks that can hide something from the lens at `eye` (the ones between
+   *  the lens and him are faded by the follow camera: those hide nothing). */
+  trunks(eye: { x: number; y: number; z: number }, me: { x: number; z: number }): Upright[] {
+    const g = this.env.groundY;
+    const head = { x: me.x, y: g(me.x, me.z) + 1.25, z: me.z };
+    return this.trees.filter((t) => lineClear(eye, head, [trunkUpright(t.trunk, g(t.trunk.x, t.trunk.z))])).map((t) => trunkUpright(t.trunk, g(t.trunk.x, t.trunk.z)));
+  }
+
   dispose(): void {
+    this.dropVisitor();
+    this.nest.geometry.dispose();
+    (this.nest.material as THREE.Material).dispose();
+    this.dining.geometry.dispose();
+    (this.dining.material as THREE.Material).dispose();
     this.fieldNow.dispose();
     for (const s of this.spawned) s.dispose();
     for (const b of [...this.birds]) this.dropBird(b);
@@ -672,7 +839,209 @@ function clipBelow(mat: THREE.MeshStandardMaterial, y: number): void {
   mat.needsUpdate = true;
 }
 
-/** A tiny oak seedling: a thin stem and a few lobed leaves (green), ~0.2 m. */
+/* ------------------------------------------- run 7: what he can find, drawn ---- */
+
+/** The picture's size (px) a lens draws into (the game's canvas fills the window). */
+const viewH = (): number => (typeof window !== 'undefined' ? window.innerHeight : 800) || 800;
+const viewW = (): number => (typeof window !== 'undefined' ? window.innerWidth : 1280) || 1280;
+
+/** What a camera sees of a thing (run 7, its finds; design §4.4): how tall and how wide it
+ *  stands in the picture (px), whether it is in the picture (its middle in front of the
+ *  lens, inside the picture's width and under the line card at the top), and the share of
+ *  its points no trunk of the home hides (`trunks`). */
+export interface Picture { px: number; across: number; inside: boolean; clear: number;
+  /** its middle across the picture (−1 the left edge … 1 the right), and down it (px) */ cx: number; cy: number }
+const CORNER = new THREE.Vector3();
+export function pictureOf(cam: THREE.Camera, h: number, w: number, box: THREE.Box3, pts: readonly THREE.Vector3[], trunks: readonly Upright[]): Picture {
+  cam.updateMatrixWorld();
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, behind = false;
+  for (let i = 0; i < 8; i++) {
+    CORNER.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+    if (CORNER.clone().applyMatrix4(cam.matrixWorldInverse).z > -0.2) { behind = true; break; }
+    CORNER.project(cam);
+    minX = Math.min(minX, CORNER.x); maxX = Math.max(maxX, CORNER.x); minY = Math.min(minY, CORNER.y); maxY = Math.max(maxY, CORNER.y);
+  }
+  if (behind) return { px: 0, across: 0, inside: false, clear: 0, cx: 9, cy: -1 };
+  const cx = (minX + maxX) / 2, cy = (1 - (minY + maxY) / 2) * 0.5 * h;
+  const inside = Math.abs(cx) <= 0.92 && cy >= 96 && cy <= h - 8;
+  const clear = pts.length ? pts.filter((p) => lineClear(cam.position, p, trunks)).length / pts.length : 0;
+  return { px: (maxY - minY) * 0.5 * h, across: (maxX - minX) * 0.5 * w, inside, clear, cx, cy };
+}
+
+/** A colour with a little of the stream's own variety (every twig, every flake its own). */
+function jitter(hex: string, rnd: () => number, k = 0.12): THREE.Color {
+  const c = new THREE.Color(hex);
+  const f = 1 + (rnd() - 0.5) * 2 * k;
+  return c.multiplyScalar(f);
+}
+/** Paint every triangle of a non-indexed geometry its own shade of `hex`. */
+function paintFaces(geo: THREE.BufferGeometry, hex: string | ((i: number) => string), rnd: () => number, k = 0.12): THREE.BufferGeometry {
+  const n = geo.attributes.position.count;
+  const c = new Float32Array(n * 3);
+  for (let t = 0; t < n / 3; t++) {
+    const col = jitter(typeof hex === 'string' ? hex : hex(t), rnd, k);
+    for (let v = 0; v < 3; v++) { const i = (t * 3 + v) * 3; c[i] = col.r; c[i + 1] = col.g; c[i + 2] = col.b; }
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return geo;
+}
+/** A geometry made non-indexed, normals of its own faces. */
+function flat(geo: THREE.BufferGeometry): THREE.BufferGeometry {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  if (g !== geo) geo.dispose();
+  g.deleteAttribute('uv');
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * The squirrel's nest (a drey, design §6.7): a rough ball of twigs and dry leaves ≈ 0.45 m
+ * across, a little flattened, one side against the bark (it sits in the trunk there), with
+ * twigs sticking out of it and a few dry oak leaves woven in — one mesh, ≤ 800 triangles,
+ * its look from `seed` (every nest its own). Local space: its middle at 0, the bark at −z.
+ */
+function dreyGeometry(seed: number): THREE.BufferGeometry {
+  const rnd = stream(0xd7e1 + (seed >>> 0));
+  const r = NEST.r;
+  const parts: THREE.BufferGeometry[] = [];
+  // the ball: lumpy, squashed a little, the side against the trunk pressed flat
+  const ball = flat(new THREE.IcosahedronGeometry(1, 2));
+  const pos = ball.attributes.position as THREE.BufferAttribute;
+  const bump = new Map<string, number>();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const key = `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
+    let b = bump.get(key);
+    if (b === undefined) { b = 0.86 + rnd() * 0.24; bump.set(key, b); }
+    pos.setXYZ(i, x * r * b, y * r * b * 0.86, Math.max(z, -0.55) * r * b);
+  }
+  ball.computeVertexNormals();
+  paintFaces(ball, (t) => (t % 5 === 0 ? '#8c6b42' : t % 3 === 0 ? '#6a4f34' : '#54402c'), rnd, 0.16);
+  parts.push(ball);
+  // twigs sticking out (thin three-sided sticks)
+  for (let i = 0; i < 16; i++) {
+    const len = 0.1 + rnd() * 0.16, rad = 0.007 + rnd() * 0.005;
+    const twig = flat(new THREE.CylinderGeometry(rad * 0.6, rad, len, 3, 1, true));
+    const a = rnd() * Math.PI * 2, e = (rnd() - 0.35) * 1.2;
+    const dir = new THREE.Vector3(Math.cos(e) * Math.sin(a), Math.sin(e), Math.cos(e) * Math.cos(a));
+    if (dir.z < -0.3) dir.z = -dir.z; // (not into the bark)
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    twig.translate(0, len / 2, 0).applyQuaternion(q).translate(dir.x * r * 0.7, dir.y * r * 0.6, dir.z * r * 0.7);
+    paintFaces(twig, '#4a3828', rnd, 0.15);
+    parts.push(twig);
+  }
+  // dry leaves woven in (small flat pieces on its skin)
+  for (let i = 0; i < 26; i++) {
+    const leaf = flat(new THREE.PlaneGeometry(0.06 + rnd() * 0.04, 0.035 + rnd() * 0.02));
+    const a = rnd() * Math.PI * 2, e = (rnd() - 0.3) * 1.3;
+    const dir = new THREE.Vector3(Math.cos(e) * Math.sin(a), Math.sin(e), Math.cos(e) * Math.cos(a));
+    if (dir.z < -0.2) dir.z = -dir.z;
+    dir.normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+    leaf.rotateZ(rnd() * Math.PI).applyQuaternion(q).translate(dir.x * r * 0.97, dir.y * r * 0.84, dir.z * r * 0.97);
+    paintFaces(leaf, rnd() < 0.5 ? '#9c7748' : '#a8844f', rnd, 0.12);
+    parts.push(leaf);
+  }
+  return mergeFlat(parts);
+}
+
+/** A low cut stump at a dining spot (its cut top lighter, a ring in it, roots reaching
+ *  into the needles), in world space. */
+function stumpGeometry(d: DiningSpot, g: (x: number, z: number) => number, rnd: () => number): THREE.BufferGeometry[] {
+  const y0 = g(d.x, d.z) - 0.04;
+  const h = STRONK.h + (rnd() - 0.5) * 0.06, r = STRONK.r;
+  const out: THREE.BufferGeometry[] = [];
+  const at = (geo: THREE.BufferGeometry): THREE.BufferGeometry => geo.rotateY(d.turn).translate(d.x, y0, d.z);
+  out.push(at(paintFaces(flat(new THREE.CylinderGeometry(r * 0.9, r, h, 9, 1, true).translate(0, h / 2, 0)), '#5b4636', rnd, 0.14)));
+  // the cut: pale wood, a darker heart, the top a little tilted
+  const tilt = (rnd() - 0.5) * 0.08;
+  out.push(at(paintFaces(flat(new THREE.CircleGeometry(r * 0.9, 9).rotateX(-Math.PI / 2).rotateZ(tilt).translate(0, h + 0.002, 0)), '#a98457', rnd, 0.06)));
+  out.push(at(paintFaces(flat(new THREE.CircleGeometry(r * 0.42, 7).rotateX(-Math.PI / 2).rotateZ(tilt).translate(0, h + 0.006, 0)), '#8a6845', rnd, 0.05)));
+  // roots
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + rnd() * 0.6;
+    const root = flat(new THREE.ConeGeometry(0.07, 0.34, 4, 1, true)).rotateZ(-Math.PI / 2 + 0.35).translate(r * 0.95 + 0.12, 0.05, 0).rotateY(a);
+    out.push(at(paintFaces(root, '#4f3c2e', rnd, 0.12)));
+  }
+  return out;
+}
+
+/** The end of a fallen trunk at a dining spot (its sawn ends pale, moss on its back), in
+ *  world space: it lies along `turn`. */
+function logGeometry(d: DiningSpot, g: (x: number, z: number) => number, rnd: () => number): THREE.BufferGeometry[] {
+  const r = STAM.r, len = STAM.len;
+  const y = g(d.x, d.z) + r * 0.82;
+  const out: THREE.BufferGeometry[] = [];
+  const at = (geo: THREE.BufferGeometry): THREE.BufferGeometry => geo.rotateY(d.turn).translate(d.x, y, d.z);
+  const side = flat(new THREE.CylinderGeometry(r, r * 1.06, len, 9, 2, true)).rotateZ(Math.PI / 2);
+  paintFaces(side, (t) => (t % 7 === 0 ? '#5d6b3a' : '#56432f'), rnd, 0.14);
+  out.push(at(side));
+  for (const s of [-1, 1]) {
+    out.push(at(paintFaces(flat(new THREE.CircleGeometry(r * (s > 0 ? 1.06 : 1), 9).rotateY(s * Math.PI / 2).translate(s * len / 2, 0, 0)), '#a07d52', rnd, 0.06)));
+  }
+  return out;
+}
+
+/**
+ * The gnawed cones at a dining spot (design §6.7): what is left when a squirrel strips a
+ * pine cone for its seeds — bare cores with a little tuft at the tip, and a litter of
+ * stripped scales round where it sat (on the stump's top and round its foot; along the
+ * log's back and round its end). 6-10 cores, the scales a reddish-brown speckle on the
+ * needles a child can spot from a few metres. World space; its look from `rnd`.
+ */
+function conesGeometry(d: DiningSpot, g: (x: number, z: number) => number, rnd: () => number): THREE.BufferGeometry[] {
+  const out: THREE.BufferGeometry[] = [];
+  const along = { x: Math.cos(d.turn), z: -Math.sin(d.turn) }; // (three's rotation.y: its local +x)
+  // where it sat: the stump's top, or the log's back near its end
+  const seat = d.kind === 'stam' ? { x: d.x + along.x * STAM.len * 0.32, z: d.z + along.z * STAM.len * 0.32 } : { x: d.x, z: d.z };
+  const seatY = d.kind === 'stam' ? g(d.x, d.z) + STAM.r * 1.8 : g(d.x, d.z) - 0.04 + STRONK.h + 0.01;
+  const bodyR = d.kind === 'stam' ? STAM.r : STRONK.r;
+  // (a core a child reads from a few metres off: a little stouter than life, its tuft of
+  // scales at the top; `half`: a cone it left half eaten — the scales still on its lower
+  // half, the bare core above: plainly a pine cone somebody ate)
+  const core = (x: number, y: number, z: number, yaw: number, lying: boolean, half = false): void => {
+    const len = 0.08 + rnd() * 0.03;
+    const parts = [
+      paintFaces(flat(new THREE.ConeGeometry(0.021, len * 0.55, 5, 1, true).translate(0, len * 0.275, 0)), '#b47c45', rnd, 0.1),
+      paintFaces(flat(new THREE.ConeGeometry(0.021, len * 0.45, 5, 1, true).rotateX(Math.PI).translate(0, -len * 0.225, 0)), '#a8723e', rnd, 0.1),
+      paintFaces(flat(new THREE.ConeGeometry(0.032, 0.035, 5, 1, true).translate(0, len * 0.55, 0)), '#6b472a', rnd, 0.1),
+    ];
+    if (half) parts.push(paintFaces(flat(new THREE.SphereGeometry(0.034, 7, 5).scale(1, 1.35, 1).translate(0, -len * 0.28, 0)), '#73462a', rnd, 0.14));
+    const r = half ? 0.034 : 0.021;
+    for (const p of parts) {
+      if (lying) p.rotateZ(Math.PI / 2 - 0.15);
+      p.rotateY(yaw).translate(x, y + (lying ? r : len * 0.45 + (half ? 0.02 : 0)), z);
+      out.push(p);
+    }
+  };
+  const n = 6 + Math.floor(rnd() * 5);
+  for (let i = 0; i < n; i++) {
+    if (i < 2) {
+      // one or two on its seat
+      core(seat.x + (rnd() - 0.5) * bodyR * 0.8, seatY, seat.z + (rnd() - 0.5) * bodyR * 0.8, rnd() * Math.PI * 2, rnd() < 0.7, i === 0);
+    } else {
+      const a = rnd() * Math.PI * 2, rr = bodyR + 0.08 + rnd() * 0.45;
+      const x = seat.x + Math.sin(a) * rr, z = seat.z + Math.cos(a) * rr;
+      core(x, g(x, z), z, rnd() * Math.PI * 2, true);
+    }
+  }
+  // the stripped scales: a litter round its seat (most near it), a few on the seat
+  for (let i = 0; i < 90; i++) {
+    const on = i < 10;
+    const a = rnd() * Math.PI * 2, rr = on ? rnd() * bodyR * 0.8 : bodyR + 0.03 + Math.pow(rnd(), 1.6) * 0.6;
+    const x = seat.x + Math.sin(a) * rr, z = seat.z + Math.cos(a) * rr;
+    const y = on ? seatY + 0.003 : g(x, z) + 0.006;
+    const sz = 0.03 + rnd() * 0.025;
+    const flake = flat(new THREE.CircleGeometry(sz, 3).scale(1, 0.62, 1).rotateX(-Math.PI / 2 + (rnd() - 0.5) * 0.5).rotateY(rnd() * Math.PI * 2).translate(x, y, z));
+    out.push(paintFaces(flake, rnd() < 0.5 ? '#8f5a33' : rnd() < 0.5 ? '#a4683a' : '#7a4a2c', rnd, 0.1));
+  }
+  return out;
+}
+
+/** The oak seedling's own height (m) before it is scaled to SEEDLING_H. */
+const SEEDLING_GEO_H = 0.2;
+
+/** A young oak seedling: a thin stem and lobed leaves (green), SEEDLING_GEO_H tall. */
 function seedlingGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
   const stem = new THREE.CylinderGeometry(0.004, 0.006, 0.18, 5, 1).translate(0, 0.09, 0);
@@ -690,7 +1059,7 @@ function seedlingGeometry(): THREE.BufferGeometry {
     const lobe = 1 + 0.2 * Math.cos(i * Math.PI * 0.9);
     leafShape.lineTo(-Math.sin(a) * 0.025 * lobe, (1 - Math.cos(a)) * 0.035);
   }
-  [[0.1, 0.4, 0.9], [0.13, 2.4, 0.8], [0.16, 4.3, 0.9], [0.18, 1.2, 0.5]].forEach(([y, a, tilt]) => {
+  [[0.07, 3.4, 1.0], [0.1, 0.4, 0.9], [0.12, 5.4, 0.85], [0.13, 2.4, 0.8], [0.15, 1.6, 0.75], [0.16, 4.3, 0.9], [0.18, 1.2, 0.5], [0.19, 3.8, 0.4]].forEach(([y, a, tilt]) => {
     const leaf = new THREE.ShapeGeometry(leafShape).rotateX(-tilt).rotateY(a).translate(0, y, 0);
     paint(leaf, '#6f9a3a');
     parts.push(leaf.toNonIndexed());

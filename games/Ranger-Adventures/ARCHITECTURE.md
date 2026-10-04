@@ -153,7 +153,14 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          tree), the moss pattern's mirror-image (gladeSpots(sym)) and the
                          neighbour trio (NEIGHBOURS, one bird per perch), never the last two
                          plays', read back from the beat history (`ek:<variant>`); the found
-                         view and the jay's way back are pure and pinned by its test): the four
+                         view and the jay's way back are pure and pinned by its test; ek-finds:
+                         its finds — the nest on a wait tree of the play's way (it peeks out
+                         of it), gnawed cones at one of five dining stumps and logs, the oak
+                         seedling seen in free roam (DressingEnv.discover), and two rare
+                         visitors staged where a squirrel is big (a dark-brown one at the
+                         den, a young one sitting up at the hide pine's foot in the found
+                         view), each recorded only once he saw
+                         it (`seenFor`: big enough in his picture, for a moment)): the four
                          missions met first; run 7: ven (the north bank of the ven: a shore
                          path, three coves of sedge, cotton-grass and veenmos where the
                          heikikkers live; ven.places.ts the coves — each with six nooks of
@@ -171,6 +178,9 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          follow, the three moments with his feet, the search, the song, the
                          answer, the plop)
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
+                         run 7: a home may record what he saw of it in free roam
+                         (`DressingEnv.discover`, wired by WorldSession to the save and the
+                         reveal; `view()` the live camera to tell what he sees);
                          a `shy` resident slips into cover when he comes near (per state);
                          a home rests beyond 40-46 m, its small things (`env.detail(at)`:
                          look-alikes, route spots, prints) beyond 22-28 m of their own spot,
@@ -280,7 +290,10 @@ world/Sky.ts         shows a mood and crossfades to the next (a second dome only
 render3d/AnimalDress.ts  dressAnimal(root, id): THE way every animal is dressed (spawn.ts,
                      Fauna's roamers and birds, Markers' heroes): eyes, coat, stance, calm
                      pose, one draw call, then the animal light: matte, a dark coat lifted
-                     (Coat.ts), and the mood's animal fill on the side away from the sun
+                     (Coat.ts), and the mood's animal fill on the side away from the sun; a
+                     content id may wear its own coat on a model (Coat.ts: a tint, or a
+                     `ramp` that lays the fur by its lightness on another coat: the
+                     eekhoorn's dark-brown visitor `eekhoorn-donker` on the red squirrel's)
 ui/hud/Reveal.ts     "Nieuw in je veldgids!" ("Dat hoorde je!" for a bird he met by its call)
                      under the top chips, one at a time, read aloud, only at a quiet moment
                      (ui/hud/reveal-queue.ts: the pure rules); the real animal's picture, a
