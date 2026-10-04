@@ -866,8 +866,9 @@ const MISSIE_EEKHOORN = {
     badgeId: 'nootjes-vinder', badgeNaam: 'Nootjes-vinder',
     vaktermBadge: { id: 'knap-wintervoorraad', naam: 'Knap woord: wintervoorraad' },
   },
-  // (the squirrel sits on its stump and eats one: the ending the child sees)
-  reunion: { sprite: 'eekhoorn', tekst: 'Alle nootjes terug. Hij eet er een op.' },
+  // (run 7, ek-day: the squirrel ends its day three ways — eats an acorn on its stump,
+  // buries one last one by it, or grooms there — so the line says what is true of all three)
+  reunion: { sprite: 'eekhoorn', tekst: 'Alle nootjes terug. De eekhoorn is blij.' },
   /* run 6: De verstopte nootjes as an adventure in the world (render3d/adventure/
      missions/eekhoorn.ts): follow the squirrel tree to tree, watch where it buries its
      acorns and point them out when it forgets, call back its noisy neighbours. */
@@ -912,6 +913,12 @@ const MISSIE_EEKHOORN = {
       nestKijk: 'Kijk, zijn nest!',
       nogEen: 'Kijk, nog een eekhoorn!',
       gevondenJong: 'Gevonden! En nog een kleintje!',
+      // run 7 (ek-day): it hides a second time, round a close pine; the jay buries its own
+      nogEenKeer: 'Nog een keer!',
+      weerGevonden: 'Weer gevonden!',
+      gaaiVerstopt: 'De gaai verstopt ook nootjes!',
+      // run 7 (ek-day, review r1): a pine cone drops in front of him as he walks up
+      plof: 'Plof! Een dennenappel.',
     },
     knap: {
       routeKijk: 'Kijk waar hij zijn voorraad verstopt.',

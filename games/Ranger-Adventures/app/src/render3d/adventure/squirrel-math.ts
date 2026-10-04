@@ -47,6 +47,11 @@ export interface Segment {
   /** metres travelled (for the speed rules) */
   len: number;
   act: SqAct;
+  /** run 7 (ek-day, additive): how far its tail is bent while this piece plays (a flick's
+   *  lift is 0.55; + curls it up and forward over its back, − stretches it back), at the
+   *  piece's own progress `u` — an antic grooming its tail, a sunning stretch. None: at rest
+   *  (a flick still rides on top). Never copied into a later piece's pose. */
+  tail?: (u: number) => number;
 }
 
 /** A tree the squirrel runs on: its trunk axis at (x, z), height H, the kind of tree. */
@@ -200,6 +205,22 @@ export function dashDirectPlan(from: SqPose, tx: number, tz: number): Segment[] 
     },
   });
   out.push(hold({ ...p, x: tx, z: tz, yaw, pitch: 0, act: 'sit' }, 0.06, 'sit'));
+  return out;
+}
+
+/** Run 7 (ek-day, additive): one run to (tx, tz) without its stops to look — a dash home
+ *  that keeps ahead of a boy walking after it: the corners of its dash (round the lens and
+ *  round him, `dashPath`), each leg one bound at its full run (`dashDirectPlan`, never
+ *  faster than `SQ.run`). */
+export function runPlan(from: SqPose, tx: number, tz: number, lens?: { x: number; z: number }, avoid?: { x: number; z: number; r: number }): Segment[] {
+  const pts = dashPath(from, tx, tz, lens, avoid);
+  const out: Segment[] = [];
+  let p = from;
+  for (let k = 1; k < pts.length; k++) {
+    const leg = dashDirectPlan(p, pts[k].x, pts[k].z);
+    out.push(...leg);
+    p = leg[leg.length - 1].at(1);
+  }
   return out;
 }
 
@@ -369,6 +390,148 @@ export function poseAt(plan: readonly Segment[], t: number): SqPose {
   }
   const last = plan[plan.length - 1];
   return last.at(1);
+}
+
+/** Run 7 (ek-day): the tail's held bend `t` s into a plan (0 where a piece holds none). */
+export function tailAt(plan: readonly Segment[], t: number): number {
+  let left = t;
+  for (const g of plan) {
+    if (left <= g.dur) return g.tail ? g.tail(g.dur > 0 ? left / g.dur : 1) : 0;
+    left -= g.dur;
+  }
+  const last = plan[plan.length - 1];
+  return last?.tail ? last.tail(1) : 0;
+}
+
+/* ------------------------------------------------------------ its antics ---- */
+
+/**
+ * Run 7 (ek-day, design §6.8): what the squirrel does on its stub while he comes — its
+ * day, so no wait is like the one before. Each is a pure plan from where it sits (`p`) back
+ * to sitting up facing him (`face`): it never leaves its seat (no step toward anything, so
+ * never toward the lens), never faster than a calm move, 1.5-3 s long (squirrel.test):
+ *
+ *   kijken    — it looks round, this way and that, chin up, and flicks its tail
+ *   poetsen   — it turns aside and bends to its tail (curled forward round to its paws),
+ *               grooming it with quick little bobs, one side then the other
+ *   knabbelen — it sits up turning a pine cone in its paws, nibbling (squirrel.ts holds the
+ *               cone, the home lets the stripped scales fall: the gnawed cones' story)
+ *   zonnen    — it lies down flat along its branch (`along`: the way the stub points), its
+ *               tail stretched out, and breathes slowly in the sun (a home allows it only in
+ *               a sunny light)
+ *   mopperen  — it scolds: stamps its feet, its tail flicking, bob after bob (the
+ *               adventure lets it chatter with it)
+ */
+export type AnticKind = 'kijken' | 'poetsen' | 'knabbelen' | 'zonnen' | 'mopperen';
+export const ANTIC_KINDS: readonly AnticKind[] = ['kijken', 'poetsen', 'knabbelen', 'zonnen', 'mopperen'];
+
+/** A calm turn of the body where it sits (its seat, its roll kept): `to` over `dur` s, its
+ *  tail eased from `tail[0]` to `tail[1]`. */
+function settle(from: SqPose, to: Partial<Pick<SqPose, 'yaw' | 'pitch' | 'alt'>>, dur: number, act: SqAct, tail: readonly [number, number] = [0, 0]): Segment {
+  const yaw1 = to.yaw ?? from.yaw, pitch1 = to.pitch ?? from.pitch, alt1 = to.alt ?? from.alt;
+  const dy = wrap(yaw1 - from.yaw);
+  return {
+    dur, len: 0, act,
+    at: (u) => { const e = smooth(u); return { ...from, yaw: from.yaw + dy * e, pitch: lerp(from.pitch, pitch1, e), alt: lerp(from.alt, alt1, e), act }; },
+    tail: (u) => lerp(tail[0], tail[1], smooth(u)),
+  };
+}
+
+/** Holding a pose `dur` s with a small motion on it (`wob(s)`: what it adds at `s` s in). */
+function wobble(p: SqPose, dur: number, act: SqAct, wob: (s: number) => Partial<Pick<SqPose, 'yaw' | 'pitch' | 'alt'>>, tail: (s: number) => number): Segment {
+  return {
+    dur, len: 0, act,
+    at: (u) => { const w = wob(u * dur); return { ...p, yaw: p.yaw + (w.yaw ?? 0), pitch: p.pitch + (w.pitch ?? 0), alt: p.alt + (w.alt ?? 0), act }; },
+    tail: (u) => tail(u * dur),
+  };
+}
+
+/** A piece that also moves it a few centimetres over its seat, from `a` to `b` (lying down
+ *  along its branch: its body lies ahead of its feet). */
+function slide(g: Segment, a: { x: number; z: number }, b: { x: number; z: number }): Segment {
+  return { ...g, at: (u) => { const e = smooth(u); return { ...g.at(u), x: lerp(a.x, b.x, e), z: lerp(a.z, b.z, e) }; } };
+}
+
+/** The end of a piece (its last pose). */
+const endOf = (g: Segment): SqPose => g.at(1);
+
+export function anticPlan(kind: AnticKind, p: SqPose, face: number, o: { along?: number } = {}): Segment[] {
+  const sit: SqPose = { ...p, act: 'sit' };
+  const out: Segment[] = [];
+  const push = (g: Segment): SqPose => { out.push(g); return endOf(g); };
+  let at = sit;
+  if (kind === 'kijken') {
+    at = push(settle(at, { yaw: face + 0.75, pitch: -0.08 }, Math.max(0.3, Math.abs(wrap(face + 0.75 - at.yaw)) / 5), 'sit'));
+    at = push(wobble(at, 0.55, 'sit', () => ({}), () => 0));
+    at = push(settle(at, { yaw: face - 0.7 }, 0.42, 'sit'));
+    at = push(wobble(at, 0.5, 'sit', () => ({}), () => 0));
+    at = push(settle(at, { yaw: face, pitch: 0 }, 0.3, 'sit'));
+    // (a flick as it turns back to him)
+    push(wobble(at, 0.42, 'sit', () => ({}), (s) => flick(s) * 0.55));
+  } else if (kind === 'poetsen') {
+    const curl = 0.85;
+    const groom = (dur: number) => wobble(at, dur, 'sit', (s) => ({ pitch: 0.07 * Math.sin(s * Math.PI * 2 * 4.5), yaw: 0.05 * Math.sin(s * Math.PI * 2 * 2.2) }), (s) => curl + 0.08 * Math.sin(s * Math.PI * 2 * 2.2));
+    at = push(settle(at, { yaw: face + 0.85, pitch: 0.5 }, Math.max(0.36, Math.abs(wrap(face + 0.85 - at.yaw)) / 5), 'sit', [0, curl]));
+    at = push(groom(0.85));
+    at = push(settle(at, { yaw: face - 0.85 }, 0.38, 'sit', [curl, curl]));
+    at = push(groom(0.65));
+    push(settle(at, { yaw: face, pitch: 0 }, 0.36, 'sit', [curl, 0]));
+  } else if (kind === 'knabbelen') {
+    // (act 'eat': squirrel.ts adds the nibbling bob and holds the cone in its paws)
+    const turnCone = (dur: number) => wobble(at, dur, 'eat', (s) => ({ yaw: 0.13 * Math.sin(s * Math.PI * 2 * 1.5) }), () => 0.12);
+    at = push(settle(at, { yaw: face + 0.35, pitch: 0.12 }, Math.max(0.26, Math.abs(wrap(face + 0.35 - at.yaw)) / 5), 'eat', [0, 0.12]));
+    at = push(turnCone(1.05));
+    at = push(settle(at, { yaw: face - 0.25 }, 0.3, 'eat', [0.12, 0.12]));
+    at = push(turnCone(0.85));
+    push(settle(at, { yaw: face, pitch: 0 }, 0.26, 'sit', [0.12, 0]));
+  } else if (kind === 'zonnen') {
+    // it lies down flat along its branch facing the trunk (`along`: the way the stub points
+    // out from the trunk), its body on the stub, its tail curled forward over its back like a
+    // parasol (as red squirrels shade themselves): lying down it shifts `out` m out along
+    // the stub (its body lies ahead of its feet)
+    const along = o.along ?? face;
+    const toward = along + Math.PI;
+    const flat = 1.5, out = 0.08, tl = 0.55;
+    const lie = { x: p.x + Math.sin(along) * out, z: p.z + Math.cos(along) * out };
+    // (a calm turn to lie along its branch and back: ≤ 4.5 rad/s, the lying shorter for it)
+    const tin = Math.max(0.35, Math.abs(wrap(toward - at.yaw)) / 4.5), tout = Math.max(0.5, Math.abs(wrap(face - toward)) / 4.5);
+    at = push(settle(at, { yaw: toward, pitch: 0.2 }, tin, 'sit'));
+    at = push(slide(settle(at, { pitch: flat, alt: p.alt - 0.03 }, 0.55, 'sit', [0, tl]), at, lie));
+    at = push(wobble(at, Math.max(0.8, Math.min(1.3, 2.85 - 0.55 - tin - tout)), 'sit', (s) => ({ pitch: 0.025 * Math.sin(s * Math.PI * 2 * 0.7) }), () => tl));
+    push(slide(settle(at, { yaw: face, pitch: 0, alt: p.alt }, tout, 'sit', [tl, 0]), at, p));
+  } else {
+    // mopperen: three stamps, each a jolt of its body and a flick, a breath, two more
+    at = push(settle(at, { yaw: face, pitch: -0.05 }, Math.max(0.2, Math.abs(wrap(face - at.yaw)) / 5), 'sit'));
+    const stamp = (dur: number) => wobble(at, dur, 'sit', (s) => {
+      const u = Math.min(1, s / dur);
+      return { alt: 0.018 * Math.sin(u * Math.PI), pitch: 0.16 * Math.sin(u * Math.PI) };
+    }, (s) => flick(s, dur) * 0.75);
+    for (let i = 0; i < 3; i++) at = push(stamp(0.26));
+    at = push(wobble(at, 0.36, 'sit', () => ({}), () => 0));
+    for (let i = 0; i < 2; i++) at = push(stamp(0.24));
+    push(settle(at, { yaw: face, pitch: 0 }, 0.3, 'sit'));
+  }
+  return out;
+}
+
+/** Run 7 (ek-day): from whatever it is doing on its perch (an antic he cut short by coming
+ *  close) back to sitting up facing `face`, calmly, in `dur` s, its feet at `alt` (its seat:
+ *  lying flat it sank a little); its tail eases from `tail`. */
+export function settlePlan(p: SqPose, face: number, dur = 0.3, tail = 0, alt = p.alt): Segment[] {
+  return [settle({ ...p, act: 'sit' }, { yaw: face, pitch: 0, alt }, dur, 'sit', [tail, 0])];
+}
+
+/**
+ * Run 7 (ek-day, the ending): it pats the earth down over an acorn it just buried — three
+ * slow pats of its front paws, its nose down, where it sits (`p`, on the ground) — then
+ * sits up facing `face`. ~1.4 s; it never leaves the spot.
+ */
+export function patPlan(p: SqPose, face: number): Segment[] {
+  const down: SqPose = { ...p, alt: 0, roll: 0, act: 'dig' };
+  const out: Segment[] = [settle({ ...down, pitch: p.pitch }, { pitch: 0.62 }, 0.2, 'dig')];
+  out.push(wobble({ ...down, pitch: 0.62 }, 0.9, 'dig', (s) => ({ pitch: 0.14 * Math.max(0, Math.sin(s * Math.PI * 2 * 3.3)) }), () => 0.1));
+  out.push(settle({ ...down, pitch: 0.62 }, { pitch: 0, yaw: face }, 0.3, 'sit', [0.1, 0]));
+  return out;
 }
 
 /** The fastest a plan moves in each kind of move (m/s), for the readability rules. */
