@@ -50,7 +50,7 @@ import {
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
   DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, nestWatch, youngPeek,
-  ANTICS, DEN_KINDS, DEN_DAY, denSpot, EINDES, BURY_AT, SECOND_HIDE, coneDrop, jayFliesAway, hide2Stand,
+  ANTICS, DEN_KINDS, DEN_DAY, denSpot, EINDES, BURY_AT, SECOND_HIDE, coneDrop, jayFliesAway, hide2Stand, foundRun,
 } from './eekhoorn.places';
 import { ontdekking } from '../../../content/ontdekkingen';
 
@@ -1044,20 +1044,25 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     sq.called();
     await k.wait(1.4);
   }
-  // the lens back behind him; it pours straight down the bark on its side (in his view)
-  // and pops up on the ground in front of him, sits up facing him, chatters
-  k.lockFollow();
-  await k.wait(0.6);
+  // he turns toward its glade (or, where he must, a few calm steps first) and the lens comes
+  // round behind him on an arc: from there his picture holds it on the bark and its whole
+  // run to its stump (eekhoorn.places foundRun, review r1: still facing the tree from the
+  // found view, the stump stood behind him where he found it from the glade's side, and it
+  // ran past him at the lens). It pours down the bark on its side toward the glade and pops
+  // up on the ground in front of him, sits up facing him, chatters — and runs on across the
+  // picture or away from the lens, never at it
+  const run = foundRun(k.ranger(), sqAng, cT);
+  k.stats.run_ok = run.ok ? 1 : 0;
+  if (dist(run.at, k.ranger()) > 0.05) {
+    k.stats.run_step = Math.round(dist(run.at, k.ranger()) * 10) / 10;
+    await k.walkRanger(run.at.x, run.at.z, 0.05);
+  }
+  k.world.faceRanger(run.face);
+  await k.behind();
+  await k.wait(0.3);
   const m = k.ranger();
-  const ahead = m.heading; // (where he looks: the follow camera looks there too)
-  // (ahead of him but off to the side away from the tree, on the open floor: straight
-  // ahead his own body would hide it from the camera behind him, by the trunk it is a
-  // small dark thing against the dark bark)
-  const toTree = headingTo(m, hideTree.trunk);
-  const side = Math.sin(toTree - ahead) >= 0 ? -1 : 1;
-  const popAt = ahead + side * 0.75;
-  const pop = { x: m.x + Math.sin(popAt) * 1.8, z: m.z + Math.cos(popAt) * 1.8 };
-  await k.guard(sq.run(sq.dashTo(pop.x, pop.z, headingTo(pop, m), sqAng)));
+  const pop = run.pop;
+  await k.guard(sq.run(sq.dashTo(pop.x, pop.z, headingTo(pop, m), run.side)));
   chatter();
   await k.wait(0.7);
   sq.flick();

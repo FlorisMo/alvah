@@ -22,6 +22,7 @@ import {
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
   drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, HIDE2_TURN, HIDE2_STEP, hide2Stand, denSpot, DEN_DAY, BURY_AT, JAY_CACHE, jayFliesAway, coneDrop, CONE_DROP, type Drawn,
+  FOUND_RUN, foundRun,
   NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
 } from './eekhoorn.places.ts';
@@ -30,7 +31,7 @@ import { biomeAt, heightAt as groundY, VEN_CENTER, VEN_SHORE_R } from '../../Bio
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
 import { dist, headingTo, toLocal, segDist, offCentre } from '../places.ts';
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
-import { SQ, barkRadius, lineClear, trunkFadeUpright, trunkOutline, trunkUpright, type Trunk, type Upright } from '../squirrel-math.ts';
+import { SQ, barkRadius, climbPlan, dashPlan, dismountPlan, lineClear, trunkFadeUpright, trunkOutline, trunkUpright, type Segment, type SqPose, type Trunk, type Upright } from '../squirrel-math.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import { newPlay } from '../../../core/play.ts';
 
@@ -559,6 +560,91 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
     }
   }
   assert.ok(n >= 60, `${n} finds framed`);
+});
+
+test('after a find (ek-day, review r1): he turns toward its glade and its run from the bark to its stump plays in his picture — it starts in it and never comes at the lens', () => {
+  let n = 0, stepped = 0;
+  const turns = [0, 0, 0]; // (≤ 45° off his way to the glade, ≤ 90°, more)
+  const popPx: number[] = [];
+  const check = (id: string, c: HomeTree, sqAng: number, at: { x: number; z: number }): void => {
+    // where the found view left him (a few calm steps nearer it, from further off) and the
+    // side of the bark it peeks out on
+    const me0 = foundStand(c, foundFace(c, sqAng, at), at);
+    const face = foundFace(c, sqAng, me0);
+    const run = foundRun(me0, face, c);
+    n += 1;
+    assert.ok(run.ok, `${id}: a turn whose picture holds its run to its stump`);
+    const me = run.at;
+    if (dist(me, me0) > 0) {
+      stepped += 1;
+      assert.ok(dist(me, me0) <= FOUND_RUN.steps[FOUND_RUN.steps.length - 1] + 1e-9, `${id}: a few calm steps at most`);
+      for (const o of HOME_TREES) assert.ok(dist(o, me) >= trunkClear(o) && segDist(o, me0, me) >= trunkClear(o) - 0.15, `${id}: his steps clear ${o.id}`);
+    }
+    const way = headingTo(me, wayTo(me, P.stand));
+    const off = Math.abs(wrapA(run.face - way));
+    turns[off <= Math.PI / 4 ? 0 : off <= Math.PI / 2 ? 1 : 2] += 1;
+    // the lens where the kit's behind() puts it, and the squirrel's REAL plan from there: down
+    // the bark round to the side it comes off, off the bark, its dash to where it pops up,
+    // and its dash on to its stump's foot and the hop up (squirrel.ts dashTo + toStumpPlan;
+    // each dash bends round him and round the lens as it does in the game)
+    const lens = { x: me.x - Math.sin(run.face) * LENS.back, z: me.z - Math.cos(run.face) * LENS.back };
+    const tr = trunk(c);
+    const avoid = { x: me.x, z: me.z, r: 1.6 };
+    const rnd = (): number => 0.5;
+    const last = (p: readonly Segment[]): SqPose => p[p.length - 1].at(1);
+    const plan: Segment[] = [...climbPlan(tr, { ang: face, h: HIDE.h }, { ang: run.side, h: 0.25 }, 0), ...dismountPlan(tr, { ang: run.side, h: 0.25 })];
+    plan.push(...dashPlan(last(plan), run.pop.x, run.pop.z, rnd, lens, avoid));
+    const g = last(plan);
+    const ds = dist(g, STUMP);
+    const sf = { x: STUMP.x + ((g.x - STUMP.x) / ds) * (STUMP.r + 0.3), z: STUMP.z + ((g.z - STUMP.z) / ds) * (STUMP.r + 0.3) };
+    plan.push(...dashPlan(g, sf.x, sf.z, rnd, lens, avoid));
+    const poses = plan.flatMap((s) => { const k = Math.max(2, Math.ceil(s.len / 0.1)); return Array.from({ length: k + 1 }, (_, i) => s.at(i / k)); });
+    // it starts in his picture: on the bark, well inside it, under the line card
+    const p0 = poses[0];
+    const s0 = followPx(me, run.face, { x: p0.x, y: groundY(p0.x, p0.z) + p0.alt + 0.12, z: p0.z });
+    assert.ok(s0.inside && s0.x > 0.1 * W && s0.x < 0.9 * W && s0.y > 110 && s0.y < H - 70, `${id}: it starts in his picture (${s0.x.toFixed(0)}, ${s0.y.toFixed(0)})`);
+    // its distance to the lens never shrinks by more than a little (the pour off the bark)
+    let far = -Infinity;
+    for (const q of poses) {
+      const dq = Math.hypot(q.x - lens.x, q.z - lens.z);
+      assert.ok(dq >= far - 0.3, `${id}: it never comes at the lens (${dq.toFixed(2)} m after ${far.toFixed(2)})`);
+      far = Math.max(far, dq);
+      // (never over his feet)
+      if (q.alt < 0.3) assert.ok(dist(q, me) >= 0.65, `${id}: never over his feet (${dist(q, me).toFixed(2)} m)`);
+    }
+    // where it sits up facing him: in his picture, off his body, big enough to read
+    const pp = followPx(me, run.face, { x: run.pop.x, y: groundY(run.pop.x, run.pop.z) + 0.15, z: run.pop.z });
+    assert.ok(pp.inside && pp.x > 0.1 * W && pp.x < 0.9 * W && pp.y < H - 60, `${id}: it pops up in his picture (${pp.x.toFixed(0)}, ${pp.y.toFixed(0)})`);
+    assert.ok(Math.abs(pp.x - W / 2) > 60, `${id}: …beside him, not behind his body (${pp.x.toFixed(0)})`);
+    popPx.push(pxAt(0.33, pp.d));
+    for (const o of HOME_TREES) assert.ok(dist(o, run.pop) >= trunkOutline(trunk(o), 0.15) + 0.35, `${id}: not on ${o.id}'s root spurs`);
+    assert.equal(biomeAt(run.pop.x, run.pop.z), 'bos');
+  };
+  for (const rid of ROUTE_IDS) {
+    // where a perfect player finds it…
+    const c = ROUTES[rid].hide;
+    const from = headingTo(c, comesFrom(ROUTES[rid], ROUTES[rid].waits.length - 1));
+    for (let k = -6; k <= 6; k += 3) for (const d of [1.8, 2.6, 3.4]) {
+      const start = { x: c.x + Math.sin(from + k * 0.17) * d, z: c.z + Math.cos(from + k * 0.17) * d };
+      if (dist(start, seatOf(c)) > SEE_D || HOME_TREES.some((o) => dist(o, start) < trunkClear(o))) continue;
+      const res = playHide(c, start, `${rid} run`);
+      if (res.found) check(`${rid}/${c.id} played ${k}/${d}`, c, res.sqAng, res.me);
+    }
+  }
+  // …and all round each pine it hides round (the second hide's too), near or as far as he
+  // may find it from
+  for (const t of ALL_HIDE_TREES) for (let a = -Math.PI; a < Math.PI; a += Math.PI / 12) for (const d of [1.2, 2.2, 3.2, FIND_R]) {
+    const at = { x: t.x + Math.sin(a + 0.5) * d, z: t.z + Math.cos(a + 0.5) * d };
+    if (HOME_TREES.some((o) => dist(o, at) < trunkClear(o))) continue;
+    check(`${t.id} ${deg(a)}°/${d}`, t, a, at);
+  }
+  assert.ok(n >= 250, `${n} finds`);
+  // (mostly he turns from where he stands; mostly toward the glade)
+  assert.ok(stepped <= n / 6, `${stepped} of ${n} stepped first`);
+  assert.ok(turns[2] <= n / 6, `turns off his way to the glade: ${turns.join(' / ')} (≤45° / ≤90° / more)`);
+  popPx.sort((a, b) => a - b);
+  console.log(`after a find: ${n} finds, ${stepped} stepped, turns ${turns.join('/')}, pop ${popPx[0].toFixed(0)}-${popPx[popPx.length - 1].toFixed(0)} px (median ${popPx[popPx.length >> 1].toFixed(0)})`);
+  assert.ok(popPx[0] >= 32 && popPx[popPx.length >> 1] >= 38, `it pops up big enough to read (smallest ${popPx[0].toFixed(0)} px, median ${popPx[popPx.length >> 1].toFixed(0)})`);
 });
 
 test('the den (ek-day): every opening stands in the den look, big and whole — on its stub, head down under it, nibbling at the pine\'s foot', () => {

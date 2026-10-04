@@ -27,7 +27,7 @@ import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { atLocal, dist, headingTo, segDist, uniformLocal, type Frame } from '../places.ts';
-import { ANTIC_KINDS, barkRadius, trunkFadeUpright, trunkOutline, type AnticKind } from '../squirrel-math.ts';
+import { ANTIC_KINDS, barkRadius, dashPath, trunkFadeUpright, trunkOutline, type AnticKind } from '../squirrel-math.ts';
 import type { TreeStub } from '../../world/Forest.ts';
 
 /** The eekhoorn marker: the bos anchor it has always had (the test checks it). */
@@ -700,6 +700,154 @@ export function foundStand(tree: HomeTree, sqAng: number, me: Spot): Spot {
 export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
   const side = Math.sign(wrapA(headingTo(tree, me) - sqAng)) || 1;
   return headingTo(tree, me) - side * FOUND.turns[0] * 0.7;
+}
+
+/**
+ * Run 7 (ek-day, review r1): after a find — the first and the second, round every pine it
+ * hides round, the young one's play too — the squirrel's way from the bark to its stump
+ * plays in his picture, across it or away from the lens, never at it (played 2026-10-04:
+ * he still faced the tree from the found view, so where he found it from the glade's side
+ * the stump stood behind him, and the squirrel ran from the bark past him into the
+ * picture's bottom corner, big, at the lens, in 3 of 3 plays with a second hide).
+ *
+ * So he turns first — the lens comes round behind him (kit `behind`: `back` m back) — to
+ * the heading nearest his way to the glade from which: the squirrel on the bark is in the
+ * picture (`half` rad either side of its middle), on the bark's side toward the lens
+ * (`face`), not behind his body (`body`) nor another trunk; the stump stands at least
+ * `front` m in front of the lens (its run never goes round behind the lens); and its whole
+ * real way — down the bark (round to the side `sides` picks), off the bark, the dash to
+ * where it pops up in front of him (`pops`: m ahead of him, rad off his heading, on the
+ * stump's side first), and on to its stump as its dash plans it (round him and round the
+ * lens: squirrel-math `dashPath`) — never comes nearer the lens than it has been by more
+ * than `toward` m, never through a trunk's foot nor within `feet` m of his, and its first `runIn` m on from the pop
+ * stay in the picture. The pop is in the picture too, off his body, off every trunk's foot.
+ * Where no heading from where he stands does it, a few calm steps first (`steps` m, the way
+ * back from the tree first). `ok`: one did.
+ */
+export const FOUND_RUN = {
+  back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, face: (75 * Math.PI) / 180, toward: 0.25, front: 3.0, feet: 0.75,
+  step: (2.5 * Math.PI) / 180, runIn: 2,
+  pops: [[1.6, 0.7], [1.6, 0.9], [1.9, 0.6], [1.9, 0.8], [2.3, 0.5], [2.3, 0.7], [1.9, 1.0], [2.7, 0.45], [2.7, 0.65]] as readonly (readonly [number, number])[],
+  sides: [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9],
+  steps: [0.6, 1.0, 1.4, 1.8],
+} as const;
+/** The picture's whole half-width (rad) through the 55° follow lens at 1280×800 (a little in
+ *  from its edge). */
+const FOLLOW_HALF = Math.atan(Math.tan((55 / 2) * Math.PI / 180) * 1.6 * 0.9);
+/** Where it clings on the bark once found (its found face, `HIDE.h` up). */
+export function barkSpot(tree: HomeTree, ang: number): Spot {
+  const r = barkRadius({ x: tree.x, z: tree.z, H: tree.h, species: tree.species }, HIDE.h) + 0.08;
+  return { x: tree.x + Math.sin(ang) * r, z: tree.z + Math.cos(ang) * r };
+}
+/** The squirrel's real way after a find, over the ground (x/z): from the bark at `sqAng`
+ *  round and down to `side`, off the bark, its dash to `pop`, and its dash on to its stump's
+ *  foot — each dash as squirrel-math plans it (round `me`, round `lens`). `pop`: the index
+ *  of the pop in `pts`; `foot`: of the spot it comes off the bark. */
+export function foundRunPath(me: Spot, tree: HomeTree, sqAng: number, side: number, pop: Spot, lens: Spot): { pts: Spot[]; foot: number; pop: number } {
+  const tr = { x: tree.x, z: tree.z, H: tree.h, species: tree.species };
+  const pts: Spot[] = [barkSpot(tree, sqAng)];
+  const da = wrapA(side - sqAng);
+  const n = Math.max(1, Math.ceil(Math.abs(da) / 0.15));
+  for (let i = 1; i <= n; i++) {
+    const a = sqAng + (da * i) / n, r = barkRadius(tr, HIDE.h + ((0.25 - HIDE.h) * i) / n) + 0.08;
+    pts.push({ x: tree.x + Math.sin(a) * r, z: tree.z + Math.cos(a) * r });
+  }
+  const r0 = barkRadius(tr, 0) + 0.35; // (squirrel-math dismountPlan)
+  pts.push({ x: tree.x + Math.sin(side) * r0, z: tree.z + Math.cos(side) * r0 });
+  const foot = pts.length - 1;
+  const avoid = { x: me.x, z: me.z, r: 1.6 }; // (squirrel.ts: a dash goes round him)
+  const toPop = dashPath(pts[foot], pop.x, pop.z, lens, avoid);
+  pts.push(...toPop.slice(1));
+  const at = pts.length - 1;
+  const d = dist(pop, STUMP) || 1;
+  const sf = { x: STUMP.x + ((pop.x - STUMP.x) / d) * (STUMP.r + 0.3), z: STUMP.z + ((pop.z - STUMP.z) / d) * (STUMP.r + 0.3) }; // (squirrel.ts toStumpPlan)
+  pts.push(...dashPath(pop, sf.x, sf.z, lens, avoid).slice(1));
+  return { pts, foot, pop: at };
+}
+/** Points every `step` m along a way. */
+function along(pts: readonly Spot[], step = 0.1): Spot[] {
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], n = Math.max(1, Math.ceil(dist(a, b) / step));
+    for (let k = 1; k <= n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, z: a.z + ((b.z - a.z) * k) / n });
+  }
+  return out;
+}
+/** The follow lens behind him facing `h` (x/z). */
+export function lensBehind(me: Spot, h: number, back: number = FOUND_RUN.back): Spot {
+  return { x: me.x - Math.sin(h) * back, z: me.z - Math.cos(h) * back };
+}
+/** From `me` facing `h`: where it pops up and the side it comes down, when its run plays in
+ *  his picture (FOUND_RUN); else null. */
+function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: Spot; side: number } | null {
+  const lens = lensBehind(me, h);
+  const off = (q: Spot): number => Math.abs(wrapA(headingTo(lens, q) - h));
+  const rOf = (t: HomeTree): number => barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, 1) + 0.3;
+  const footOf = (t: HomeTree): number => trunkOutline({ x: t.x, z: t.z, H: t.h, species: t.species }, 0.15) + 0.05;
+  const sq = barkSpot(tree, sqAng);
+  // (the lens clear of every trunk, its own pine not between the lens and him, the stump in
+  // front of the lens, the squirrel's side of the bark toward the lens, in the picture, not
+  // behind his body nor another trunk)
+  if (HOME_TREES.some((t) => dist(t, lens) < rOf(t) + 0.7) || segDist(tree, lens, me) < rOf(tree) + 0.2) return null;
+  if ((STUMP.x - lens.x) * Math.sin(h) + (STUMP.z - lens.z) * Math.cos(h) < FOUND_RUN.front) return null;
+  if (Math.abs(wrapA(headingTo(tree, lens) - sqAng)) > FOUND_RUN.face || off(sq) > FOUND_RUN.half) return null;
+  if (off(sq) < FOUND_RUN.body && dist(lens, sq) > dist(lens, me) - 0.3) return null;
+  if (HOME_TREES.some((t) => t !== tree && segDist(t, lens, sq) < rOf(t))) return null;
+  const toStump = Math.sign(wrapA(headingTo(me, STUMP) - h)) || 1;
+  for (const [d, turn] of FOUND_RUN.pops) for (const s of [toStump, -toStump]) {
+    const pop = { x: me.x + Math.sin(h + s * turn) * d, z: me.z + Math.cos(h + s * turn) * d };
+    if (HOME_TREES.some((t) => dist(t, pop) < footOf(t) + 0.35) || off(pop) > FOUND_RUN.half) continue;
+    if (off(pop) < FOUND_RUN.body && dist(lens, pop) > dist(lens, me) - 0.3) continue;
+    for (const k of FOUND_RUN.sides) {
+      const side = sqAng + k;
+      if (Math.abs(wrapA(headingTo(tree, lens) - side)) > FOUND_RUN.face) continue;
+      const way = foundRunPath(me, tree, sqAng, side, pop, lens);
+      let far = -Infinity, bad = false;
+      for (const q of along(way.pts)) {
+        const dq = dist(lens, q);
+        if (dq < far - FOUND_RUN.toward) { bad = true; break; }
+        far = Math.max(far, dq);
+      }
+      if (bad) continue;
+      // (over the ground: never through a trunk's foot — its own pine's only once it is off it
+      // — nor over his feet)
+      const dash = along(way.pts.slice(way.foot));
+      if (dash.some((q) => dist(q, me) < FOUND_RUN.feet || HOME_TREES.some((t) => (t !== tree || dist(q, tree) > 1.2) && dist(t, q) < footOf(t)))) continue;
+      // (its first `runIn` m on from the pop in the picture: it runs off where he sees it)
+      let run = 0, prev = pop;
+      if (along(way.pts.slice(way.pop)).some((q) => { run += dist(prev, q); prev = q; return run <= FOUND_RUN.runIn && off(q) > FOLLOW_HALF; })) continue;
+      return { pop, side };
+    }
+  }
+  return null;
+}
+/** After a find (`sqAng`: its found face on `tree`'s bark, `me`: where he stands): where he
+ *  turns to (and, where he must, a few calm steps first) so that its run to its stump plays
+ *  in his picture (FOUND_RUN). */
+export function foundRun(me: Spot, sqAng: number, tree: HomeTree): { at: Spot; face: number; pop: Spot; side: number; ok: boolean } {
+  const turnFrom = (at: Spot): { face: number; pop: Spot; side: number } | null => {
+    const want = headingTo(at, wayTo(at, STAND));
+    for (let a = 0; a <= Math.PI + 1e-9; a += FOUND_RUN.step) {
+      for (const s of a === 0 ? [1] : [1, -1]) {
+        const r = foundRunAt(at, tree, sqAng, want + s * a);
+        if (r) return { face: wrapA(want + s * a), ...r };
+      }
+    }
+    return null;
+  };
+  const here = turnFrom(me);
+  if (here) return { at: me, ...here, ok: true };
+  const back = headingTo(tree, me);
+  const ways = Array.from({ length: 16 }, (_, i) => back + ((i % 2 ? 1 : -1) * Math.ceil(i / 2) * Math.PI) / 8);
+  for (const r of FOUND_RUN.steps) for (const a of ways) {
+    const at = { x: me.x + Math.sin(a) * r, z: me.z + Math.cos(a) * r };
+    if (HOME_TREES.some((t) => dist(t, at) < trunkClear(t) || segDist(t, me, at) < trunkClear(t) - 0.15)) continue;
+    const t = turnFrom(at);
+    if (t) return { at, ...t, ok: true };
+  }
+  // (none: as before — toward the glade, it pops up ahead of him)
+  const face = headingTo(me, wayTo(me, STAND));
+  return { at: me, face, pop: { x: me.x + Math.sin(face + 0.6) * 1.9, z: me.z + Math.cos(face + 0.6) * 1.9 }, side: sqAng, ok: false };
 }
 
 /* -------------------------------------------- what he can find (run 7) ---- */
