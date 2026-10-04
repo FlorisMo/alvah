@@ -223,8 +223,8 @@ export interface ReeLayout {
   larkOn: Readonly<Record<'in' | 'out', readonly ('meadow' | 'hide')[]>>;
   /** ree-discover: where a twin lies (a rare play) — in the tall grass or her bracken behind
    *  where they meet, on the side its sibling's twin spot is (it rises there in the
-   *  reunion's picture and comes round to her); laid once he has left the calf, out of his
-   *  picture (never in the search's) */
+   *  reunion's picture and comes round to her); laid once the watch is over, out of his
+   *  picture (never in the search's or the watch's: in C it lies on open heath) */
   twinBed: Spot & { yaw: number };
 }
 

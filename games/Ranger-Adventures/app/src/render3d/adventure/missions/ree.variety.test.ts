@@ -25,6 +25,7 @@ import { ONTDEKKINGEN, ontdekkingenVan } from '../../../content/ontdekkingen.ts'
 import { compactVariant } from '../../../core/play.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
+import { countWords, MAX_WORDS_PER_SENTENCE } from '../../../core/readlevel.ts';
 import { LAYOUTS, REE_LAYOUTS, birchWalk, poolSides } from './ree.places.ts';
 
 const MISSION = 'ree-niet-aanraken';
@@ -434,4 +435,26 @@ test('ree-discover: her listening pauses never say the same line twice in one wa
       assert.equal(new Set(lines).size, lines.length, `seed ${seed}: ${lines.join(', ')}`);
     }
   }
+});
+
+test('close: every line the reekalf says on its strip is at most 7 words, all of it (a calm moment\'s good and wrong words too)', () => {
+  // (the close of the lane: a reach at the calf\'s nose put "Nu ruikt het kalf naar jou. Dan
+  // durft de moeder niet te komen." on the strip, 13 words over two lines; the encounters\'
+  // words are said on the world\'s strip as one line, plain and knap)
+  const m = AREA_VELUWE.missies.find((x) => x.id === MISSION)!;
+  const lines: [string, string][] = [];
+  m.stappen.forEach((st, si) => {
+    const skin = st.skin as { copy?: Record<string, string>; encounters?: Record<string, unknown>[] };
+    for (const [k, t] of Object.entries(skin.copy ?? {})) lines.push([`step${si}.${k}`, t]);
+    for (const e of skin.encounters ?? []) {
+      for (const k of ['vraag', 'vraagKnap', 'uitleg', 'uitlegKnap', 'gevolg', 'gevolgKnap']) {
+        if (typeof e[k] === 'string') lines.push([`${String(e.id)}.${k}`, e[k] as string]);
+      }
+    }
+  });
+  const av = (m as { avontuur?: Record<string, Record<string, string>> }).avontuur ?? {};
+  for (const tier of Object.keys(av)) for (const [k, t] of Object.entries(av[tier])) lines.push([`avontuur.${tier}.${k}`, t]);
+  assert.ok(lines.length > 40, `the ree's lines (${lines.length})`);
+  const long = lines.filter(([, t]) => countWords(t) > MAX_WORDS_PER_SENTENCE).map(([k, t]) => `${k}: "${t}" (${countWords(t)})`);
+  assert.deepEqual(long, [], `lines over ${MAX_WORDS_PER_SENTENCE} words on the strip`);
 });
