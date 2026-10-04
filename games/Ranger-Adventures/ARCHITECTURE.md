@@ -181,7 +181,17 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          leaps and dives, and otherwise sits dead still (`Actor` opts.recipe:
                          no idle hop; its body rests beyond 18 m); ven.ts the beats: look,
                          follow, the three moments with his feet, the search, the song, the
-                         answer, the plop)
+                         answer, the plop; ven-life: ven.life.ts (pure, ven.life.test.ts)
+                         where the bank's life is and what a play brings of it, each from
+                         its own fork and never the last play's (`venLife`: the duck family's
+                         loop and count, dragonflies in the warm moods, the heath blue in
+                         the sunny ones, the feather's spot, the frogs that plop in as he
+                         comes down, the blue frog's cushion when `k.rare()` says so);
+                         ven.finds.ts draws and moves it (the ducklings and the dragonflies
+                         one instanced mesh each, culled by a sphere that follows them) and
+                         its `Seen` records a find only once it was really in his picture;
+                         small surprises only on his walks (`surprisesOn`), never in a
+                         search, a hold or a listening stop)
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          run 7: a home may record what he saw of it in free roam
                          (`DressingEnv.discover`, wired by WorldSession to the save and the

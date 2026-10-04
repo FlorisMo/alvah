@@ -188,14 +188,19 @@ test('a play\'s life: drawn from its own forks, deterministic, never the last pl
       if (l.libellen.length) fly++;
       if (l.vlinder !== null) blue++;
       if (l.veer !== null) veer++;
+      // every play brings at least one of them besides the ducks (three plays in a row with
+      // the ducks alone felt alike)
+      assert.ok(l.libellen.length || l.vlinder !== null || l.veer !== null, `${m} seed ${seed}: a small thing besides the ducks`);
     }
     return { fly, blue, veer };
   };
   for (const m of MOOD_IDS) {
     const r = moodsOf(m);
-    if (DRAGONFLY_MOODS.includes(m)) assert.ok(r.fly >= 70 && r.fly <= 130, `${m}: dragonflies in ${r.fly} of 200 plays`); else assert.equal(r.fly, 0, `${m}: no dragonflies`);
-    if (BUTTERFLY_MOODS.includes(m)) assert.ok(r.blue >= 70 && r.blue <= 130, `${m}: the heath blue in ${r.blue} of 200 plays`); else assert.equal(r.blue, 0, `${m}: no heath blue`);
-    assert.ok(r.veer >= 55 && r.veer <= 105, `${m}: the feather in ${r.veer} of 200 plays`);
+    const others = DRAGONFLY_MOODS.includes(m) || BUTTERFLY_MOODS.includes(m);
+    if (DRAGONFLY_MOODS.includes(m)) assert.ok(r.fly >= 70 && r.fly <= 145, `${m}: dragonflies in ${r.fly} of 200 plays`); else assert.equal(r.fly, 0, `${m}: no dragonflies`);
+    if (BUTTERFLY_MOODS.includes(m)) assert.ok(r.blue >= 70 && r.blue <= 135, `${m}: the heath blue in ${r.blue} of 200 plays`); else assert.equal(r.blue, 0, `${m}: no heath blue`);
+    // (where nothing else lives in this light, the feather lies there every play)
+    if (others) assert.ok(r.veer >= 60 && r.veer <= 125, `${m}: the feather in ${r.veer} of 200 plays`); else assert.equal(r.veer, 200, `${m}: the feather every play`);
   }
   // three plays in a row bring different life (the ducks' loop at least)
   for (const base of [11, 31, 71]) {

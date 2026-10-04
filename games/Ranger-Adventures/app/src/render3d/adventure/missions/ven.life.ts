@@ -175,8 +175,9 @@ export const FREE_DUCKS: VenLife['ducks'] = { loop: 0, count: DUCKLINGS_FREE, st
  * What lives on the bank this play: each decision from its own fork of the play (a later
  * draw never moves another). The duck family's loop (never the last play's) and its count;
  * dragonflies in the warm moods (about half the plays; two, away from his cove); the
- * butterfly in the sunny moods (about half); the feather (two in five); one frog plopping at
- * his own cove, and now and then one at a cove he walks past. Never a knob.
+ * butterfly in the sunny moods (about half); the feather (two in five); at least one of
+ * these three every play; one frog plopping at his own cove, and now and then one at a cove
+ * he walks past. Never a knob.
  */
 export function venLife(play: Pick<Play, 'fork'>, mood: MoodId, laid: { bay: BayId; side: Side }, last: LastLife | null = null): VenLife {
   const e = play.fork('ven-eend');
@@ -191,10 +192,22 @@ export function venLife(play: Pick<Play, 'fork'>, mood: MoodId, laid: { bay: Bay
   const flies = l.chance(0.5) && DRAGONFLY_MOODS.includes(mood);
   const libellen = flies ? l.shuffle(dragonflyHomesFor(laid.bay)).slice(0, 2).sort((a, b) => a - b) : [];
   const v = play.fork('ven-vlinder');
-  const vlinder = v.chance(0.5) && BUTTERFLY_MOODS.includes(mood) ? v.int(0, BUTTERFLY_TH.length - 1) : null;
+  let vlinder = v.chance(0.5) && BUTTERFLY_MOODS.includes(mood) ? v.int(0, BUTTERFLY_TH.length - 1) : null;
   const f = play.fork('ven-veer');
   // (never where it lay last play: another place on the bank)
-  const veer = f.chance(0.4) ? f.pick(FEATHER_TH.map((_, i) => i).filter((i) => i !== last?.veer)) : null;
+  const feathers = FEATHER_TH.map((_, i) => i).filter((i) => i !== last?.veer);
+  let veer = f.chance(0.4) ? f.pick(feathers) : null;
+  // every play brings at least one of them (a play with the ducks alone felt like the play
+  // before: three in a row drew none, seeds 5199-5201): when none came, one that lives in
+  // this light comes, from its own fork
+  if (!libellen.length && vlinder === null && veer === null) {
+    const g = play.fork('ven-iets');
+    const kinds = [...(DRAGONFLY_MOODS.includes(mood) ? ['libel'] : []), ...(BUTTERFLY_MOODS.includes(mood) ? ['vlinder'] : []), 'veer'];
+    const kind = g.pick(kinds);
+    if (kind === 'libel') libellen.push(...g.shuffle(dragonflyHomesFor(laid.bay)).slice(0, 2).sort((a, b) => a - b));
+    else if (kind === 'vlinder') vlinder = g.int(0, BUTTERFLY_TH.length - 1);
+    else veer = g.pick(feathers);
+  }
   const p = play.fork('ven-plons');
   // (his own cove's frog sits on the side he comes down to: it plops as he arrives; a frog
   // left sitting there would be a frog in the search's picture)
