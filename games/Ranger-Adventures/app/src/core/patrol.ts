@@ -54,3 +54,19 @@ export function nextPatrolTarget(
 ): string | null {
   return missions.find((m) => !voltooid[m.id])?.id ?? null;
 }
+
+/**
+ * Run 7 (the adventures lane): the story order — the missions played as adventures with
+ * his own body first, in the order the game meets them (`adventureIds`: the adventure
+ * registry's order, so a new adventure comes right after the ones before it), then every
+ * other mission in the area's order. The wayfinding chip, Bram's next step and the
+ * missiebord's "Nu doen" follow it; the markers keep the area's layout. Pure.
+ */
+export function storyOrderOf<T extends PatrolStop>(missies: readonly T[], adventureIds: readonly string[]): T[] {
+  const adventures: T[] = [];
+  for (const id of adventureIds) {
+    const m = missies.find((q) => q.id === id);
+    if (m && !adventures.includes(m)) adventures.push(m);
+  }
+  return [...adventures, ...missies.filter((m) => !adventures.includes(m))];
+}

@@ -647,13 +647,20 @@ export class Dressing {
     const bx = VEN_CENTER.x, bz = VEN_CENTER.z;
     const budget = Math.round(90 * veg);
     const spots: PlantSpot[] = [];
-    for (let i = 0; i < budget * 12 && spots.length < budget; i++) {
+    // run 7 (the ven, additive): a mission home's own ground keeps the belt out (its coves:
+    // the home lays its own few cattails at the water line), as `gridSpots` keeps the heath
+    // scatter out; a reed left out still counts toward the budget, so every other reed of
+    // the belt stands exactly where it stood
+    let laid = 0;
+    for (let i = 0; i < budget * 12 && laid < budget; i++) {
       const ang = i * 2.39996;             // golden angle → even, non-repeating ring
       const rad = 9 + (i % 22) * ((VEN_REED_OUT - 9) / 22); // 9–20 m out — a TIGHT belt hugging the waterline
       const x = bx + Math.cos(ang) * rad;
       const z = bz + Math.sin(ang) * rad;
       const gy = this.groundY(x, z);
       if (gy < WATER_LEVEL - 0.3 || gy > WATER_LEVEL + 1.0) continue; // keep the reed belt right at the shore
+      laid += 1;
+      if (this.clearings.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) continue;
       spots.push({ x, y: gy - 0.03, z, s: spreadAt('lisdodde', (i % 4) / 3), rotY: ang * 3.1, phase: (i % 5) * 1.3 });
     }
     void thin;
@@ -670,10 +677,18 @@ export class Dressing {
     this.plantFields.push(field);
     if (wind > 0) {
       for (const c of field.chunks) {
-        this.windMeshes.push({
-          mesh: c.mesh, strength: wind,
-          items: c.items.map((p) => ({ x: p.x, y: p.y, z: p.z, sx: p.s, sy: p.sy ?? p.s, phase: p.phase ?? 0, rotY: p.rotY })),
-        });
+        const items = c.items.map((p) => ({ x: p.x, y: p.y, z: p.z, sx: p.s, sy: p.sy ?? p.s, phase: p.phase ?? 0, rotY: p.rotY }));
+        this.windMeshes.push({ mesh: c.mesh, strength: wind, items });
+        // run 7 (additive): where each blade is PLANTED (no wind lean), for the dev seat probe
+        // (play/kit `seating`): a blade the breeze bends is still standing where it stood —
+        // its swaying pose is not a thing that moved or sank (a reed by the ven's marker
+        // read as 'appeared, 6 cm in the ground' between two moments of the breeze)
+        c.mesh.userData.restMatrixAt = (i: number, out: THREE.Matrix4): THREE.Matrix4 => {
+          const it = items[i];
+          const q = new THREE.Quaternion();
+          if (it.rotY) q.setFromAxisAngle(Dressing._up, it.rotY);
+          return out.compose(new THREE.Vector3(it.x, it.y, it.z), q, new THREE.Vector3(it.sx, it.sy, it.sx));
+        };
       }
       this.lastWindT = NaN; // pose the new blades on the next tick
     }

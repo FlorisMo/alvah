@@ -22,6 +22,12 @@ export interface FitSpec {
   insetBottom: number;
   /** things that must be in the picture too: their feet and their tops */
   include?: readonly { x: number; z: number; h: number }[];
+  /** run 7 (additive): the closest (m) the lens may come to its aim point (default 3) — a
+   *  close look at a small animal (a singing frog) comes nearer */
+  near?: number;
+  /** run 7 (additive): how high (m) the lens stands at least over the rendered ground at
+   *  its own spot (default 1.4) — a low look across the water at a frog stands lower */
+  lensUp?: number;
 }
 
 /**
@@ -62,7 +68,7 @@ export function fitFrame(
   const dir = fw.clone().multiplyScalar(Math.cos(pitch)).setY(-Math.sin(pitch)); // lens → aim
   const ndc = V();
   let bestFit: { cam: THREE.Vector3; look: THREE.Vector3 } | null = null;
-  for (let dist = 3; dist <= 16 && !bestFit; dist += 0.2) {
+  for (let dist = spec.near ?? 3; dist <= 16 && !bestFit; dist += 0.2) {
     // slide the aim point up/down so the box sits centred in the free band
     let lift = tall * 0.35;
     for (let k = 0; k < 4; k++) {
@@ -94,7 +100,7 @@ export function fitFrame(
     bestFit = { cam: look.clone().addScaledVector(dir, -16), look };
   }
   // never under (or skimming) the rendered ground at the lens's own spot
-  bestFit.cam.y = safeCamHeight(bestFit.cam.y, groundY(bestFit.cam.x, bestFit.cam.z), 1.4);
+  bestFit.cam.y = safeCamHeight(bestFit.cam.y, groundY(bestFit.cam.x, bestFit.cam.z), spec.lensUp ?? 1.4);
   return { P, cam: bestFit.cam, look: bestFit.look };
 }
 

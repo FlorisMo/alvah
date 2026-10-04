@@ -47,6 +47,10 @@ export interface StageSpec {
   anchor?: { x: number; z: number; heading: number; include?: readonly { x: number; z: number; h: number }[] };
   /** the screen size to fit for (default: the canvas as it is now) */
   viewport?: { w: number; h: number };
+  /** run 7 (additive, play/frame-fit `near`, `lensUp`): how close to its aim and how low
+   *  over the ground the lens may come (defaults 3 m and 1.4 m, as before) */
+  near?: number;
+  lensUp?: number;
 }
 
 const V = (x = 0, y = 0, z = 0): THREE.Vector3 => new THREE.Vector3(x, y, z);
@@ -86,7 +90,7 @@ export class Stage {
     this.scene = ctx.scene as THREE.Scene;
     this.spec = {
       tall: 1, pitchDeg: 30, insetTop: 0, insetBottom: 0, anchor: undefined as unknown as NonNullable<StageSpec['anchor']>,
-      viewport: undefined as unknown as NonNullable<StageSpec['viewport']>, ...spec,
+      viewport: undefined as unknown as NonNullable<StageSpec['viewport']>, near: 3, lensUp: 1.4, ...spec,
     };
     // remember where the follow camera stood and which way it looked (at the ranger)
     // before the reframe takes it

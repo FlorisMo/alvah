@@ -80,6 +80,11 @@ export interface StillOpts {
    *  never on a button or the line) is a step toward them. His own input is locked
    *  meanwhile (a framed beat). */
   feet?: boolean;
+  /** run 7 (the ven, additive): KEEP YOUR DISTANCE — his input stays free (the script
+   *  frees it first: he may wait or walk round), and coming within `r` m of `at()` (the
+   *  adder on the path) is the reach; within `warn` m `onWarn` is called once each time he
+   *  comes that near (she lifts her head: a cue, no reach) */
+  room?: { at: () => Spot; r: number; warn?: number; onWarn?: () => void };
   /** what the reach did, said after the animal's reaction (default: the encounter's gevolg) */
   mis?: string;
   /** shown with the line: the animal turns up (a look, a sound) */
@@ -274,6 +279,17 @@ export class ChoiceRun {
     };
     window.addEventListener('pointerdown', onDown, true);
     window.addEventListener('keydown', onKey);
+    // (keep your distance: his own feet, free, read every frame)
+    let warned = false;
+    const offRoom = o.room ? k.onTick(() => {
+      const room = o.room!;
+      const me = k.ranger(), at = room.at();
+      const d = Math.hypot(me.x - at.x, me.z - at.z);
+      if (d < room.r) reached = true;
+      const near = room.warn !== undefined && d < room.warn;
+      if (near && !warned) room.onWarn?.();
+      warned = near;
+    }) : null;
     o.show?.();
     try {
       for (;;) {
@@ -313,6 +329,7 @@ export class ChoiceRun {
     } finally {
       window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('keydown', onKey);
+      offRoom?.();
       unhint();
     }
     k.stats[`still_${id}`] = core.impulses;
