@@ -142,6 +142,11 @@ export interface FrameSpec {
   include?: readonly { x: number; z: number; h: number; r?: number }[];
   /** seconds of the eased move (≥ ~90°/s turns: longer for a big turn) */
   seconds?: number;
+  /** run 7 (additive, ven): the closest (m) the lens may come to what it frames, and how
+   *  low (m) over the ground it may stand (defaults 3 and 1.4: every view as before) — a
+   *  singing frog seen from just over the water */
+  near?: number;
+  lensUp?: number;
 }
 
 export interface WalkOpts {
@@ -476,6 +481,7 @@ export class AdventureKit {
       halfW: f.halfW, halfD: f.halfD, tall: f.tall ?? 1, pitchDeg: f.pitchDeg ?? 34,
       insetTop: f.insetTop ?? 96, insetBottom: f.insetBottom ?? 16,
       anchor: { x: f.at.x, z: f.at.z, heading: f.heading, include },
+      ...(f.near !== undefined ? { near: f.near } : {}), ...(f.lensUp !== undefined ? { lensUp: f.lensUp } : {}),
     };
     const stage = new Stage(this.ctx, spec);
     return { cam: stage.cam.clone(), look: stage.look.clone(), stage };
