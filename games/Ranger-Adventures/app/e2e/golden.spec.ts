@@ -777,7 +777,9 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
       || !(await page.getByRole('button', { name: 'Begin', exact: true }).isVisible().catch(() => false));
     const enterWorks = await expect.poll(beginGone, { timeout: 3_000 }).toBe(true).then(() => true, () => false);
     soft(enterWorks, 'Enter does not press Begin on the title');
-    if (!enterWorks) await clickButton(page, 'Begin', 'title after reload', 10_000, 30_000);
+    // (a slow Enter is still Enter: under heavy load it may land after the 3 s — click Begin
+    // only while the title still shows it, never wait for a button Enter already pressed)
+    if (!enterWorks && !(await beginGone())) await clickButton(page, 'Begin', 'title after reload', 10_000, 30_000);
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000, message: 'after a reload Begin must go straight back into the world' }).toBe('world');
     const sv = await save(page);
     hard(!!sv?.voltooid[missionId], `after a reload mission "${missionId}" is no longer done`);

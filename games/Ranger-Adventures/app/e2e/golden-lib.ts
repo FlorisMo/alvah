@@ -324,6 +324,17 @@ export async function walkTo(page: Page, goal: P2, opts: { stopDist?: number; un
     for (const k of [...held]) if (!want.has(k)) { await page.keyboard.up(k); held.delete(k); }
     for (const k of want) if (!held.has(k)) { await page.keyboard.down(k); held.add(k); }
   };
+  /** Wait `ms` with the keys as they are, still checking `stopWhen` every ≈ 0.15 s: true
+   *  when it stopped the walk. (Run 7 land: the detour round a solid held its keys blind for
+   *  1.7 s, so a walk whose goal was reached in it walked on into the next beat — the
+   *  frisling's free path took the still-held ArrowUp as his walking on.) */
+  const waitOrStop = async (ms: number): Promise<boolean> => {
+    for (const end = Date.now() + ms; Date.now() < end;) {
+      if (stopWhen && await stopWhen()) return true;
+      await sleep(page, Math.max(0, Math.min(150, end - Date.now())));
+    }
+    return false;
+  };
   const st: WalkStats = { res: 'timeout', ms: 0, samples: 0, worstClearance: 0, notGrounded: 0, viewBlocked: 0, camAhead: 0, maxYawRate: 0, end: { x: 0, z: 0 } };
   const t0 = Date.now();
   let best = Infinity; let bestAt = Date.now(); let prev: Snap | null = null; let detour = 0;
@@ -362,9 +373,9 @@ export async function walkTo(page: Page, goal: P2, opts: { stopDist?: number; un
         if (++detour > 8) { st.res = 'stuck'; break; }
         if (++sideTries > 3) { side = -side; sideTries = 1; }
         await setKeys(new Set([side > 0 ? 'ArrowRight' : 'ArrowLeft', 'ArrowUp']));
-        await sleep(page, 700);
+        if (await waitOrStop(700)) { st.res = 'until'; break; }
         await setKeys(new Set(['ArrowUp']));
-        await sleep(page, 1_000);
+        if (await waitOrStop(1_000)) { st.res = 'until'; break; }
         bestAt = Date.now();
         continue;
       }

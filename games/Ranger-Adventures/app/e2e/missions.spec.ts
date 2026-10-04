@@ -939,7 +939,11 @@ test('frisling: a mistake at each of the five body moments is a gentle reaction 
       backs.push((async () => {
         // (after a run he first walks calmly back to where the tired piglet dropped flat: the
         // walk back is part of the moment, and the stretch begins again there)
-        const back = await expect.poll(async () => (await adv())?.line ?? '', { timeout: beat === 'pace:dragen' ? 35_000 : 20_000 }).toMatch(beat === 'pace:dragen' ? /^Hij is moe/ : want).then(() => true, () => false);
+        // (the free path's words are back for a second only — the player walks on at once —
+        // so its return is read from its count, never from catching the line: run 7 close)
+        const back = beat === 'go:pad'
+          ? await expect.poll(async () => (await adv())?.stats.pad_again ?? 0, { timeout: 20_000 }).toBeGreaterThanOrEqual(1).then(() => true, () => false)
+          : await expect.poll(async () => (await adv())?.line ?? '', { timeout: beat === 'pace:dragen' ? 35_000 : 20_000 }).toMatch(beat === 'pace:dragen' ? /^Hij is moe/ : want).then(() => true, () => false);
         log.soft(back, `${beat}: the moment comes back`);
         if (back) await log.shot(`${beat.replace(':', '-')}-again`);
       })());
