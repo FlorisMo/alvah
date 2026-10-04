@@ -424,8 +424,8 @@ test('the second hide (ek-day): from where he found it the first time, a short h
     }
   }
   assert.ok(n >= 12, `${n} second hides played`);
-  // (as often as not he watches it go from where he found it)
-  assert.ok(stepped <= n / 2, `${stepped} of ${n} stepped back first`);
+  // (mostly he watches it go from where he found it)
+  assert.ok(stepped <= n / 4, `${stepped} of ${n} stepped back first`);
 });
 
 test('hide-and-seek: right up at the bark on its side (where a child steering at its chatter ends up) he is by it; round the side he is not', () => {

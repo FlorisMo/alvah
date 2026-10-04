@@ -1310,17 +1310,19 @@ export const ALL_HIDE_TREES: readonly HomeTree[] = [...new Set([...HIDE_TREES, .
  * round behind him (kit `behind`: `back` m back, looking the way he faces); from there the
  * squirrel where it sits on the first pine (`sq`) and the second pine both stand in the
  * picture (`half` rad either side of its middle), neither behind a trunk, its way between
- * them over the ground never behind his own body (`body` rad either side of him), the
- * second pine in front of him and the first not far behind him nor near the lens, the lens clear of every trunk, and its run from the one to the other goes
+ * them over the ground at most a moment behind his body (`body` rad either side of him) or
+ * a trunk's foot (`hid` of five bits, never as it reaches the pine), the second pine in
+ * front of him and the first not far behind him nor near the lens, the lens clear of every trunk, and its run from the one to the other goes
  * across the picture or away from the lens (at most `toward` of it toward the lens). The
  * turn nearest his way to the second pine that does it (`ok`); else that way.
  */
-export const HIDE2_TURN = { back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, toward: 0.3, step: (2.5 * Math.PI) / 180, most: (85 * Math.PI) / 180, ahead: 0.4, behind: 0.8, lensD: 3.0, hid: 1 } as const;
+export const HIDE2_TURN = { back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, toward: 0.3, step: (2.5 * Math.PI) / 180, most: (85 * Math.PI) / 180, ahead: 0.4, behind: 0.8, lensD: 3.0, hid: 2 } as const;
 export function hide2Turn(me: Spot, sq: Spot, from: HomeTree, t2: HomeTree): { face: number; ok: boolean } {
   const want = headingTo(me, t2);
   const run = { x: t2.x - sq.x, z: t2.z - sq.z };
   const len = Math.hypot(run.x, run.z) || 1;
   const rOf = (t: HomeTree): number => barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, 1) + 0.3;
+  const footOf = (t: HomeTree): number => trunkOutline({ x: t.x, z: t.z, H: t.h, species: t.species }, 0.15) + 0.05;
   const fits = (h: number): boolean => {
     const f = { x: Math.sin(h), z: Math.cos(h) };
     const lens = { x: me.x - f.x * HIDE2_TURN.back, z: me.z - f.z * HIDE2_TURN.back };
@@ -1335,10 +1337,17 @@ export function hide2Turn(me: Spot, sq: Spot, from: HomeTree, t2: HomeTree): { f
     // (its way over the ground not behind his own body: off to his side, or nearer the lens
     // than he is — played 2026-10-04: facing the second pine square on, his back hid the
     // whole dash; up on the bark, where it sits and where it climbs, it shows over his head)
+    // (nor behind a trunk's foot — the pine it leaves too: played 2026-10-04, standing close
+    // to that pine he saw it go down the bark and the rest of its run hid behind the trunk):
+    // a moment of it may (`hid` of five bits, never the last two: he sees it reach the pine)
     let hid = 0;
     for (let k = 1; k <= 5; k++) {
       const q = { x: sq.x + (run.x * k) / 6, z: sq.z + (run.z * k) / 6 };
-      if (off(q) < HIDE2_TURN.body && dist(lens, q) > dist(lens, me) - 0.3) hid += 1;
+      if ((off(q) < HIDE2_TURN.body && dist(lens, q) > dist(lens, me) - 0.3)
+        || HOME_TREES.some((t) => { const r = footOf(t); return dist(t, q) > r && dist(lens, t) < dist(lens, q) && segDist(t, lens, q) < r; })) {
+        if (k >= 4) return false;
+        hid += 1;
+      }
     }
     if (hid > HIDE2_TURN.hid) return false;
     if ((run.x * f.x + run.z * f.z) / len < -HIDE2_TURN.toward) return false;
