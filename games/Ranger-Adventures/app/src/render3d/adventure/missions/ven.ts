@@ -47,8 +47,8 @@ import { VenHome, venBody, type Frog } from './ven.home';
 import { ListenCore, StillFor, chorusCalls, listensOf, ringSize } from './ven.listen';
 import {
   ADDER_NEAR, ADDER_WARN, APPROACH, BAYS, BAY_IDS, CARPET_A, CARPET_SEEN, CARPET_WET, CHORUS_KEYS, FROG_H, FROG_LEN, GO_AWAY, MISSION, VARIANT_KEY,
-  VEN_HOME, AFTER_FROG, adderAt, plopOf, adderHeather, adderView, between, carpetAt, frogOf, decoySlots, lastVenVariants, pointAt, project, route, singOf,
-  stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type VenLaid, type WayStep,
+  VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderView, between, carpetAt, frogOf, decoySlots, lastVenVariants, pointAt,
+  project, route, singOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type VenLaid, type WayStep,
 } from './ven.places';
 
 /** The keys that would take a step (the song asks him to keep still). */
@@ -87,10 +87,10 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Ven
   // laid on the cove's own slots
   const trial = buildZoekenTrial(mission.stappen[0].skin, store.knobs('zoeken'), play.fork('zoeken').rng);
   const bay = BAYS[laid.bay];
-  const slots = decoySlots(bay, trial.decoys.map((d) => ({ id: d.id, k: d.k })), play.fork('ven-slots').rng);
+  const slots = decoySlots(bay, laid.nook, trial.decoys.map((d) => ({ id: d.id, k: d.k })), play.fork('ven-slots').rng);
   const frog = frogOf(laid);
-  const sts = stationsOf(laid.bay);
-  const adder = laid.order.includes('adder-ven') ? adderAt(laid.bay, sts[laid.stations['adder-ven']], laid.adderShift, laid.adderTurn) : null;
+  const sts = stationsOf(laid.bay, laid.side);
+  const adder = laid.order.includes('adder-ven') ? adderAt(laid.bay, laid.side, sts[laid.stations['adder-ven']], laid.adderShift, laid.adderTurn) : null;
   const carpet = laid.order.includes('modder-ven') ? carpetAt(sts[laid.stations['modder-ven']]) : null;
   home.lay({ laid, frog, decoys: slots, glimpse: trial.glimpse, adder, carpet });
   // the frog sits hidden in its cove (put there at once: nobody sees it under the sedge)
@@ -125,7 +125,8 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   const frog = A.kikker;
   const id = laid.bay;
   const bay = BAYS[id];
-  const l = route(id);
+  const stand = bay.stands[laid.side];
+  const l = route(id, laid.side);
   const singer = A[CHORUS_KEYS[id]];
   const settings = store.get().settings;
   const zk = k.knobs('zoeken');
@@ -251,7 +252,7 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   if (!rust.next()) rust.done();
 
   /* 6 · at the cove: he stands still and listens; the frogs call from its water */
-  k.world.faceRanger(bay.stand.heading!);
+  k.world.faceRanger(stand.heading!);
   await listenStop();
   // (the calling frogs go under: the picture of the cove is the hidden frog's alone)
   await Promise.all(BAY_IDS.map((b) => A[CHORUS_KEYS[b]].dive(false, 0.8)));
@@ -277,7 +278,7 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   });
   try {
     await searchBeat(k, 0, {
-      view: bay.views.search, stand: bay.stand, cover: home.cover, target: frog, call: 'heikikker', lyingH: FROG_H, len: FROG_LEN,
+      view: bay.views.search[laid.side], stand, cover: home.cover, target: frog, call: 'heikikker', lyingH: FROG_H, len: FROG_LEN,
       glimpse: home.laid?.glimpse, fit: (eye, back, share) => home.fitGlimpse(eye, back, share),
       decoys: home.decoys.map((d) => ({ id: d.id, object: d.object, x: d.x, z: d.z, poke: d.poke })),
       lines: { zoek: c.zoek, mis: c.mis, hint: c.hint, gevonden: k.steps[0].skin.copy?.goed ?? c.zoek },
@@ -287,15 +288,30 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   /* 8 · the raaf: he sits still, so the birds don't see him */
   await k.fact(0);
 
-  /* 9 · he keeps still, and the frog sings for him; the other coves answer */
+  /* 9 · he keeps still, and the frog sings: three-quarters toward the lens from just over
+     the water, the boy behind him on the bank; then the other coves answer */
   k.beat = 'sing';
-  const at = { x: frog.x, z: frog.z };
-  const sing = singOf(bay, at);
+  const sat = frogOf(laid);
+  const sing = singOf(bay, sat);
+  // (a frog a step up the bank hops down to the water's edge first: in the search's picture
+  // still, a hop or two of at most ~0.65 m — it sings at the edge)
+  const edge = sing.at;
+  const hops = Math.ceil(dist(frog, edge) / 0.65 - 0.05);
+  if (hops > 0) {
+    await k.wait(0.3);
+    const from = { x: frog.x, z: frog.z };
+    for (let i = 1; i <= hops; i++) {
+      await k.guard(frog.hop({ x: from.x + ((edge.x - from.x) * i) / hops, z: from.z + ((edge.z - from.z) * i) / hops }, 0.42));
+      await k.wait(0.25);
+    }
+  }
   // (the lens looks back from over the water: one soft dip-cut, never a swing round him;
-  // the sedge on the water's side of him leans aside, so he sits in plain view)
-  home.openForSong(k.lensFor(sing.view).cam, { x: frog.x, z: frog.z, yaw: frog.yaw });
+  // the sedge on the water's side of him leans aside, so he sits in plain view; he turns
+  // calmly to sing toward the open water, his throat to the lens)
+  home.openForSong(k.lensFor(sing.view).cam, { x: frog.x, z: frog.z, yaw: sing.yaw });
+  const turnTo = { x: frog.x + Math.sin(sing.yaw), z: frog.z + Math.cos(sing.yaw), speed: 0 };
+  void frog.lookAt(() => turnTo, 60);
   await k.frame(sing.view, { dip: true });
-  void frog.lookAt(() => ({ ...k.ranger() }), 1.2);
   k.say(c.zingen);
   let movedAt = k.now;
   let told = -9;
@@ -309,32 +325,46 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   try {
     await k.wait(0.8);
     const t1 = k.now;
-    await k.until(() => k.now - movedAt >= SING_STILL_S && (!speaking() || k.now - t1 > READ_MAX_S));
+    try {
+      await k.until(() => k.now - movedAt >= SING_STILL_S && (!speaking() || k.now - t1 > READ_MAX_S));
+    } finally {
+      // (he sings now: a step no longer asks him to wait — the frogs' answer is next)
+      window.removeEventListener('keydown', onKey);
+    }
     // his throat swells, three soft calls
     for (let i = 0; i < 3; i++) {
       frog.sing(1);
       if (settings.geluid) Sound.callAt('heikikker', frog.x, frog.z, listenerOf(k.world.camera), 25, WOOG_S + 0.05);
       await k.wait(0.62);
     }
-    await k.wait(0.5);
-    // the other coves answer, one after the other (rings over there)
+    await k.wait(0.4);
+    // the answer: the lens draws calmly back over the water until the nearest answering
+    // cove is in the picture too; its frog comes up and calls (rings), then the far one
+    const [nearCove, farCove] = answerOrder(id);
+    const near = A[CHORUS_KEYS[nearCove]];
+    if (!near.group.visible || near.lift < -0.05) { near.group.visible = true; void near.dive(true, 0.7); }
+    await k.frame(answerView(bay, sat));
     k.say(c.terug);
-    for (const b of BAY_IDS.filter((x) => x !== id)) {
-      await k.wait(0.7);
-      chorus(2, A[CHORUS_KEYS[b]], 60);
-    }
+    await k.wait(0.3);
+    chorus(2, near, 60);
+    await k.wait(1.3);
+    chorus(2, A[CHORUS_KEYS[farCove]], 60);
+    await k.wait(0.6);
+    chorus(1, near, 60);
     await k.wait(1.2);
+    k.stats.answered = 2;
   } finally {
     window.removeEventListener('keydown', onKey);
     unhint();
   }
 
-  /* 10 · the frog plops back into the ven; one frog climbs out onto bay B's moss */
-  const into = plopOf(bay, frog);
+  /* 10 · the frog plops back into the ven (seen in the answer's picture); one frog climbs
+     out onto bay B's moss */
+  const into = plopOf(bay, sat);
   const keeper = A[CHORUS_KEYS.B];
   await k.reunion(async () => {
     await k.wait(0.6);
-    await frog.leap(into, 0.65);
+    await frog.leap(into, 0.7);
     if (settings.geluid) Sound.plop();
     // (the other coves' frogs go under; one of the ven's frogs comes up and climbs onto
     // bay B's moss cushion, where it lives after)
@@ -365,7 +395,7 @@ async function adderMoment(k: AdventureKit, rust: ChoiceRun, home: VenHome, laid
   f: Follow & { callFrom(p: Spot, n?: number): void; curS(): number }): Promise<void> {
   const c = k.copy;
   const settings = store.get().settings;
-  const l = route(laid.bay);
+  const l = route(laid.bay, laid.side);
   await f.walkTo('adder', step.s, { r: 0.9 });
   f.listen.pause();
   k.beat = 'adder';
@@ -396,7 +426,7 @@ async function adderMoment(k: AdventureKit, rust: ChoiceRun, home: VenHome, laid
     },
     // too near: she rears and hisses softly (never strikes); he takes two calm steps back
     wrong: async () => {
-      home.adderLift(1);
+      home.adderLift(1, me());
       if (settings.geluid) Sound.callAt('adder', a.x, a.z, listenerOf(k.world.camera), 20);
       const m = me();
       const away = Math.max(dist(m, a), 0.1);
@@ -434,9 +464,9 @@ async function mossMoment(k: AdventureKit, rust: ChoiceRun, home: VenHome, laid:
   f: Follow & { tickChorus(dt: number): void; setS(s: number): void }): Promise<void> {
   const c = k.copy;
   const settings = store.get().settings;
-  const l = route(laid.bay);
+  const l = route(laid.bay, laid.side);
   const enc = rust.current!;
-  const st = stationsOf(laid.bay)[step.station];
+  const st = stationsOf(laid.bay, laid.side)[step.station];
   const nearRim = st.s - CARPET_A, farRim = st.s + CARPET_A;
   // (up to where it can be seen: the follow, the chorus calling)
   await f.walkTo('kikkers', step.s);

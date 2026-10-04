@@ -13,20 +13,21 @@
  * play's cove two STATIONS on the path hold its calm moments (an adder basking on the warm
  * sand, a carpet of soft wet moss across the path and down to the water); the dry path
  * (the flip) comes right after one of them. Each cove has its own two stations: a play's
- * cove is never one of his last two plays', so three plays in a row meet the adder and
- * the moss at three other places.
+ * cove is never the last play's, so two plays in a row meet the adder and the moss at
+ * other places.
  *
  * Angles: θ (degrees) round the ven's centre (46, -19), x = cx + r cos θ, z = cz + r sin θ;
  * θ 90 is the middle of the north bank, larger θ toward the bird hide (west), smaller
  * toward the east. He walks the path from the hide eastward (θ falling).
  *
  * Every play draws from its forks (decision 1; `venLayout`): the cove the frogs call from,
- * where in it the frog sits (two spots a cove, never the middle of the picture), the order
- * of the three moments (the dagnacht trial's own seeded order: the same as the 2D floor's)
- * and so which station holds the adder and which the moss, the adder's exact spot on the
- * path and her turn. None of it changes a knob: every cove is the same size, seen from the
- * same distance and angle, every frog spot fitted to the level's glimpse; difficulty is the
- * level's.
+ * which of its six nooks the frog sits in (each cove its own, spread over the search's
+ * picture, never its middle; never where the frog sat in the last play's picture) and so
+ * the side he searches it from, the order of the three moments (the dagnacht trial's own
+ * seeded order: the same as the 2D floor's) and so which station holds the adder and which
+ * the moss, the adder's exact spot on the path and her turn. None of it changes a knob:
+ * every cove is the same size, seen from the same distance and angle, every nook fitted to
+ * the level's glimpse; difficulty is the level's.
  */
 
 import { anchorInBiome, heightAt, VEN_CENTER, WATER_LEVEL } from '../../Biomes.ts';
@@ -158,83 +159,158 @@ export const APPROACH: readonly Spot[] = [{ x: 22.2, z: -14.0 }];
 
 export type BayId = 'A' | 'B' | 'C';
 export const BAY_IDS: readonly BayId[] = ['A', 'B', 'C'];
+/** The side of a cove he searches it from (+1: he stands at its right, in the lower right
+ *  of the search's picture; −1: the left). */
+export type Side = 1 | -1;
+export const SIDES: readonly Side[] = [1, -1];
 
 /** A framed view as `k.frame` takes it. */
 export interface ViewSpec {
   at: Spot; heading: number; halfW: number; halfD: number; tall: number; pitchDeg: number;
   insetTop: number; insetBottom: number; include?: readonly { x: number; z: number; h: number; r?: number }[];
   seconds?: number;
+  /** (kit FrameSpec, run 7 additive) how near the lens may come, how low over the ground */
+  near?: number; lensUp?: number;
 }
 
-/** The search lens over a cove: the same in every cove (decision 1), looking down on the
- *  cove from the bank (its water line across the picture). He stands at the cove's side
- *  (`side` m along the bank, `back` m up from its middle), in a lower corner of the
- *  picture, never between the lens and a frog; the lens close enough that a frog reads at
- *  ~55 px (≈ 0.23 m seen from ~3.8 m). */
-export const COVE_LENS = { halfW: 0.95, halfD: 0.55, tall: 0.4, pitchDeg: 56, insetTop: 112, insetBottom: 28, r: 0.22, side: 1.4, back: 0.7 } as const;
+/** The search lens over a cove: looking down on it from the bank (its water line across
+ *  the picture), from over his shoulder — he stands at the cove's side (`side` m along the
+ *  bank, `back` m up from its middle), in a lower corner of the picture, never between the
+ *  lens and a frog — turned `turn` (rad) across the cove from his side, so the water line
+ *  runs aslant. The lens is the same at every cove and either side (decision 1: the frog
+ *  reads at 52-68 px wherever it sits); WHICH side is the nook's. */
+export const COVE_LENS = { halfW: 0.95, halfD: 0.55, tall: 0.4, pitchDeg: 56, insetTop: 112, insetBottom: 28, r: 0.22, side: 1.4, back: 0.7, turn: 0.3 } as const;
 
-/** The frog's spots in a cove's frame (u across, v toward the water from the cove's middle):
- *  two a cove, at the water line among the sedge, never in the middle of the picture. */
-export const FROG_SPOTS: readonly { u: number; v: number }[] = [{ u: -0.62, v: 0.3 }, { u: 0.63, v: 0.25 }];
+/** A spot in a cove's frame: `u` across (+: his right as he faces the water), `v` toward
+ *  the water from the cove's middle. */
+export interface UV { u: number; v: number }
 
-/** The look-alikes' slots in a cove (its frame): frog-sized moss clods on the wet moss at
- *  the water line and among the sedge, a heath blue on a cotton-grass head, a stonechat on
- *  a dry stalk. A play lays the zoeken trial's own set of them (`decoySlots`). */
-export const CLOD_SLOTS: readonly { u: number; v: number }[] = [
-  { u: -0.95, v: 0.12 }, { u: -0.2, v: 0.36 }, { u: 0.22, v: 0.2 }, { u: 0.98, v: 0.42 },
-  { u: -0.6, v: -0.12 }, { u: 0.62, v: -0.16 }, { u: -0.25, v: -0.3 }, { u: 0.25, v: -0.32 },
-];
-export const BUTTERFLY_SLOTS: readonly { u: number; v: number }[] = [{ u: 0.0, v: -0.5 }, { u: 0.55, v: -0.5 }];
-export const BIRD_SLOTS: readonly { u: number; v: number }[] = [{ u: -0.85, v: -0.42 }, { u: 0.88, v: -0.45 }];
+/**
+ * A nook the frog may sit in: at the water's edge or a step up among the sedge and the
+ * veenmos (cove frame), the side he searches it from (so the picture's framing changes with
+ * the nook: the boy in the lower left or the lower right), how the frog sits there (`turn`
+ * rad off the lens's line of sight to it: a three-quarter back view, its brown back and a
+ * flank, the same at every nook), and where it lands in the search's 1280×800 picture
+ * (`px`: its middle, pinned by
+ * ven.places.test.ts against the very lens the kit fits — a play's frog keeps well away
+ * from where it sat in the last play's picture, `venLayout`).
+ */
+export interface Nook extends UV { side: Side; turn: number; px: readonly [number, number] }
+
+/** What lies in one cove: its own nooks (six: three searched from either side, spread over
+ *  the picture), its own look-alike slots (frog-sized moss clods, a heath blue on a
+ *  cotton-grass head, a stonechat on a dry stalk). A nook the frog does not use this play
+ *  may hold a clod too: every nook has the same sedge round it, and an empty one is never
+ *  a giveaway. */
+export interface CoveSpec { nooks: readonly Nook[]; clods: readonly UV[]; butterflies: readonly UV[]; birds: readonly UV[] }
+
+/** The three coves' own nooks and slots (chosen over the search's picture: the eighteen
+ *  nooks fall at eighteen places over it, never its middle, never at the boy, each cove's
+ *  six spread so that whatever the plays before, the next one has a nook far from them). */
+export const COVES: Readonly<Record<BayId, CoveSpec>> = {
+  A: {
+    nooks: [
+      { u: -0.55, v: 0.65, side: 1, turn: -0.9, px: [571, 301] }, { u: 0.35, v: 0.65, side: 1, turn: -0.9, px: [743, 345] },
+      { u: -1.3, v: -0.15, side: 1, turn: -0.9, px: [353, 366] }, { u: 1.4, v: -0.05, side: -1, turn: -0.9, px: [914, 359] },
+      { u: -0.7, v: -0.35, side: -1, turn: 0.9, px: [510, 515] }, { u: 0.65, v: -0.25, side: -1, turn: -0.9, px: [794, 424] },
+    ],
+    clods: [{ u: -0.1, v: 0.7 }, { u: 0.6, v: 0.3 }, { u: 0.1, v: 0.2 }, { u: -1.3, v: 0.7 }, { u: -0.7, v: 0.1 }],
+    butterflies: [{ u: 0.2, v: -0.5 }, { u: -0.3, v: -0.1 }],
+    birds: [{ u: -1.1, v: 0.3 }, { u: 1.3, v: 0.7 }],
+  },
+  B: {
+    nooks: [
+      { u: -1.15, v: -0.35, side: 1, turn: -0.9, px: [359, 406] }, { u: 0.5, v: 0.55, side: 1, turn: 0.9, px: [769, 366] },
+      { u: -1.3, v: 0.65, side: 1, turn: 0.9, px: [436, 262] }, { u: 1.4, v: -0.45, side: -1, turn: 0.9, px: [959, 418] },
+      { u: 0.65, v: -0.45, side: -1, turn: 0.9, px: [813, 457] }, { u: -0.4, v: 0.65, side: -1, turn: 0.9, px: [532, 346] },
+    ],
+    clods: [{ u: 0.1, v: 0.7 }, { u: 0.4, v: 0.1 }, { u: -0.9, v: 0.5 }, { u: -0.2, v: 0 }, { u: -0.5, v: -0.5 }],
+    butterflies: [{ u: -0.8, v: -0.1 }, { u: 0.1, v: -0.5 }],
+    birds: [{ u: 1.3, v: 0.7 }, { u: 1.0, v: -0.2 }],
+  },
+  C: {
+    nooks: [
+      { u: -0.7, v: 0.55, side: 1, turn: -0.9, px: [536, 303] }, { u: 0.5, v: -0.45, side: 1, turn: 0.9, px: [723, 536] },
+      { u: -1.45, v: -0.45, side: 1, turn: 0.9, px: [284, 405] }, { u: -0.7, v: -0.25, side: -1, turn: -0.9, px: [506, 498] },
+      { u: 1.25, v: 0.55, side: -1, turn: -0.9, px: [832, 292] }, { u: 0.5, v: 0.55, side: -1, turn: -0.9, px: [703, 321] },
+    ],
+    clods: [{ u: -1.2, v: 0.3 }, { u: 0.6, v: 0.1 }, { u: -0.4, v: 0.1 }, { u: 0.1, v: 0.7 }, { u: -0.3, v: 0.7 }],
+    butterflies: [{ u: 1.0, v: -0.3 }, { u: 0.1, v: -0.1 }],
+    birds: [{ u: -0.1, v: 0.4 }, { u: -0.3, v: -0.5 }],
+  },
+};
+
+/** How far (px) a play's frog sits at least from where it sat in the last play's search
+ *  picture (and, while enough nooks are left, the play before that): a child who
+ *  remembers the place finds an empty one, and searches. */
+export const NOOK_GAP_PX = 160;
+/** From the plays before the last one the frog keeps as far as it can, up to this (px):
+ *  beyond it every nook is far enough and the pick is the seed's. */
+const SPREAD_ENOUGH_PX = 240;
 
 /** Each cove's moss cushion: a round of bright veenmos in its middle, just up from the
  *  water (frame-local u, v). After the mission a frog sits on bay B's, calling. */
 export const CUSHION = { u: 0.04, v: -0.06, r: 0.3 } as const;
+
+/** A frog's spot in a cove (world), the way it sits there and the nook it is. */
+export type FrogSpot = Spot & { yaw: number; side: Side; nook: number };
 
 export interface Bay {
   id: BayId;
   th: number;
   /** the cove's frame: its middle just up from the water line, `v` toward the water */
   frame: Frame;
-  /** the frog's two spots (world), each with the way it sits (a three-quarter back view) */
-  frogs: readonly (Spot & { yaw: number })[];
-  /** where he stands to search it: up the bank, to one side */
-  stand: Place;
-  /** the path point above the stand (he leaves the path there) */
-  off: Spot;
+  /** the frog's nooks (world), each with the way it sits and the side he searches from */
+  nooks: readonly FrogSpot[];
+  /** where he stands to search it from either side: up the bank, to that side */
+  stands: Readonly<Record<Side, Place>>;
+  /** the path point above each stand (he leaves the path there) */
+  offs: Readonly<Record<Side, Spot>>;
   /** where the cove's calling frog floats, out on the water to one side */
   chorus: Spot;
-  /** the side of the picture he stands in (+1: lower right) */
-  side: 1 | -1;
-  views: { search: ViewSpec };
+  views: { search: Readonly<Record<Side, ViewSpec>> };
+  /** the cove's own look-alike slots (world) */
+  slots: { clods: readonly Spot[]; butterflies: readonly Spot[]; birds: readonly Spot[] };
 }
 
 /** The coves' angles: A nearest the hide, C furthest east. */
-const BAY_TH: Readonly<Record<BayId, number>> = { A: 90, B: 68, C: 46 };
+const BAY_TH: Readonly<Record<BayId, number>> = { A: 84, B: 68, C: 46 };
 /** Where each cove's calling frog floats (θ): beside its cove, never in another's. */
-const CHORUS_TH: Readonly<Record<BayId, number>> = { A: 101, B: 78, C: 36 };
-/** The side of the picture he stands in (+1: lower right). */
-const BAY_SIDE: Readonly<Record<BayId, 1 | -1>> = { A: 1, B: -1, C: -1 };
+const CHORUS_TH: Readonly<Record<BayId, number>> = { A: 100, B: 59, C: 36 };
 
 function bay(id: BayId): Bay {
-  const th = BAY_TH[id], side = BAY_SIDE[id];
+  const th = BAY_TH[id], spec = COVES[id];
   const rw = shoreR(th, 0.1);
   const mid = polar(th, rw + 0.42);
   const frame: Frame = { ...mid, heading: headingTo(mid, C) };
-  const frogs = FROG_SPOTS.map((f, i) => ({ ...atLocal(frame, f.u, f.v), yaw: frame.heading + (i ? -0.75 : 0.75) }));
-  const stand0 = atLocal(frame, side * COVE_LENS.side, -COVE_LENS.back);
-  const stand: Place = { ...stand0, r: 0.7, heading: headingTo(stand0, atLocal(frame, -side * 0.3, 0.25)) };
-  const off = pointAt(PATH, project(PATH, stand).s);
+  // (the frog sits turned `turn` off the search lens's line of sight to him: the same
+  // three-quarter back view at every nook, whichever side the lens looks from)
+  const lensNear = (side: Side): Spot => atLocal({ ...atLocal(frame, 0, 0.06), heading: frame.heading + side * COVE_LENS.turn }, 0, -1.9);
+  const nooks = spec.nooks.map((n, i): FrogSpot => {
+    const p = atLocal(frame, n.u, n.v);
+    return { ...p, yaw: headingTo(lensNear(n.side), p) + n.turn, side: n.side, nook: i };
+  });
+  const standOf = (side: Side): Place => {
+    const p = atLocal(frame, side * COVE_LENS.side, -COVE_LENS.back);
+    return { ...p, r: 0.7, heading: headingTo(p, atLocal(frame, -side * 0.3, 0.25)) };
+  };
+  const stands = { 1: standOf(1), [-1]: standOf(-1) } as Record<Side, Place>;
+  const offs = { 1: pointAt(PATH, project(PATH, stands[1]).s), [-1]: pointAt(PATH, project(PATH, stands[-1]).s) } as Record<Side, Spot>;
   // (on the water ~2.5 m along the bank from the cove, where it is a hand deep: floating)
   const cth = CHORUS_TH[id];
   const chorus = polar(cth, shoreR(cth, -0.07));
-  const search: ViewSpec = {
-    at: atLocal(frame, 0, 0.06), heading: frame.heading,
+  const searchOf = (side: Side): ViewSpec => ({
+    at: atLocal(frame, 0, 0.06), heading: frame.heading + side * COVE_LENS.turn,
     halfW: COVE_LENS.halfW, halfD: COVE_LENS.halfD, tall: COVE_LENS.tall, pitchDeg: COVE_LENS.pitchDeg,
     insetTop: COVE_LENS.insetTop, insetBottom: COVE_LENS.insetBottom,
-    include: [{ x: stand.x, z: stand.z, h: RANGER_STAND_HEIGHT, r: COVE_LENS.r }],
+    include: [{ x: stands[side].x, z: stands[side].z, h: RANGER_STAND_HEIGHT, r: COVE_LENS.r }],
+  });
+  const world = (q: readonly UV[]): Spot[] => q.map((x) => atLocal(frame, x.u, x.v));
+  return {
+    id, th, frame, nooks, stands, offs, chorus,
+    views: { search: { 1: searchOf(1), [-1]: searchOf(-1) } as Record<Side, ViewSpec> },
+    slots: { clods: world(spec.clods), butterflies: world(spec.butterflies), birds: world(spec.birds) },
   };
-  return { id, th, frame, frogs, stand, off, chorus, side, views: { search } };
 }
 
 export const BAYS: Readonly<Record<BayId, Bay>> = { A: bay('A'), B: bay('B'), C: bay('C') };
@@ -242,37 +318,103 @@ export const BAYS: Readonly<Record<BayId, Bay>> = { A: bay('A'), B: bay('B'), C:
 /** A spot in a cove's frame (world). */
 export function inCove(b: Bay, u: number, v: number): Spot { return atLocal(b.frame, u, v); }
 
-/** The song (after the find): he stays where he searched; the lens turns round to look
- *  back from over the water — the frog big on the moss in front, singing toward him, the
- *  boy behind it on the bank (one soft dip-cut: a turn that big is never a swing). */
-export function singOf(b: Bay, frog: Spot): { stand: Place; view: ViewSpec } {
+/** How far (m) the song's lens stands out over the water from the frog (the fit may stand
+ *  it a little further, so the boy is whole): near enough that the frog reads ~90-110 px. */
+export const SING_NEAR = 1.4;
+
+/** Where the found frog sings: at the water's edge — a frog sitting a step up the bank
+ *  hops down to it first (a hop or two), one at the edge sings where he sits. */
+export function edgeOf(b: Bay, frog: FrogSpot): FrogSpot {
   const fl = toLocal(b.frame, frog);
-  const view: ViewSpec = {
-    at: atLocal(b.frame, fl.u, fl.v + 0.0), heading: b.frame.heading + Math.PI, halfW: 0.6, halfD: 0.4, tall: 0.25, pitchDeg: 26,
-    insetTop: 120, insetBottom: 60, seconds: 1.6,
-    include: [{ x: b.stand.x, z: b.stand.z, h: RANGER_STAND_HEIGHT, r: 0.1 }],
-  };
-  return { stand: b.stand, view };
+  if (fl.v >= 0.45) return frog;
+  return { ...atLocal(b.frame, fl.u - frog.side * 0.15, 0.72), yaw: frog.yaw, side: frog.side, nook: frog.nook };
 }
 
-/** Where the frog plops into the ven: along the water's edge and out into it, away from
- *  the boy (sideways in the song's picture, never toward the lens). */
-export function plopOf(b: Bay, frog: Spot): Spot {
-  const fl = toLocal(b.frame, frog);
-  return atLocal(b.frame, fl.u - b.side * 0.9, fl.v + 1.25);
+/**
+ * The song (after the find): he stays where he searched; the frog sings at the water's edge
+ * (`edgeOf`); the lens looks back from just over the water — the frog big in front,
+ * singing three-quarters toward it (his throat on its side), the boy behind him on the
+ * bank, whole and to one side (one soft dip-cut: a turn that big is never a swing). The
+ * heading is the bank's straight back from the water, turned the least that sets the boy
+ * 16-28° off the frog (as the lens sees them), with the lens over the water. `yaw`: the way
+ * the frog faces while he sings (his nose turned 0.6 rad from the lens, away from the boy:
+ * he looks into the open picture).
+ */
+export function singOf(b: Bay, sat: FrogSpot): { stand: Place; view: ViewSpec; yaw: number; at: FrogSpot } {
+  const frog = edgeOf(b, sat);
+  const stand = b.stands[frog.side];
+  const out = b.frame.heading + Math.PI;
+  let heading = out, best = -Infinity, boySide = 1;
+  for (let k = 0; k <= 20; k++) {
+    const dl = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.1;
+    const h = out + dl;
+    const fx = Math.sin(h), fz = Math.cos(h);
+    const lens = { x: frog.x - fx * 1.8, z: frog.z - fz * 1.8 };
+    const bx = stand.x - lens.x, bz = stand.z - lens.z;
+    const ang = Math.atan2(fx * bz - fz * bx, fx * bx + fz * bz) / RAD;
+    // (over the water, the boy 16-28° to one side as the lens sees him, the least turn)
+    const score = (above(lens) < -0.05 ? 10 : above(lens) < 0.05 ? 4 : 0) + (Math.abs(ang) >= 16 && Math.abs(ang) <= 28 ? 6 : -Math.abs(Math.abs(ang) - 22) / 10) - Math.abs(dl);
+    if (score > best) { best = score; heading = h; boySide = ang >= 0 ? 1 : -1; }
+  }
+  const view: ViewSpec = {
+    at: { x: frog.x, z: frog.z }, heading, halfW: 0.3, halfD: 0.2, tall: 0.15, pitchDeg: 8,
+    insetTop: 120, insetBottom: 40, seconds: 1.6, near: SING_NEAR, lensUp: 0.3,
+    include: [{ x: stand.x, z: stand.z, h: RANGER_STAND_HEIGHT, r: 0.16 }],
+  };
+  // (toward the lens is heading + π; his nose turns away from the boy's side of the picture)
+  const yaw = heading + Math.PI + boySide * 0.6;
+  return { stand, view, yaw, at: frog };
+}
+
+/** The other coves answer him: the nearest first (its frog comes up and calls, rings
+ *  round it), then the far one. */
+export function answerOrder(id: BayId): BayId[] {
+  const at = (x: BayId): Spot => BAYS[x].chorus;
+  return BAY_IDS.filter((x) => x !== id).sort((p, q) => dist(at(p), BAYS[id].frame) - dist(at(q), BAYS[id].frame));
+}
+
+/**
+ * The answer: once he has sung, the lens draws calmly back over the water until the
+ * nearest answering cove's water is in the picture with him — the singing frog at the
+ * water's edge, the boy on the bank behind, the rings where the other frog answers. One
+ * eased pull-back; the plop that follows is seen in it too.
+ */
+export function answerView(b: Bay, sat: FrogSpot): ViewSpec {
+  const frog = edgeOf(b, sat);
+  const other = BAYS[answerOrder(b.id)[0]].chorus;
+  const stand = b.stands[frog.side];
+  const mid = { x: (frog.x + other.x) / 2, z: (frog.z + other.z) / 2 };
+  const half = dist(frog, other) / 2;
+  return {
+    at: mid, heading: headingTo(C, mid), halfW: half + 0.9, halfD: 0.9, tall: 0.3, pitchDeg: 24,
+    insetTop: 120, insetBottom: 40, seconds: 2.2,
+    include: [{ x: stand.x, z: stand.z, h: RANGER_STAND_HEIGHT, r: 0.2 }, { x: frog.x, z: frog.z, h: 0.15 }],
+  };
+}
+
+/** Where the frog plops into the ven from where he sang (`edgeOf`): out into the water
+ *  and along the edge, away from the boy (sideways in the pictures, never toward a lens). */
+export function plopOf(b: Bay, sat: FrogSpot): Spot {
+  const fl = toLocal(b.frame, edgeOf(b, sat));
+  // (out to where the water is a few centimetres deep: the bank's slope is each cove's own)
+  let v = Math.max(1.1, fl.v + 0.5);
+  while (v < 3 && above(atLocal(b.frame, fl.u - sat.side * 0.6, v)) > -0.03) v += 0.05;
+  return atLocal(b.frame, fl.u - sat.side * 0.6, v);
 }
 
 /* ---------------------------------------------------------- the route ---- */
 
 /** His whole way to a cove (golden's): the marker, up past the hide, along the path to
- *  above the cove, down the bank to where he searches. */
-export function routeOf(b: Bay): Line {
-  const end = project(PATH, b.off).s;
-  return measure([MARKER, ...APPROACH, ...PATH.pts.filter((_, i) => PATH.acc[i] < end - 0.3), b.off, { x: b.stand.x, z: b.stand.z }]);
+ *  above the side of the cove he searches it from, down the bank to where he stands. */
+export function routeOf(b: Bay, side: Side): Line {
+  const off = b.offs[side], stand = b.stands[side];
+  const end = project(PATH, off).s;
+  return measure([MARKER, ...APPROACH, ...PATH.pts.filter((_, i) => PATH.acc[i] < end - 0.3), off, { x: stand.x, z: stand.z }]);
 }
-const ROUTES: Readonly<Record<BayId, Line>> = { A: routeOf(BAYS.A), B: routeOf(BAYS.B), C: routeOf(BAYS.C) };
-/** A cove's route (made once). */
-export function route(id: BayId): Line { return ROUTES[id]; }
+const ROUTES = new Map<string, Line>();
+for (const id of BAY_IDS) for (const side of SIDES) ROUTES.set(`${id}${side}`, routeOf(BAYS[id], side));
+/** A cove's route to the side he searches it from (made once). */
+export function route(id: BayId, side: Side): Line { return ROUTES.get(`${id}${side}`)!; }
 
 /* -------------------------------------------------------- the stations ---- */
 
@@ -293,9 +435,9 @@ export interface Station {
   at: Spot;
   s: number;
 }
-/** A cove's two stations. */
-export function stationsOf(id: BayId): readonly [Station, Station] {
-  const l = route(id);
+/** A cove's two stations (`s` along his way to the side he searches it from). */
+export function stationsOf(id: BayId, side: Side): readonly [Station, Station] {
+  const l = route(id, side);
   return STATION_TH[id].map((th, i) => {
     const at = polar(th, pathR(th));
     return { i: i as StationIndex, th, at, s: project(l, at).s };
@@ -313,14 +455,14 @@ export const ADDER_WARN = 3.3;
 
 /** The adder at a station: on the path, coiled, turned `turn` off its line; `s` along the
  *  cove's route. */
-export function adderAt(id: BayId, st: Station, shift: number, turn: number): Spot & { yaw: number; s: number } {
-  const l = route(id);
+export function adderAt(id: BayId, side: Side, st: Station, shift: number, turn: number): Spot & { yaw: number; s: number } {
+  const l = route(id, side);
   const s = st.s + shift;
   return { ...pointAt(l, s), yaw: headingAt(l, s) + Math.PI / 2 + turn, s };
 }
 /** Where his walk up to her ends (`ADDER_BEFORE` m before her on his way). */
-export function adderApproach(id: BayId, adderS: number): Place {
-  const l = route(id);
+export function adderApproach(id: BayId, side: Side, adderS: number): Place {
+  const l = route(id, side);
   const s = adderS - ADDER_BEFORE;
   return { ...pointAt(l, s), r: 0.9, heading: headingAt(l, s) };
 }
@@ -381,8 +523,8 @@ export function carpetRound(c: Carpet): Spot[] {
   return [polar(c.th + dth, r0 + 1.1), polar(c.th + dth * 0.45, r0 + CARPET_TOP + 1.1), polar(c.th - dth * 0.45, r0 + CARPET_TOP + 1.1), polar(c.th - dth, r0 + 1.1)];
 }
 /** Where his walk past the carpet ends (beyond it on his way). */
-export function carpetPast(id: BayId, st: Station): Place {
-  const l = route(id);
+export function carpetPast(id: BayId, side: Side, st: Station): Place {
+  const l = route(id, side);
   const s = st.s + CARPET_A + CARPET_PAST;
   return { ...pointAt(l, s), r: 0.9, heading: headingAt(l, s) };
 }
@@ -425,23 +567,23 @@ export function spanOf(st: WayStep): readonly [number, number] {
  * listening stop comes on top: a fresh ranger, `trailLegs` 2, stops twice). `s` is metres
  * along `route(bay)`.
  */
-export function wayOf(laid: Pick<VenLaid, 'bay' | 'order' | 'stations' | 'adderShift' | 'adderTurn'>, listens: number): WayStep[] {
-  const id = laid.bay;
-  const l = route(id);
-  const sts = stationsOf(id);
+export function wayOf(laid: Pick<VenLaid, 'bay' | 'side' | 'order' | 'stations' | 'adderShift' | 'adderTurn'>, listens: number): WayStep[] {
+  const id = laid.bay, side = laid.side;
+  const l = route(id, side);
+  const sts = stationsOf(id, side);
   const steps: WayStep[] = [];
   let lastEnd = 0;
   for (const enc of laid.order) {
     if (enc === 'adder-ven') {
       const st = sts[laid.stations['adder-ven']];
-      const adder = adderAt(id, st, laid.adderShift, laid.adderTurn);
-      const approach = adderApproach(id, adder.s);
+      const adder = adderAt(id, side, st, laid.adderShift, laid.adderTurn);
+      const approach = adderApproach(id, side, adder.s);
       steps.push({ kind: 'adder', s: adder.s - ADDER_BEFORE, station: st.i, adder, approach });
       lastEnd = adder.s - ADDER_BEFORE;
     } else if (enc === 'modder-ven') {
       const st = sts[laid.stations['modder-ven']];
       const carpet = carpetAt(st);
-      const past = carpetPast(id, st);
+      const past = carpetPast(id, side, st);
       steps.push({ kind: 'modder', s: st.s - CARPET_A - CARPET_SEEN, station: st.i, carpet, past, round: carpetRound(carpet) });
       lastEnd = st.s + CARPET_A + CARPET_PAST;
     } else if (enc === 'pad-ven') {
@@ -454,7 +596,7 @@ export function wayOf(laid: Pick<VenLaid, 'bay' | 'order' | 'stations' | 'adderS
     }
   }
   const busy = steps.map(spanOf);
-  const sOff = project(l, BAYS[id].off).s;
+  const sOff = project(l, BAYS[id].offs[side]).s;
   for (const s of listenStops(Math.max(0, Math.round(listens)), 0, sOff, busy)) steps.push({ kind: 'listen', s, at: pointAt(l, s) });
   steps.push({ kind: 'bay', s: l.length });
   // (in order along the way; the dry path straight after the moment it follows)
@@ -485,20 +627,22 @@ export function listenStops(n: number, from: number, to: number, busy: readonly 
 
 /* ------------------------------------------------------------- the cover ---- */
 
-/** The sedge tussocks close round every frog spot (u, v off the spot, size): every spot gets
- *  the same ring, so the cover never marks the real one. */
+/** The sedge tussocks close round every nook (u, v off it, size): every nook gets the same
+ *  ring (the frog's, an empty one, one with a moss clod in it), so the cover never marks
+ *  the real one. */
 const RING: readonly (readonly [number, number, number])[] = [[-0.28, -0.1, 0.8], [0.3, -0.07, 0.84], [0.04, -0.33, 0.88], [-0.22, 0.24, 0.72], [0.25, 0.22, 0.74], [-0.12, -0.24, 0.66], [0.17, -0.22, 0.68]];
 
 /**
  * A cove's sedge (the CoverField's clumps: 'grass' tussocks), the same way for the home
- * and the tests: a ring round each frog spot, and a scatter over the cove that keeps the
- * look-alikes' slots, the moss cushion and where he stands open. Deterministic.
+ * and the tests: a ring round each of its nooks, and a scatter over the cove that keeps the
+ * look-alikes' slots, the moss cushion and where he stands (either side) open.
+ * Deterministic.
  */
 export function coveClumps(b: Bay): Clump[] {
   const rnd = stream(101 + BAY_IDS.indexOf(b.id) * 17);
   const out: Clump[] = [];
-  const frogs = FROG_SPOTS.map((f) => atLocal(b.frame, f.u, f.v));
-  const slots = [...CLOD_SLOTS, ...BUTTERFLY_SLOTS, ...BIRD_SLOTS].map((q) => atLocal(b.frame, q.u, q.v));
+  const frogs: readonly Spot[] = b.nooks;
+  const slots = [...b.slots.clods, ...b.slots.butterflies, ...b.slots.birds];
   const cushion = atLocal(b.frame, CUSHION.u, CUSHION.v);
   for (const f of frogs) {
     const fl = toLocal(b.frame, f);
@@ -514,7 +658,7 @@ export function coveClumps(b: Bay): Clump[] {
       if (frogs.some((f) => dist(p, f) < 0.4)) continue;
       if (slots.some((s) => dist(p, s) < 0.26)) continue;
       if (dist(p, cushion) < CUSHION.r + 0.1) continue; // (the moss cushion lies open)
-      if (dist(p, b.stand) < 1.0) continue;
+      if (SIDES.some((sd) => dist(p, b.stands[sd]) < 1.0)) continue;
       if (above(p) < -0.04) continue; // (out on open water nothing grows this thick)
       out.push({ ...p, kind: 'grass', size: 0.62 + rnd() * 0.3 });
     }
@@ -527,8 +671,9 @@ export function coveClumps(b: Bay): Clump[] {
 /** What this play lays out (`venLayout`). */
 export interface VenLaid {
   bay: BayId;
-  /** which of the cove's two frog spots */
-  spot: 0 | 1;
+  /** which of the cove's nooks the frog sits in, and the side he searches it from */
+  nook: number;
+  side: Side;
   /** the three moments' encounter ids in this play's order (the trial's) */
   order: readonly string[];
   /** the station each danger is met at */
@@ -536,7 +681,8 @@ export interface VenLaid {
   /** the adder's spot along the path from her station (m) and her turn off its line (rad) */
   adderShift: number;
   adderTurn: number;
-  /** compact, logged with every beat (`B1-am+0.6`) */
+  /** compact, logged with every beat (`B4-amp+0.6`: cove, nook, the moments' order, the
+   *  adder's shift) */
   variant: string;
 }
 
@@ -556,18 +702,55 @@ export function lastVenVariants(history: readonly { m: string; sd?: number; va?:
   return out.map((o) => o.v);
 }
 
+/** A logged variant read back: its cove and nook (null: not a ven variant). */
+export function readVariant(v: string): { bay: BayId; nook: number } | null {
+  const bay = v.charAt(0) as BayId;
+  const nook = Number.parseInt(v.slice(1), 10);
+  if (!(BAY_IDS as readonly string[]).includes(bay) || !Number.isFinite(nook) || !COVES[bay].nooks[nook]) return null;
+  return { bay, nook };
+}
+
+/** Where a logged play's frog sat in its search picture (px), or null. */
+function pxOf(p: { bay: BayId; nook: number } | null | undefined): readonly [number, number] | null {
+  return p ? COVES[p.bay].nooks[p.nook].px : null;
+}
+
 /**
  * This play's north bank, drawn from its forks (one per decision: a later draw never
- * reshuffles another): the cove leaves out the last two plays' (three plays in a row are
- * three coves), the frog's spot in it, the adder's spot and turn. `order` is the dagnacht
- * trial's order for this play (`playDagnachtTrial`: the same the 2D floor plays): the
- * first danger in it is met at the cove's first station, the second at its second.
+ * reshuffles another). The cove: never the last play's (a seeded pick of the other two).
+ * The nook in it: never within `NOOK_GAP_PX` of where the frog sat in the last play's
+ * search picture, and as far as it can from where it sat in the plays before that (up to
+ * four more back): six plays in a row put it at five or six places in the picture, and the
+ * place he remembers is an empty one. The nook brings the side he searches from.
+ * The adder's spot and turn.
+ * `order` is the dagnacht trial's order for this play (`playDagnachtTrial`: the same the
+ * 2D floor plays): the first danger in it is met at the cove's first station, the second
+ * at its second.
  */
 export function venLayout(play: Pick<Play, 'fork'>, order: readonly string[], last: readonly string[] = []): VenLaid {
-  const recent = last.slice(-2).map((v) => v.charAt(0)).filter((x): x is BayId => (BAY_IDS as readonly string[]).includes(x));
-  const left = BAY_IDS.filter((b) => !recent.includes(b));
-  const bayId = play.fork('ven-baai').pick(left.length ? left : BAY_IDS);
-  const spot = play.fork('ven-plek').pick([0, 1] as const);
+  const prev = last.map(readVariant);
+  const lastBay = prev[prev.length - 1]?.bay;
+  const bayId = play.fork('ven-baai').pick(lastBay ? BAY_IDS.filter((x) => x !== lastBay) : BAY_IDS);
+  const all = COVES[bayId].nooks.map((n, i) => ({ n, i }));
+  const back = (k: number): readonly [number, number] | null => pxOf(prev[prev.length - k]);
+  const far = (n: Nook, p: readonly [number, number] | null): boolean => !p || Math.hypot(n.px[0] - p[0], n.px[1] - p[1]) >= NOOK_GAP_PX;
+  // never near the last play's place; then the ones that keep furthest from the places of
+  // the plays before (up to four more back, an older one counting a little less), a
+  // seeded pick among those nearly as far as the furthest
+  let pool = all.filter((x) => far(x.n, back(1)));
+  if (!pool.length) pool = all;
+  const spread = (n: Nook): number => {
+    let m = Infinity;
+    for (let k = 2; k <= 5; k++) {
+      const p = back(k);
+      if (p) m = Math.min(m, Math.hypot(n.px[0] - p[0], n.px[1] - p[1]) + 20 * (k - 2));
+    }
+    return Math.min(m, SPREAD_ENOUGH_PX);
+  };
+  const best = Math.max(...pool.map((x) => spread(x.n)));
+  pool = pool.filter((x) => spread(x.n) >= best - 25);
+  const nook = play.fork('ven-plek').pick(pool).i;
+  const side = COVES[bayId].nooks[nook].side;
   const dangers = order.filter((id) => id === 'adder-ven' || id === 'modder-ven');
   const stations = {
     'adder-ven': (Math.max(0, dangers.indexOf('adder-ven')) as StationIndex),
@@ -577,8 +760,8 @@ export function venLayout(play: Pick<Play, 'fork'>, order: readonly string[], la
   const adderShift = Math.round(a.between(-ADDER_SHIFT, ADDER_SHIFT) * 10) / 10;
   const adderTurn = Math.round(a.between(-0.7, 0.7) * 100) / 100;
   const code = order.map((d) => d.charAt(0)).join('');
-  const variant = `${bayId}${spot}-${code}${adderShift >= 0 ? '+' : ''}${adderShift}`;
-  return { bay: bayId, spot, order: [...order], stations, adderShift, adderTurn, variant };
+  const variant = `${bayId}${nook}-${code}${adderShift >= 0 ? '+' : ''}${adderShift}`;
+  return { bay: bayId, nook, side, order: [...order], stations, adderShift, adderTurn, variant };
 }
 
 /**
@@ -591,29 +774,39 @@ export function venOrder(skin: Skin, knobs: RustKnobs, play: Play, history: read
   return playDagnachtTrial(skin, { jargon, reducedMotion: reduced, ...knobs }, play, history).encounters.map((e) => e.id);
 }
 
-/** The frog's spot this play (world, the way it sits). */
-export function frogOf(l: Pick<VenLaid, 'bay' | 'spot'>): Spot & { yaw: number } {
-  return BAYS[l.bay].frogs[l.spot];
+/** The frog's spot this play (world, the way it sits, its nook and side). */
+export function frogOf(l: Pick<VenLaid, 'bay' | 'nook'>): FrogSpot {
+  return BAYS[l.bay].nooks[l.nook];
 }
 
 /**
- * The look-alikes of this play's trial laid on the cove's slots (seeded): the moss clods
- * ('bush' decoys) on clod slots, the butterfly and the bird on theirs.
+ * The look-alikes of this play's trial laid in its cove (seeded): the moss clods ('bush'
+ * decoys) on the cove's clod slots and in its nooks the frog does not use this play (an
+ * empty nook's sedge ring with a clod in it is the frog's double), the butterfly and the
+ * bird on theirs.
  */
-export function decoySlots(b: Bay, decoys: readonly { id: string; k: string }[], rng: () => number): { id: string; k: string; x: number; z: number }[] {
+export function decoySlots(b: Bay, nook: number, decoys: readonly { id: string; k: string }[], rng: () => number): { id: string; k: string; x: number; z: number }[] {
   const shuffled = <T>(xs: readonly T[]): T[] => {
     const a = [...xs];
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     return a;
   };
-  const pools: Record<string, { u: number; v: number }[]> = { bush: shuffled(CLOD_SLOTS), butterfly: shuffled(BUTTERFLY_SLOTS), bird: shuffled(BIRD_SLOTS) };
+  const pools: Record<string, Spot[]> = {
+    bush: shuffled([...b.slots.clods, ...b.nooks.filter((n) => n.nook !== nook).map((n) => ({ x: n.x, z: n.z }))]),
+    butterfly: shuffled(b.slots.butterflies), bird: shuffled(b.slots.birds),
+  };
   const out: { id: string; k: string; x: number; z: number }[] = [];
   for (const d of decoys) {
     const q = (pools[d.k] ?? pools.bush).shift();
     if (!q) continue;
-    out.push({ id: d.id, k: d.k, ...atLocal(b.frame, q.u, q.v) });
+    out.push({ id: d.id, k: d.k, x: q.x, z: q.z });
   }
   return out;
+}
+
+/** Every spot of a cove a moss clod may lie on: its clod slots, then its nooks. */
+export function clodSpots(b: Bay): Spot[] {
+  return [...b.slots.clods, ...b.nooks.map((n) => ({ x: n.x, z: n.z }))];
 }
 
 /* ------------------------------------------------------- who lives here ---- */
@@ -632,7 +825,7 @@ export const FLOAT_SINK = 0.06;
 
 /**
  * The heikikkers. Before the mission one sits hidden in a cove (`kikker`: a play lays it
- * in its own cove and spot under the briefing card; in free roam bay B's first spot), and
+ * in its own cove and nook under the briefing card; in free roam bay B's first nook), and
  * one floats in each cove's water calling now and then (`koorA..C`), so the chorus is
  * heard from the bank within ~20 m and rings spread where one calls (ven.home.ts). After
  * it the frog he found has plonsed back into the ven; one frog sits on bay B's moss
@@ -642,7 +835,7 @@ export const FLOAT_SINK = 0.06;
  */
 export const VEN_RESIDENTS: readonly ResidentSpec[] = [
   { key: 'kikker', animal: 'heikikker', reach: 0.5,
-    before: { ...BAYS.B.frogs[0], idle: 'stand', roam: 0 },
+    before: { x: BAYS.B.nooks[0].x, z: BAYS.B.nooks[0].z, yaw: BAYS.B.nooks[0].yaw, idle: 'stand', roam: 0 },
     after: null },
   ...BAY_IDS.map((id, i): ResidentSpec => ({
     key: CHORUS_KEYS[id], animal: 'heikikker', reach: 7,
@@ -656,21 +849,24 @@ export const VEN_RESIDENTS: readonly ResidentSpec[] = [
 ];
 
 /** The places table (`__ranger.missionPlaces('ven')`): the marker, the home, every cove
- *  and its stand, every cove's stations. */
+ *  and its two stands (`R`: his right, `L`), every cove's stations. */
 export const VEN_PLACES: Readonly<Record<string, Place>> = (() => {
   const t: Record<string, Place> = { marker: { ...MARKER, r: 2.4 }, home: { x: AFTER_FROG.x, z: AFTER_FROG.z } };
   for (const id of BAY_IDS) {
     const b = BAYS[id];
     t[`${id}.cove`] = { x: b.frame.x, z: b.frame.z, heading: b.frame.heading };
-    t[`${id}.stand`] = b.stand;
-    stationsOf(id).forEach((s) => { t[`${id}.S${s.i + 1}`] = { ...s.at }; });
+    t[`${id}.standR`] = b.stands[1];
+    t[`${id}.standL`] = b.stands[-1];
+    stationsOf(id, 1).forEach((s) => { t[`${id}.S${s.i + 1}`] = { ...s.at }; });
   }
   return t;
 })();
 
-/** Every station of every cove (the home lays a carpet's moss there when a play wants it). */
+/** Every station of every cove (the home lays a carpet's moss there when a play wants it;
+ *  `s` along his way to the cove's right side: the same as to its left, the two ways part
+ *  only above the cove). */
 export function allStations(): { bay: BayId; st: Station }[] {
-  return BAY_IDS.flatMap((bay) => stationsOf(bay).map((st) => ({ bay, st })));
+  return BAY_IDS.flatMap((bay) => stationsOf(bay, 1).map((st) => ({ bay, st })));
 }
 
 /** The ground the world's scatter (heath plants, the reed belt) leaves to the home: the
@@ -681,9 +877,12 @@ export function venClearings(): { x: number; z: number; r: number }[] {
     const b = BAYS[id];
     out.push({ x: b.frame.x, z: b.frame.z, r: 2.0 });
     for (const u of [-1.3, 1.3]) out.push({ ...atLocal(b.frame, u, 0.1), r: 1.1 });
-    out.push({ x: b.stand.x, z: b.stand.z, r: 1.5 });
-    // the way down from the path, and what the lens sees over his shoulder
-    for (let k = 0.25; k < 1; k += 0.25) out.push({ x: b.off.x + (b.stand.x - b.off.x) * k, z: b.off.z + (b.stand.z - b.off.z) * k, r: 1.4 });
+    for (const side of SIDES) {
+      const st = b.stands[side], off = b.offs[side];
+      out.push({ x: st.x, z: st.z, r: 1.5 });
+      // the way down from the path, and what the lens sees over his shoulder
+      for (let k = 0.25; k < 1; k += 0.25) out.push({ x: off.x + (st.x - off.x) * k, z: off.z + (st.z - off.z) * k, r: 1.4 });
+    }
     out.push({ ...atLocal(b.frame, 0, -4.0), r: 1.5 });
   }
   for (let s = PATH_BANK_S - 4; s < PATH.length; s += 1.4) out.push({ ...pointAt(PATH, s), r: 1.25 });

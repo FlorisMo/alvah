@@ -31,8 +31,8 @@ import { lodGeometries, lodMaterial } from '../../Lod';
 import { WATER_LEVEL } from '../../Biomes';
 import { SIZE } from '../../AnimalScale';
 import {
-  BAYS, BAY_IDS, BUTTERFLY_SLOTS, CLOD_SLOTS, CUSHION, FLOAT_SINK, FROG_H, FROG_LEN, PATH, PATH_HALF, HIDE, BENCH, MARKER,
-  allStations, carpetAt, coveClumps, inCarpet, pathR, polar, type BayId, type Carpet, type VenLaid, type ViewSpec,
+  BAYS, BAY_IDS, CUSHION, FLOAT_SINK, FROG_H, FROG_LEN, PATH, PATH_HALF, HIDE, BENCH, MARKER,
+  allStations, carpetAt, clodSpots, coveClumps, inCarpet, pathR, polar, type BayId, type Carpet, type FrogSpot, type VenLaid, type ViewSpec,
 } from './ven.places';
 
 /** A look-alike laid in the play's cove, as the search takes it. */
@@ -47,8 +47,8 @@ export interface VenDecoy {
 /** What a play lays (ven.ts `prepare`). */
 export interface VenPlay {
   laid: VenLaid;
-  /** the frog's spot this play (world, the way it sits) */
-  frog: Spot & { yaw: number };
+  /** the frog's spot this play (world, the way it sits, its nook and side) */
+  frog: FrogSpot;
   /** the trial's look-alikes on the cove's slots */
   decoys: readonly { id: string; k: string; x: number; z: number }[];
   /** how much of the frog's back the search's lens glimpses (the level's) */
@@ -87,7 +87,9 @@ export class Frog extends Actor {
   private readonly throat: THREE.Mesh;
   private pulse = 0;
   private pulses = 0;
-  private leaping: { from: Spot; to: Spot; t: number; secs: number; done: (ok: boolean) => void } | null = null;
+  private leaping: { from: Spot; to: Spot; t: number; secs: number; into: boolean; done: (ok: boolean) => void } | null = null;
+  /** its body is drawn (a frog further than `FROG_DRAWN_M` from the lens is a speck: it rests) */
+  private near = true;
   private diving: { t: number; to: number; done: () => void } | null = null;
 
   constructor(key: string, env: ActorEnv, height: number, home: VenHome | null) {
@@ -100,9 +102,10 @@ export class Frog extends Actor {
     }, { height });
     self.frog = this;
     this.home = home;
-    // its throat: a pale round swelling under its chin, there only while it calls
-    this.throat = new THREE.Mesh(new THREE.SphereGeometry(0.028, 10, 8), new THREE.MeshStandardMaterial({ color: '#f1e8c8', roughness: 0.5, emissive: '#3a3628' }));
-    this.throat.position.set(0, height * 0.3, FROG_LEN * 0.28);
+    // its throat: a pale bubble swelling under its chin and out in front of it, there only
+    // while it calls (it reads at the song's size: a clear round bubble on every call)
+    this.throat = new THREE.Mesh(new THREE.SphereGeometry(0.034, 16, 12), new THREE.MeshStandardMaterial({ color: '#f4ecd2', roughness: 0.35, emissive: '#6b6450' }));
+    this.throat.position.set(0, height * 0.22, FROG_LEN * 0.4);
     this.throat.scale.setScalar(0.001);
     this.throat.visible = false;
     this.gaitNode.add(this.throat);
@@ -122,11 +125,30 @@ export class Frog extends Actor {
 
   /** It leaps to (x, z) — into the water: an arc, a plop, rings — and is under (hidden). */
   leap(to: Spot, secs = 0.7): Promise<boolean> {
+    return this.jump(to, secs, true);
+  }
+
+  /** One hop on land to (x, z) (a frog a step up the bank hops down to the edge first). */
+  hop(to: Spot, secs = 0.45): Promise<boolean> {
+    return this.jump(to, secs, false);
+  }
+
+  private jump(to: Spot, secs: number, into: boolean): Promise<boolean> {
     this.idle();
     return new Promise((done) => {
       this.leaping?.done(false);
-      this.leaping = { from: { x: this.x, z: this.z }, to, t: 0, secs, done };
+      this.leaping = { from: { x: this.x, z: this.z }, to, t: 0, secs, into, done };
     });
+  }
+
+  /** Its contact shadow and its body by the lens's distance: a frog is a few px from ~20 m
+   *  — its body rests beyond `FROG_DRAWN_M` (its rings and its call still tell where it
+   *  is), its shadow beyond a few metres (a frog sits IN the sedge or the water). */
+  override shadowFor(d: number): void {
+    // (the shadow: full within 4 m, gone by 6 m — the actors' 22/28 m, scaled down)
+    super.shadowFor(d <= 4 ? 0 : 22 + (d - 4) * 3);
+    const near = this.near ? d < FROG_DRAWN_M + 2 : d < FROG_DRAWN_M;
+    if (near !== this.near) { this.near = near; this.pivot.visible = near; }
   }
 
   /** It sinks under the water (hidden there), or comes up again (`up`). */
@@ -148,13 +170,15 @@ export class Frog extends Actor {
       L.t = Math.min(L.secs, L.t + (reduced ? L.secs : dt));
       const k = L.t / L.secs;
       super.place(L.from.x + (L.to.x - L.from.x) * k, L.from.z + (L.to.z - L.from.z) * k, headingTo(L.from, L.to));
-      this.lift = Math.sin(Math.PI * k) * 0.28 - (k > 0.85 ? (k - 0.85) * 0.9 : 0);
+      this.lift = Math.sin(Math.PI * k) * (L.into ? 0.28 : 0.16) - (L.into && k > 0.85 ? (k - 0.85) * 0.9 : 0);
       if (k >= 1) {
         this.leaping = null;
-        this.home?.ring(L.to.x, L.to.z, 0.95);
-        this.home?.plop(L.to.x, L.to.z);
-        this.lift = -0.2;
-        this.group.visible = false;
+        if (L.into) {
+          this.home?.ring(L.to.x, L.to.z, 0.95);
+          this.home?.plop(L.to.x, L.to.z);
+          this.lift = -0.2;
+          this.group.visible = false;
+        } else this.lift = 0;
         L.done(true);
       }
     }
@@ -200,6 +224,9 @@ export class Frog extends Actor {
   }
 }
 
+/** Beyond this far (m) from the lens a frog's body rests (a 23 cm frog is ~6 px there). */
+const FROG_DRAWN_M = 22;
+
 /** The adventure's `actor` hook: every heikikker of the home is a Frog. */
 export function venBody(spec: ResidentSpec, env: ActorEnv, height: number, dressing: HomeDressing | null): Actor | null {
   if (spec.animal !== 'heikikker') return null;
@@ -211,13 +238,18 @@ export function venBody(spec: ResidentSpec, env: ActorEnv, height: number, dress
 /** A ring spreading on the water (a frog called, a frog went in). */
 interface Ring { mesh: THREE.Mesh; t: number; delay: number; max: number }
 
-/** One cove's small things (they rest from their own spot, Residents `detail`). */
+/** The coves' small things: every cove's moss clods in ONE instanced mesh (each clod spot
+ *  of each cove an instance: its slots, then its nooks), the one heath blue and the one
+ *  stonechat a play lays in its cove (they rest from the coves' middle, Residents
+ *  `detail`). */
 interface CoveBits {
-  id: BayId;
   clods: THREE.InstancedMesh;
-  /** each clod slot's matrix as laid, and whether it shows */
+  /** per cove, the instance index of its first clod spot (`clodSpots(bay)` order) */
+  first: Readonly<Record<BayId, number>>;
+  /** each clod spot's matrix as laid */
   clodAt: THREE.Matrix4[];
   wobble: number[];
+  /** an empty anchor at each clod spot (the search's decoy object) */
   anchors: THREE.Object3D[];
   butterfly: THREE.Group;
   bird: THREE.Group;
@@ -230,9 +262,15 @@ interface AdderBody {
   root: THREE.Object3D | null;
   at: Spot & { yaw: number };
   shown: boolean;
-  /** 0..1 her head lifted (a cue: he came near; a hiss: too near) */
+  /** 0..1 her head and neck raised (a cue: he came near; a hiss: too near) */
   lift: number;
   liftTo: number;
+  /** her coil drawn back a little from him after a hiss (m along `away`), eased */
+  back: number;
+  backTo: number;
+  away: Spot;
+  /** her body's mesh with the raised head as a morph target (0..1) */
+  body: THREE.Mesh | null;
   /** the slide into the heather: progress, from, to */
   slide: { t: number; from: Spot; to: Spot; done: () => void } | null;
 }
@@ -243,9 +281,46 @@ const MOSS = { green: '#8fbf47', sheen: '#bfe07a', wet: '#55613a', mud: '#4a3b26
 /** The adder is drawn this much over the scale table's coil (0.15 m high, 0.47 m long →
  *  0.2 m, 0.6 m: a big adder, still a real one): a child sees her on the path. */
 const ADDER_SCALE = 1.3;
+/** How far (m) she draws her coil back from him after a hiss. */
+const ADDER_DRAW_BACK = 0.22;
 
-/** The default look-alikes in a cove not played (or in free roam): a few moss clods. */
-const FREE_CLODS = [0, 3, 5];
+/**
+ * Her coil with its head and neck raised as a morph target (on her own copy of the
+ * geometry: the model's other uses stay as they are). The head is the top of the model
+ * (above the coil, to one side of its middle): it rises by ~0.55 of the coil's height,
+ * the neck under it less, the coil round it not at all.
+ */
+function raisedHead(mesh: THREE.Mesh): THREE.Mesh {
+  const geo = mesh.geometry.clone();
+  mesh.geometry = geo;
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox!;
+  const H = bb.max.y - bb.min.y || 1, W = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) || 1;
+  // the head: the model's top quarter, its middle
+  let hx = 0, hz = 0, n = 0;
+  for (let i = 0; i < pos.count; i++) if (pos.getY(i) > bb.min.y + H * 0.72) { hx += pos.getX(i); hz += pos.getZ(i); n++; }
+  if (n) { hx /= n; hz /= n; }
+  const ramp = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const delta = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const r = Math.hypot(x - hx, z - hz) / W;
+    const w = ramp(0.26, 0.08, r) * ramp(bb.min.y + H * 0.45, bb.min.y + H * 0.8, y);
+    delta[i * 3 + 1] = w * H * 0.55;
+    // (the raised neck leans back a little over the coil)
+    delta[i * 3] = -(x - hx) * w * 0.05;
+    delta[i * 3 + 2] = -(z - hz) * w * 0.05;
+  }
+  geo.morphAttributes.position = [new THREE.BufferAttribute(delta, 3)];
+  geo.morphTargetsRelative = true;
+  mesh.updateMorphTargets();
+  if (mesh.morphTargetInfluences) mesh.morphTargetInfluences[0] = 0;
+  return mesh;
+}
+
+/** The moss clods lying in a cove not played (or in free roam): three of its clod slots. */
+const FREE_CLODS = [0, 2, 4];
 
 export class VenHome implements HomeDressing {
   readonly group = new THREE.Group();
@@ -257,7 +332,7 @@ export class VenHome implements HomeDressing {
   private readonly built: Built[];
   private readonly env: DressingEnv;
   private readonly g: (x: number, z: number) => number;
-  private readonly coves = new Map<BayId, CoveBits>();
+  private readonly bits: CoveBits;
   private readonly rings: Ring[] = [];
   private readonly carpets = new Map<string, { carpet: Carpet; moss: THREE.Mesh; sheen: THREE.Mesh }>();
   private carpetOn: { carpet: Carpet; moss: THREE.Mesh; sheen: THREE.Mesh } | null = null;
@@ -290,11 +365,16 @@ export class VenHome implements HomeDressing {
       for (let th = th0; th >= th1 - 1e-6; th -= 2) out.push(polar(th, r(th)));
       return out;
     };
-    keep(groundStrip(g, arc(() => 16.2, 146, 34), 3.3, '#6f7a3e', { layer: 1, wobble: 0.3, seed: 2, ends: 3 }));
-    keep(groundStrip(g, arc((th) => pathR(th) + 2.6, 144, 36), 2.1, '#5c5136', { layer: 1, wobble: 0.35, seed: 4, ends: 3 }));
+    // (the bank's green, the heath ground above it, the shore path and the coves' veenmos
+    // are ONE mesh — one draw call — laid in the order they stack: each piece's own height
+    // over the ground keeps it over the one before)
+    const ground: THREE.BufferGeometry[] = [];
+    const lay = (m: THREE.Mesh): void => { ground.push(m.geometry); (m.material as THREE.Material).dispose(); };
+    lay(groundStrip(g, arc(() => 16.2, 146, 34), 3.3, '#6f7a3e', { layer: 1, wobble: 0.3, seed: 2, ends: 3 }));
+    lay(groundStrip(g, arc((th) => pathR(th) + 2.6, 144, 36), 2.1, '#5c5136', { layer: 1, wobble: 0.35, seed: 4, ends: 3 }));
     // the shore path: pale trodden sand along the bank's top, round the hide from the trail
     const pathPts = PATH.pts.filter((_, i) => PATH.acc[i] > 1.2);
-    keep(groundStrip(g, pathPts, PATH_HALF, '#c2ad84', { layer: 2, wobble: 0.28, seed: 7, ends: 1.2 }));
+    lay(groundStrip(g, pathPts, PATH_HALF, '#c2ad84', { layer: 2, wobble: 0.28, seed: 7, ends: 1.2 }));
 
     /* -- heather on the land side of the path (low cushions he walks through) -- */
     const heathSpots: { x: number; z: number; s: number; rot: number }[] = [];
@@ -319,7 +399,7 @@ export class VenHome implements HomeDressing {
     this.cover = new CoverField({ parent: this.group, groundY: g, clumps, seed: 61 });
     this.built = this.cover.stems.map((s) => ({ h: s.h, lx: s.lx, lz: s.lz, r: s.r }));
 
-    /* -- veenmos: each cove's cushion and patches, the dark wet band at the water line -- */
+    /* -- veenmos: each cove's moss, its cushion and patches (into the one ground mesh) -- */
     const decals: THREE.BufferGeometry[] = [];
     const patch = (p: Spot, rx: number, rz: number, yaw: number, color: string, layer: number, seed: number): void => {
       const m = groundDecal(g, p.x, p.z, rx, rz, yaw, color, { layer, wobble: 0.22, seed, feather: true });
@@ -329,30 +409,34 @@ export class VenHome implements HomeDressing {
     BAY_IDS.forEach((id, bi) => {
       const b = BAYS[id];
       const f = b.frame;
-      patch(atLocal(f, 0, -0.1), 0.85, 1.55, f.heading, '#56672f', 2, 5 + bi);                         // the cove's moss
+      patch(atLocal(f, 0, 0.05), 1.75, 1.0, f.heading, '#56672f', 2, 5 + bi);                          // the cove's moss
       patch(atLocal(f, CUSHION.u, CUSHION.v), CUSHION.r + 0.06, CUSHION.r, f.heading, '#6c8338', 3, 7 + bi); // the cushion
       patch(atLocal(f, -0.95, -0.35), 0.26, 0.2, f.heading + 0.6, '#6f6d3c', 3, 9 + bi);               // a tuft of older, yellower moss
       patch(atLocal(f, 0.45, 0.32), 0.26, 0.18, f.heading + 0.2, '#617a35', 3, 13 + bi);
     });
     const mossGeo = mergeGeometries(decals);
     for (const d of decals) d.dispose();
-    if (mossGeo) mottle(mossGeo, 0.24, 31);
-    if (mossGeo) {
-      const moss = keep(new THREE.Mesh(mossGeo, new THREE.MeshStandardMaterial({
+    if (mossGeo) { mottle(mossGeo, 0.24, 31); ground.push(mossGeo); }
+    const groundGeo = mergeGeometries(ground);
+    for (const q of ground) q.dispose();
+    if (groundGeo) {
+      const bank = keep(new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({
         vertexColors: true, transparent: true, depthWrite: false, roughness: 0.95,
         polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6,
       })));
-      moss.name = 'ven-moss';
-      moss.renderOrder = 3;
-      moss.receiveShadow = true;
+      bank.name = 'ven-ground';
+      bank.renderOrder = 2;
+      bank.receiveShadow = true;
     }
 
     /* -- cotton-grass: white puffs on thin stems, at the coves' backs and sides -- */
     const cotton: { x: number; z: number; s: number; rot: number }[] = [];
     BAY_IDS.forEach((id) => {
       const b = BAYS[id];
-      const spots = [[-1.35, -0.55], [-1.15, -0.8], [1.3, -0.62], [1.12, -0.85], [-1.45, 0.2], [1.45, 0.15], [-0.55, -0.75], [0.15, -0.82], ...BUTTERFLY_SLOTS.map((q) => [q.u, q.v])];
+      const spots = [[-1.35, -0.55], [-1.15, -0.8], [1.3, -0.62], [1.12, -0.85], [-1.55, 0.2], [1.55, 0.15], [-0.55, -0.75], [0.15, -0.82]];
       for (const [u, v] of spots) cotton.push({ ...atLocal(b.frame, u, v), s: 0.85 + rnd() * 0.35, rot: rnd() * 6.28 });
+      // (a cotton-grass head under each of the cove's butterfly slots: it sits on one)
+      for (const q of b.slots.butterflies) cotton.push({ ...q, s: 1, rot: rnd() * 6.28 });
     });
     const cottonMesh = keep(new THREE.InstancedMesh(cottonGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, emissive: '#3c3b35' }), cotton.length));
     cottonMesh.name = 'ven-cotton-grass';
@@ -364,7 +448,7 @@ export class VenHome implements HomeDressing {
        way to a frog) -- */
     const reedSpots: { x: number; z: number; s: number; rot: number }[] = [];
     BAY_IDS.forEach((id) => {
-      for (const [u, v] of [[-1.95, 0.8], [-1.75, 1.0], [1.85, 0.9], [2.05, 0.7]]) reedSpots.push({ ...atLocal(BAYS[id].frame, u, v), s: 0.85 + rnd() * 0.3, rot: rnd() * 6.28 });
+      for (const [u, v] of [[-2.45, 0.8], [-2.25, 1.05], [2.3, 0.95], [2.5, 0.7]]) reedSpots.push({ ...atLocal(BAYS[id].frame, u, v), s: 0.85 + rnd() * 0.3, rot: rnd() * 6.28 });
     });
     void loadModel('prop-reeds').then((m) => {
       if (!m || this.disposed) return;
@@ -377,63 +461,65 @@ export class VenHome implements HomeDressing {
       reeds.computeBoundingSphere();
     });
 
-    /* -- each cove's small things: its moss clods, a heath blue on cotton-grass, a
-       stonechat on a dry stalk (the look-alikes a play lays) -- */
+    /* -- the coves' small things: every cove's moss clods (one instanced mesh, each clod
+       spot an instance), the heath blue on a cotton-grass head and the stonechat on a dry
+       stalk a play lays in its cove (the look-alikes) -- */
     const clodGeo = clodGeometry();
     const clodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
     this.made.push({ geometry: clodGeo, material: clodMat });
-    for (const id of BAY_IDS) {
-      const b = BAYS[id];
-      const detail = env.detail(b.frame);
-      const clods = new THREE.InstancedMesh(clodGeo, clodMat, CLOD_SLOTS.length);
-      clods.name = `ven-clods-${id}`;
-      clods.castShadow = false;
-      detail.add(clods);
-      const clodAt: THREE.Matrix4[] = [];
-      const anchors: THREE.Object3D[] = [];
-      CLOD_SLOTS.forEach((q, i) => {
-        const p = atLocal(b.frame, q.u, q.v);
-        const s = 0.9 + ((i * 7) % 5) * 0.06;
-        clodAt.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, g(p.x, p.z) - 0.015, p.z), new THREE.Quaternion().setFromAxisAngle(UP, i * 1.9 + 0.4), new THREE.Vector3(s, s, s)));
-        const a = new THREE.Object3D();
-        a.name = `ven-clod-${id}-${i}`;
-        a.position.set(p.x, g(p.x, p.z) + 0.08, p.z);
-        detail.add(a);
-        anchors.push(a);
-      });
-      const butterfly = new THREE.Group();
-      butterfly.name = `ven-butterfly-${id}`;
-      butterfly.visible = false;
-      detail.add(butterfly);
-      const bird = new THREE.Group();
-      bird.name = `ven-bird-${id}`;
-      bird.visible = false;
-      detail.add(bird);
-      const bits: CoveBits = { id, clods, clodAt, wobble: CLOD_SLOTS.map(() => 0), anchors, butterfly, bird, flit: [{ o: null, base: 0, t: 0 }, { o: null, base: 0, t: 0 }] };
-      this.coves.set(id, bits);
-      // the butterfly sits on a cotton-grass head (0.33 m), the stonechat on a dry stalk
-      void env.spawnModel('heideblauwtje', { idle: false }).then((s) => {
-        if (!s || this.disposed) { s?.dispose(); return; }
-        const r = s.root as THREE.Object3D;
-        r.position.set(0, 0.34, 0);
-        butterfly.add(r);
-        this.spawned.push(s);
-        bits.flit[0] = { o: r, base: r.position.y, t: 0 };
-      });
-      const stalkH = 0.62;
-      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.011, stalkH, 5).translate(0, stalkH / 2, 0), new THREE.MeshStandardMaterial({ color: '#b39c66', roughness: 1 }));
-      stalk.rotation.z = 0.07;
-      bird.add(stalk);
-      this.made.push(stalk);
-      void env.spawnModel('roodborsttapuit', { idle: false }).then((s) => {
-        if (!s || this.disposed) { s?.dispose(); return; }
-        const r = s.root as THREE.Object3D;
-        r.position.set(-Math.sin(0.07) * stalkH, stalkH - 0.012, 0);
-        bird.add(r);
-        this.spawned.push(s);
-        bits.flit[1] = { o: r, base: r.position.y, t: 0 };
-      });
-    }
+    // (resting from the middle cove: the three coves lie within ~11 m of it)
+    const detail = env.detail(BAYS.B.frame, { near: 26, far: 32 });
+    const spots = BAY_IDS.flatMap((id) => clodSpots(BAYS[id]));
+    const clods = new THREE.InstancedMesh(clodGeo, clodMat, spots.length);
+    clods.name = 'ven-clods';
+    clods.castShadow = false;
+    detail.add(clods);
+    const first = {} as Record<BayId, number>;
+    let n0 = 0;
+    for (const id of BAY_IDS) { first[id] = n0; n0 += clodSpots(BAYS[id]).length; }
+    const clodAt: THREE.Matrix4[] = [];
+    const anchors: THREE.Object3D[] = [];
+    spots.forEach((p, i) => {
+      const sc = 0.9 + ((i * 7) % 5) * 0.06;
+      clodAt.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, g(p.x, p.z) - 0.015, p.z), new THREE.Quaternion().setFromAxisAngle(UP, i * 1.9 + 0.4), new THREE.Vector3(sc, sc, sc)));
+      const a = new THREE.Object3D();
+      a.name = `ven-clod-${i}`;
+      a.position.set(p.x, g(p.x, p.z) + 0.08, p.z);
+      detail.add(a);
+      anchors.push(a);
+    });
+    const butterfly = new THREE.Group();
+    butterfly.name = 'ven-butterfly';
+    butterfly.visible = false;
+    detail.add(butterfly);
+    const bird = new THREE.Group();
+    bird.name = 'ven-bird';
+    bird.visible = false;
+    detail.add(bird);
+    const bits: CoveBits = { clods, first, clodAt, wobble: spots.map(() => 0), anchors, butterfly, bird, flit: [{ o: null, base: 0, t: 0 }, { o: null, base: 0, t: 0 }] };
+    this.bits = bits;
+    // the butterfly sits on a cotton-grass head (0.33 m), the stonechat on a dry stalk
+    void env.spawnModel('heideblauwtje', { idle: false }).then((sp) => {
+      if (!sp || this.disposed) { sp?.dispose(); return; }
+      const r = sp.root as THREE.Object3D;
+      r.position.set(0, 0.34, 0);
+      butterfly.add(r);
+      this.spawned.push(sp);
+      bits.flit[0] = { o: r, base: r.position.y, t: 0 };
+    });
+    const stalkH = 0.62;
+    const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.011, stalkH, 5).translate(0, stalkH / 2, 0), new THREE.MeshStandardMaterial({ color: '#b39c66', roughness: 1 }));
+    stalk.rotation.z = 0.07;
+    bird.add(stalk);
+    this.made.push(stalk);
+    void env.spawnModel('roodborsttapuit', { idle: false }).then((sp) => {
+      if (!sp || this.disposed) { sp?.dispose(); return; }
+      const r = sp.root as THREE.Object3D;
+      r.position.set(-Math.sin(0.07) * stalkH, stalkH - 0.012, 0);
+      bird.add(r);
+      this.spawned.push(sp);
+      bits.flit[1] = { o: r, base: r.position.y, t: 0 };
+    });
 
     /* -- the soft moss at every station (one shows: this play's) -- */
     for (const { bay, st } of allStations()) {
@@ -474,10 +560,12 @@ export class VenHome implements HomeDressing {
     ringMat.dispose();
 
     /* -- the adder: laid on the path for a play only -- */
-    this.adder = { root: null, at: { x: 0, z: 0, yaw: 0 }, shown: false, lift: 0, liftTo: 0, slide: null };
+    this.adder = { root: null, at: { x: 0, z: 0, yaw: 0 }, shown: false, lift: 0, liftTo: 0, back: 0, backTo: 0, away: { x: 0, z: 0 }, body: null, slide: null };
     void env.spawnModel('adder', { idle: false }).then((s) => {
       if (!s || this.disposed) { s?.dispose(); return; }
       const r = s.root as THREE.Object3D;
+      // her head and neck can rise: a morph target on her own copy of the coil
+      r.traverse((o) => { if (!this.adder.body && (o as THREE.Mesh).isMesh) this.adder.body = raisedHead(o as THREE.Mesh); });
       r.visible = this.adder.shown;
       r.name = 'ven-adder';
       this.group.add(r);
@@ -506,7 +594,7 @@ export class VenHome implements HomeDressing {
       delete s.h0;
     });
     if (p) {
-      const view = BAYS[p.laid.bay].views.search;
+      const view = BAYS[p.laid.bay].views.search[p.laid.side];
       const lens = this.env.lensFor(asTheKitFrames(view));
       const back = backPoints(p.frog.x, this.g(p.frog.x, p.frog.z), p.frog.z, p.frog.yaw, FROG_LEN, FROG_H);
       fitWindow(this.cover.stems, this.built, lens.cam, back, p.glimpse, { x: p.frog.x, y: 0, z: p.frog.z });
@@ -517,7 +605,7 @@ export class VenHome implements HomeDressing {
     this.layClods(p);
     // the adder (when this play has her) coiled on the warm sand of the path
     this.adder.slide = null;
-    this.adder.lift = 0; this.adder.liftTo = 0;
+    this.adder.lift = 0; this.adder.liftTo = 0; this.adder.back = 0; this.adder.backTo = 0;
     this.adder.shown = !!p?.adder;
     if (p?.adder) this.adder.at = { ...p.adder };
     this.placeAdder();
@@ -552,43 +640,46 @@ export class VenHome implements HomeDressing {
   get decoys(): VenDecoy[] {
     const p = this.laid;
     if (!p) return [];
-    const bits = this.coves.get(p.laid.bay)!;
+    const bits = this.bits;
     return p.decoys.map((d) => {
       if (d.k === 'butterfly' || d.k === 'bird') {
         const o = d.k === 'butterfly' ? bits.butterfly : bits.bird;
         return { id: d.id, k: d.k, object: o, x: d.x, z: d.z, poke: () => this.flit(bits, d.k === 'butterfly' ? 0 : 1) };
       }
-      const i = this.slotOf(p.laid.bay, d);
+      const i = this.clodOf(p.laid.bay, d);
       return { id: d.id, k: d.k, object: bits.anchors[i], x: d.x, z: d.z, poke: () => this.wobble(bits, i) };
     });
   }
 
-  /** The clod slot a decoy was laid on. */
-  private slotOf(bay: BayId, d: Spot): number {
-    const b = BAYS[bay];
+  /** The clod instance a decoy was laid on (its cove's clod spot nearest it). */
+  private clodOf(bay: BayId, d: Spot): number {
     let best = 0, bd = Infinity;
-    CLOD_SLOTS.forEach((q, i) => { const p = atLocal(b.frame, q.u, q.v); const e = dist(p, d); if (e < bd) { bd = e; best = i; } });
-    return best;
+    clodSpots(BAYS[bay]).forEach((q, i) => { const e = dist(q, d); if (e < bd) { bd = e; best = i; } });
+    return this.bits.first[bay] + best;
   }
 
-  /** The clods, the butterfly and the bird of every cove for a play (or free roam). */
+  /** The clods of every cove for a play (or free roam), the butterfly and the bird in the
+   *  play's cove. */
   private layClods(p: VenPlay | null): void {
+    const bits = this.bits;
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
-    for (const [id, bits] of this.coves) {
-      const mine = p && p.laid.bay === id;
-      const on = new Set<number>(mine ? p!.decoys.filter((d) => d.k === 'bush').map((d) => this.slotOf(id, d)) : FREE_CLODS);
-      bits.clodAt.forEach((m, i) => bits.clods.setMatrixAt(i, on.has(i) ? m : zero));
-      bits.clods.instanceMatrix.needsUpdate = true;
-      bits.clods.computeBoundingSphere();
-      bits.anchors.forEach((a, i) => { a.visible = on.has(i); });
-      const b = BAYS[id];
-      for (const [k, grp] of [['butterfly', bits.butterfly], ['bird', bits.bird]] as const) {
-        const d = mine ? p!.decoys.find((q) => q.k === k) : undefined;
-        grp.visible = !!d;
-        if (d) {
-          grp.position.set(d.x, this.g(d.x, d.z), d.z);
-          grp.rotation.y = headingTo(d, b.stand) + 0.9;
-        }
+    const on = new Set<number>();
+    for (const id of BAY_IDS) {
+      if (p && p.laid.bay === id) for (const d of p.decoys) { if (d.k === 'bush') on.add(this.clodOf(id, d)); }
+      else for (const i of FREE_CLODS) on.add(bits.first[id] + i);
+    }
+    bits.clodAt.forEach((m, i) => bits.clods.setMatrixAt(i, on.has(i) ? m : zero));
+    bits.clods.instanceMatrix.needsUpdate = true;
+    bits.clods.computeBoundingSphere();
+    bits.anchors.forEach((a, i) => { a.visible = on.has(i); });
+    bits.wobble.fill(0);
+    const stand = p ? BAYS[p.laid.bay].stands[p.laid.side] : null;
+    for (const [k, grp] of [['butterfly', bits.butterfly], ['bird', bits.bird]] as const) {
+      const d = p?.decoys.find((q) => q.k === k);
+      grp.visible = !!d;
+      if (d && stand) {
+        grp.position.set(d.x, this.g(d.x, d.z), d.z);
+        grp.rotation.y = headingTo(d, stand) + 0.9;
       }
     }
   }
@@ -615,8 +706,18 @@ export class VenHome implements HomeDressing {
   /** The adder's body (a framed shot includes it; she is seen). */
   get adderBody(): THREE.Object3D | null { return this.adder.shown ? this.adder.root : null; }
 
-  /** She lifts her head (`k` 0..1: 0.5 a look, 1 with a soft hiss) or lowers it again. */
-  adderLift(k: number): void { this.adder.liftTo = Math.max(0, Math.min(1, k)); }
+  /** She raises her head and neck (`k` 0..1: 0.5 a look, 1 with a soft hiss) or lowers it
+   *  again. `from` (a hiss): she also draws her coil back a little, away from him (along
+   *  the line from him to her: sideways in the held shot, never toward its lens). */
+  adderLift(k: number, from?: Spot): void {
+    const a = this.adder;
+    a.liftTo = Math.max(0, Math.min(1, k));
+    if (from && a.root) {
+      const d = Math.max(0.05, dist(from, a.at));
+      a.away = { x: (a.at.x - from.x) / d, z: (a.at.z - from.z) / d };
+      a.backTo = ADDER_DRAW_BACK;
+    }
+  }
 
   /** Held: she slides off the path into the heather (to `to`) and is gone there. */
   adderSlide(to: Spot, secs = 1.6): Promise<void> {
@@ -706,9 +807,13 @@ export class VenHome implements HomeDressing {
     const a = this.adder;
     if (a.root && a.shown) {
       a.lift += (a.liftTo - a.lift) * Math.min(1, dt * (reduced ? 30 : 5));
+      a.back += (a.backTo - a.back) * Math.min(1, dt * (reduced ? 30 : 3));
       const r = a.root;
-      r.scale.set(ADDER_SCALE, ADDER_SCALE * (1 + 0.22 * a.lift), ADDER_SCALE);
-      r.rotation.x = -0.12 * a.lift;
+      // her head and neck rise (the morph), the coil a touch taller; drawn back from him
+      if (a.body?.morphTargetInfluences) a.body.morphTargetInfluences[0] = a.lift;
+      r.scale.set(ADDER_SCALE, ADDER_SCALE * (1 + 0.08 * a.lift), ADDER_SCALE);
+      r.rotation.x = 0;
+      if (!a.slide) r.position.set(a.at.x + a.away.x * a.back, this.g(a.at.x, a.at.z) - 0.01, a.at.z + a.away.z * a.back);
       const S = a.slide;
       if (S) {
         S.t = Math.min(1, S.t + (reduced ? 1 : dt / 1.6));
@@ -721,24 +826,23 @@ export class VenHome implements HomeDressing {
       }
     }
     // the clods wobble when poked, the butterfly and the bird flit up and settle
-    for (const bits of this.coves.values()) {
-      let dirty = false;
-      bits.wobble.forEach((w, i) => {
-        if (w <= 0) return;
-        bits.wobble[i] = Math.max(0, w - dt);
-        const m = bits.clodAt[i].clone();
-        const s = reduced ? 1 : 1 + 0.12 * Math.sin((0.9 - bits.wobble[i]) * 18) * (bits.wobble[i] / 0.9);
-        m.multiply(new THREE.Matrix4().makeScale(s, 2 - s, s));
-        bits.clods.setMatrixAt(i, m);
-        dirty = true;
-      });
-      if (dirty) bits.clods.instanceMatrix.needsUpdate = true;
-      for (const f of bits.flit) {
-        if (!f.o || f.t <= 0) continue;
-        f.t = Math.max(0, f.t - dt);
-        const k = reduced ? 0 : Math.sin((1 - f.t / 1.1) * Math.PI);
-        f.o.position.y = f.base + k * 0.18;
-      }
+    const bits = this.bits;
+    let dirty = false;
+    bits.wobble.forEach((w, i) => {
+      if (w <= 0) return;
+      bits.wobble[i] = Math.max(0, w - dt);
+      const m = bits.clodAt[i].clone();
+      const sc = reduced ? 1 : 1 + 0.12 * Math.sin((0.9 - bits.wobble[i]) * 18) * (bits.wobble[i] / 0.9);
+      m.multiply(new THREE.Matrix4().makeScale(sc, 2 - sc, sc));
+      bits.clods.setMatrixAt(i, m);
+      dirty = true;
+    });
+    if (dirty) bits.clods.instanceMatrix.needsUpdate = true;
+    for (const f of bits.flit) {
+      if (!f.o || f.t <= 0) continue;
+      f.t = Math.max(0, f.t - dt);
+      const k = reduced ? 0 : Math.sin((1 - f.t / 1.1) * Math.PI);
+      f.o.position.y = f.base + k * 0.18;
     }
   }
 

@@ -1108,7 +1108,7 @@ const MISSIE_VEN = {
       afstand: 'Hou afstand. Wacht even.',
       // the soft moss: after the second boot in it the chip shows the way round
       chipRond: 'Om het mos heen',
-      eromheen: 'Loop er bovenlangs omheen.',
+      eromheen: 'Loop over de hei eromheen.',
       // the dry path (the flip): the encounter's words, then go
       loopDoor: 'Loop maar door.',
       chipPad: 'Verder over het pad',
