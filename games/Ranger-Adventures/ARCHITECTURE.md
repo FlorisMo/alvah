@@ -164,9 +164,13 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          missions met first; run 7: ven (the north bank of the ven: a shore
                          path, three coves of sedge, cotton-grass and veenmos where the
                          heikikkers live; ven.places.ts the coves — each with six nooks of
-                         its own, searched from either side, their place in the search
+                         its own along its water's edge, searched from either side (from his
+                         left the lens mirrors his right about the cove's water line, so the
+                         edge runs corner to corner either way), their place in the search
                          picture pinned (`px`) so a play keeps the frog away from where it
-                         sat in the plays before (`venLayout`) — two stations a cove and
+                         sat in the plays before (`venLayout`); the late hint's rings on open
+                         water 0.9-1.0 m in front of him at every nook (`hintRingOf`, decision
+                         1); the dry path's walk on set from where he stands (`padGoal`) — two stations a cove and
                          `wayOf` — his way there with the adder, the soft moss and the dry
                          path in the dagnacht trial's own order (`venOrder`), the listening
                          stops, the song at the water's edge (`singOf`) and the answer's
@@ -174,7 +178,8 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          hushes it); ven.home.ts the bank (one ground mesh; the coves' sedge,
                          cotton-grass and clods one detail resting from the middle cove) and
                          `Frog`, an Actor whose throat bubble swells, that floats, hops,
-                         leaps and dives (its body rests beyond 18 m); ven.ts the beats: look,
+                         leaps and dives, and otherwise sits dead still (`Actor` opts.recipe:
+                         no idle hop; its body rests beyond 18 m); ven.ts the beats: look,
                          follow, the three moments with his feet, the search, the song, the
                          answer, the plop)
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
