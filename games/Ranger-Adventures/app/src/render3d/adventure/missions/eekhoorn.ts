@@ -637,6 +637,12 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     await k.wait(1.2);
     chatter();
     await k.wait(0.6);
+    if (seen) {
+      // (a little longer in its nest, looking at him: its card comes up now, after its line,
+      // with the nest still in his picture — before the next line, which would hold it back)
+      sq.flick();
+      await k.wait(1.3);
+    }
     nestWait = null;
     // (a nest he did not see: his once he does — from here on, as he walks on)
     if (!seen) nestSeen ??= seenFor(k, home, 'eekhoorn.nest', () => home.nestSight(), { px: NEST_SEE.px, secs: 1, stat: 'nest' });

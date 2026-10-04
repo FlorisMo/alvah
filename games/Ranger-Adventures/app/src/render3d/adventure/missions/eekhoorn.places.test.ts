@@ -834,10 +834,11 @@ test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1
       const w = nestWatch(r, i);
       assert.ok(dist(w, nest) >= NEST_WATCH.under + 0.4 && dist(w, nest) <= NEST_SEE.near - 1, `${id}/${t.id}: the spot to see it from stands ${dist(w, nest).toFixed(2)} m off it`);
       assert.equal(biomeAt(w.x, w.z), 'bos', `${id}/${t.id}: the spot to see it from is in the wood`);
-      // (he looks at a point beside the nest, toward its stub: the nest off the middle)
-      const aim = nestAim(nest);
+      // (he looks at a point beside the nest, left of it as he sees it: the nest right of the
+      // middle of his picture, off the middle and away from the chips' corner)
+      const aim = nestAim(nest, w);
       assert.ok(dist(w.aim, aim) < 1e-9, `${id}/${t.id}: the spot's aim`);
-      assert.ok(Math.abs(dist(aim, nest) - NEST_WATCH.aside) < 1e-9 && Math.sign(wrapA(headingTo(t, aim) - nest.ang)) === Math.sign(wrapA(t.branch!.ang - nest.ang)), `${id}/${t.id}: he looks beside it, toward its stub`);
+      assert.ok(Math.abs(dist(aim, nest) - NEST_WATCH.aside) < 1e-9 && wrapA(headingTo(w, aim) - headingTo(w, nest)) > 0.2, `${id}/${t.id}: he looks beside it, to its left`);
       assert.ok(Math.abs(wrapA(w.heading - headingTo(w, aim))) < 1e-9, `${id}/${t.id}: facing it`);
       const stands: { x: number; z: number; h: number; tag: string }[] = [{ ...w, h: w.heading, tag: 'at the spot' }];
       for (let a = -Math.PI; a < Math.PI; a += Math.PI / 6) for (const rr of [NEST_WATCH.r * 0.5, NEST_WATCH.r]) {
@@ -859,7 +860,7 @@ test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1
         assert.ok(q.inside && Math.abs(q.cx) <= NEST_SEE.x - 0.1 && q.top >= 104, `${tag}: well in his picture, under the line card (x ${q.cx.toFixed(2)}, top ${q.top.toFixed(0)} px)`);
         assert.ok(((q.cx + 1) / 2) * W >= NEST_SEE.hud.w + 40 || q.cy >= NEST_SEE.hud.h + 40, `${tag}: out of the chips' corner`);
         // (where the step leaves him: the nest off the middle of his picture)
-        if (st.tag !== "at the spot") assert.ok(Math.abs(q.cx) >= 0.1, `${tag}: off the middle of his picture (x ${q.cx.toFixed(2)})`);
+        if (st.tag !== "at the spot") assert.ok(q.cx >= 0.1, `${tag}: right of the middle of his picture (x ${q.cx.toFixed(2)})`);
         assert.ok(q.px >= NEST_SEE.px + 6, `${tag}: it stands ${q.px.toFixed(0)} px tall (the moment wants ${NEST_SEE.px})`);
         const gs = groundY(st.x, st.z);
         const eye = { x: st.x - Math.sin(st.h) * LENS.back, y: gs + LENS.up, z: st.z - Math.cos(st.h) * LENS.back };
