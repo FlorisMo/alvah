@@ -902,8 +902,9 @@ function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: 
 }
 /** After a find (`sqAng`: its found face on `tree`'s bark, `me`: where he stands): where he
  *  turns to (and, where he must, a few calm steps first) so that its run to its stump plays
- *  in his picture (FOUND_RUN). */
-export function foundRun(me: Spot, sqAng: number, tree: HomeTree): { at: Spot; face: number; pop: Spot; side: number; ok: boolean } {
+ *  in his picture (FOUND_RUN). `step: false`: from where he stands only (once his steps are
+ *  done: its dash round him is planned from where he really stopped). */
+export function foundRun(me: Spot, sqAng: number, tree: HomeTree, o: { step?: boolean } = {}): { at: Spot; face: number; pop: Spot; side: number; ok: boolean } {
   // (the turn nearest his way to the glade that does it — and, where one does it with its pine
   // `roomy` m off the lens or more, the nearest such: not its pine at the picture's edge right
   // by the lens, the squirrel coming down low in the picture)
@@ -925,7 +926,8 @@ export function foundRun(me: Spot, sqAng: number, tree: HomeTree): { at: Spot; f
   };
   const roomy = (at: Spot, t: { face: number }): boolean => dist(lensBehind(at, t.face), sq) >= FOUND_RUN.roomy;
   const here = turnFrom(me);
-  if (here && roomy(me, here)) return { at: me, ...here, ok: true };
+  if (here && (roomy(me, here) || o.step === false)) return { at: me, ...here, ok: true };
+  if (o.step === false) return { at: me, face: headingTo(me, wayTo(me, STAND)), pop: me, side: sqAng, ok: false };
   // (else a few calm steps first — the way back from the tree first — to where a turn does it,
   // roomy; or, where none is roomy, the turn from where he stands, or else the first that does)
   const back = headingTo(tree, me);

@@ -1099,13 +1099,17 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   // ran past him at the lens). It pours down the bark on its side toward the glade and pops
   // up on the ground in front of him, sits up facing him, chatters — and runs on across the
   // picture or away from the lens, never at it
-  const run = foundRun(k.ranger(), sqAng, cT);
+  let run = foundRun(k.ranger(), sqAng, cT);
   k.stats.run_ok = run.ok ? 1 : 0;
   // (dev read: how far he turns from the found view — over 90°: he found it from its glade's side)
   k.stats.run_turn = Math.round((Math.abs(wrap(run.face - k.ranger().heading)) * 180) / Math.PI);
   if (dist(run.at, k.ranger()) > 0.05) {
     k.stats.run_step = Math.round(dist(run.at, k.ranger()) * 10) / 10;
     await k.walkRanger(run.at.x, run.at.z, 0.05);
+    // (planned again from where his steps really ended: its dash goes round him from there)
+    const again = foundRun(k.ranger(), sqAng, cT, { step: false });
+    if (again.ok) run = again;
+    else k.stats.run_again = 0;
   }
   await turnRanger(run.face);
   await k.behind();
