@@ -30,10 +30,10 @@ import { reeClearings } from './ree.places.ts';
 import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import {
-  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY,
+  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY, GO_CLEAR,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
   above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet, underBoy,
-  lastVenVariants, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
+  lastVenVariants, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
   type BayId, type FrogSpot, type Side, type ViewSpec,
 } from './ven.places.ts';
 import type { Spot } from '../types.ts';
@@ -389,6 +389,30 @@ test('every order of the three moments fits on the way to every cove and side; t
     }
   }
   assert.ok(ADDER_BEFORE > ADDER_NEAR + 1, 'his walk to the adder ends out of her reach');
+});
+
+test('the dry path\'s walk on is set from where he stands: at least GO_AWAY ahead of him from any start on the way, on dry open ground', () => {
+  for (const id of BAY_IDS) for (const side of SIDES) {
+    const l = route(id, side);
+    for (let s = 0; s <= l.length + 1e-6; s += 0.5) {
+      const p = pointAt(l, s), h = Math.atan2(pointAt(l, Math.min(l.length, s + 0.5)).x - pointAt(l, Math.max(0, s - 0.5)).x, pointAt(l, Math.min(l.length, s + 0.5)).z - pointAt(l, Math.max(0, s - 0.5)).z);
+      // on his way, or off it either side (he walked round the adder on the heather side)
+      for (const off of [0, -1.2, 1.2]) {
+        const me = { x: p.x - Math.cos(h) * off, z: p.z + Math.sin(h) * off };
+        if (above(me) < 0.2 || blocked(me)) continue;
+        // the moment was planned from anywhere behind him (or where he is)
+        for (const s0 of [0, Math.max(0, s - 5), s]) {
+          const g = padGoal(id, side, s0, me);
+          const d = dist(me, g.to);
+          assert.ok(d >= GO_CLEAR - 1e-6, `cove ${id}${side}, from ${s.toFixed(1)} m (${off} m off it), planned at ${s0.toFixed(1)}: the walk on ends ${d.toFixed(2)} m from his feet`);
+          // walking there is walking away from his way behind him (GoCore: 0.5 m farther)
+          assert.ok(dist(g.to, g.from) >= dist(me, g.from) + 0.5, `cove ${id}${side} from ${s.toFixed(1)}: the walk on goes away from his way behind him`);
+          assert.ok(above(g.to) >= 0.2 && !blocked(g.to) && Math.hypot(g.to.x, g.to.z) < 68, `cove ${id}${side} from ${s.toFixed(1)}: the walk on ends on dry ground ${at(g.to)}`);
+          for (const [home, cs] of Object.entries(OTHER_HOMES)) for (const c of cs) assert.ok(dist(g.to, c) > c.r + 0.5, `the walk on ${at(g.to)} keeps off the ${home} home`);
+        }
+      }
+    }
+  }
 });
 
 /** Play `seeds` in a row on one save (its history carried on): each play's layout. */

@@ -48,7 +48,7 @@ import { ListenCore, StillFor, chorusCalls, listensOf, ringSize } from './ven.li
 import {
   ADDER_NEAR, ADDER_WARN, APPROACH, BAYS, BAY_IDS, CARPET_A, CARPET_SEEN, CARPET_WET, CHORUS_KEYS, FROG_H, FROG_LEN, GO_AWAY, MISSION, VARIANT_KEY,
   VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderView, between, carpetAt, frogOf, decoySlots, lastVenVariants, pointAt,
-  project, route, singOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type VenLaid, type WayStep,
+  padGoal, project, route, singOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type VenLaid, type WayStep,
 } from './ven.places';
 
 /** The keys that would take a step (the song asks him to keep still). */
@@ -234,8 +234,12 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
     } else if (step.kind === 'pad') {
       listen.pause();
       const enc = rust.current!;
+      // (the walk on is set now, from where he really stands: the moment before it may have
+      // ended with him further on, at or past where it was planned to go)
+      const goal = padGoal(id, laid.side, step.s, k.ranger());
+      k.stats.pad_goal_m = Math.round(dist(k.ranger(), goal.to) * 100) / 100;
       await rust.go('pad-ven', {
-        line: `${enc.vraag} ${c.loopDoor}`, family: () => step.from, to: step.to, doel: c.chipPad, cue: c.luister, glyph: 'footprints',
+        line: `${enc.vraag} ${c.loopDoor}`, family: () => goal.from, to: goal.to, doel: c.chipPad, cue: c.luister, glyph: 'footprints',
         hush: c.sst, away: GO_AWAY,
         // (standing there: the frogs ahead stay silent, then the words, the moment again)
         wrong: async () => { await k.wait(0.6); },

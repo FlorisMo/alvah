@@ -553,6 +553,40 @@ export function carpetPast(id: BayId, side: Side, st: Station): Place {
 export const GO_AWAY = 3;
 /** …and golden walks this far on, along his way. */
 export const GO_ON = 4.2;
+/** The goal of the walk on lies at least this far (m) from where he stands. */
+export const GO_CLEAR = GO_AWAY + 0.6;
+
+/** The shore path on east past bay C (its last few metres of open bank): where the walk on
+ *  goes when his way to the cove has no room left ahead of him. */
+const PATH_ON: Line = measure([...PATH.pts, ...[38, 36, 34, 32, 30, 28, 26, 24, 22].map((th) => polar(th, PATH_R))]);
+
+/**
+ * The dry path's walk on, set when the moment starts, from where he really stands (he may
+ * have ended the moment before it further on: walked at the adder as she slid off, or round
+ * her and on): `GO_ON` along his way beyond the further of the moment's planned start `s0`
+ * and his own place on it, and at least `GO_CLEAR` from his feet — where his way down to
+ * the cove has no room left, on along the shore path. `from`: his way behind him (the
+ * moment's 'animals': walking on is walking away from it). Pure.
+ */
+export function padGoal(id: BayId, side: Side, s0: number, me: Spot): { to: Place; from: Spot; s: number } {
+  const l = route(id, side);
+  const s = Math.max(s0, project(l, me).s);
+  const from = pointAt(l, s - 6);
+  // (far enough from his feet, and further from his way behind him than he is: where his
+  // way turns back down to the cove's near side, that is not walking on)
+  const away = dist(me, from) + 1;
+  const ahead = (line: Line, s1: number): Place | null => {
+    for (let q = Math.min(line.length, s1); ; q = Math.min(line.length, q + 0.25)) {
+      const p = pointAt(line, q);
+      if (dist(p, me) >= GO_CLEAR && dist(p, from) >= away) return { ...p, r: 0.7, heading: headingAt(line, q) };
+      if (q >= line.length) return null;
+    }
+  };
+  const to = ahead(l, s + GO_ON)
+    ?? ahead(PATH_ON, Math.max(project(PATH_ON, pointAt(l, s)).s, project(PATH_ON, me).s) + GO_ON)
+    ?? { ...pointAt(PATH_ON, PATH_ON.length), r: 0.7, heading: headingAt(PATH_ON, PATH_ON.length) };
+  return { to, from, s };
+}
 
 /* ------------------------------------------------------------ the way ---- */
 
@@ -607,12 +641,10 @@ export function wayOf(laid: Pick<VenLaid, 'bay' | 'side' | 'order' | 'stations' 
       steps.push({ kind: 'modder', s: st.s - CARPET_A - CARPET_SEEN, station: st.i, carpet, past, round: carpetRound(carpet) });
       lastEnd = st.s + CARPET_A + CARPET_PAST;
     } else if (enc === 'pad-ven') {
-      // (he walks on along his way: away from where he came from, past where she lay; where
-      // his way turns down to the cove, a little further, so the walk is really GO_ON long)
-      const from = pointAt(l, lastEnd);
-      let s1 = Math.min(l.length, lastEnd + GO_ON);
-      while (s1 < l.length && dist(pointAt(l, s1), from) < GO_AWAY + 0.6) s1 = Math.min(l.length, s1 + 0.25);
-      steps.push({ kind: 'pad', s: lastEnd, to: { ...pointAt(l, s1), r: 0.7, heading: headingAt(l, s1) }, from: pointAt(l, lastEnd - 6) });
+      // (he walks on along his way, away from where he came from: as planned from where the
+      // moment before it ends; the script sets it again from where he really stands)
+      const g = padGoal(id, side, lastEnd, pointAt(l, lastEnd));
+      steps.push({ kind: 'pad', s: lastEnd, to: g.to, from: g.from });
     }
   }
   const busy = steps.map(spanOf);
