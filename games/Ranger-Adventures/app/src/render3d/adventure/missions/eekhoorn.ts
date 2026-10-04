@@ -105,6 +105,10 @@ const HIDE2 = { most: 1, round: HIDE.round * 0.6 } as const;
  *  `grace` s more at most, sits up facing him and runs on. Lying in the sun it lies along
  *  its stub, turned `lie` rad from the way the stub points. */
 const ANTIC = { first: 0.25, again: 2.2, near: SEE_D + 0.2, lie: 0, grace: 1.1 } as const;
+/** The pine cone's way down, as heights (m) over where it lands, each a line of sight from
+ *  the lens that must be clear before it drops: its landing and its last 0.6 s of fall
+ *  (eekhoorn.places CONE_FALL: from 3.1 m it is 2.4 m up 0.6 s before it lands). */
+const CONE_SIGHT = [0.05, 0.6, 1.2, 1.8, 2.4] as const;
 /** How he turns on the spot after a find (rad/s at most, s at least). */
 const TURN = { rate: 3.2, min: 0.35 } as const;
 /** After a find it runs home to its stump: his keys are his this long (s) after it is off,
@@ -570,6 +574,15 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
    *  picture, near enough to read where it lands (eekhoorn.places coneDrop) — from just above
    *  the top of his picture, so its fall plays in it (CONE_FALL; review r1: from the crown it
    *  fell above his picture and lay a speck); 'Plof! Een dennenappel.' as it lands */
+  /** the cone's landing spot and the fall above it (its last 0.6 s and more), each a line
+   *  of sight from the lens clear of the home's trunks (not the ones the camera fades) and
+   *  of his body */
+  const coneClear = (q: Spot): boolean => {
+    const cam = k.world.camera, me = k.ranger();
+    const g0 = k.ctx.groundY(q.x, q.z), g = k.ctx.groundY(me.x, me.z);
+    const hiders: Upright[] = [...home.trunks(cam.position, me), { x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 }];
+    return CONE_SIGHT.every((up) => lineClear(cam.position, { x: q.x, y: g0 + up, z: q.z }, hiders));
+  };
   const coneTick = (walkFrom: number, t: HomeTree, name: string, line: string): void => {
     if (verrDone || verr !== 'denappel') return;
     const m = k.ranger();
@@ -580,6 +593,10 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     const H = k.ctx.canvas.clientHeight || 800;
     const top = ndcOf(spot, CONE_FALL.from);
     if (top && top.y < 1 - (2 * 92) / H) return;
+    // (and nothing between the lens and it: where it lands and the fall above it clear of
+    // the home's trunks and of his own body — ek-day review: 'Plof!' named a cone that fell
+    // behind the drey pine's trunk, and one whose last half fell behind his head)
+    if (!coneClear(spot)) { k.stats.verr_hid = (k.stats.verr_hid ?? 0) + 1; return; }
     verrDone = true;
     k.stats.verr_go = 1;
     let inFall = 0, lastT = k.now;
@@ -1185,6 +1202,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   };
   /** the jay's own cache: it pushes its acorn into the needles, looks at him, flies up */
   // (it plays while he comes up to it — he walks on meanwhile: short, the line at once)
+  let jayRun: Promise<void> | null = null;
   const jayMoment = async (): Promise<void> => {
     k.stats.verr_go = 1;
     home.jayBury();
@@ -1233,7 +1251,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
             k.stats.gaai_sq = Math.round(dist(sq, j) * 10) / 10;
             k.stats.gaai_stump = onStump ? 1 : 0;
             verrDone = true;
-            void jayMoment().catch(() => {});
+            jayRun = jayMoment().catch(() => {});
           } else if (pic?.ok && !sqElse) k.stats.gaai_wait_sq = 1;
         }
         if (!verrDone && d < JAY_SEE.close) {
@@ -1261,6 +1279,10 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   // (the way is behind him: what he saw of it is his, the rest stays for another visit)
   nestSeen?.off();
   kegelsSeen.off();
+  // (the jay's own cache, still under way as he arrives: its line is heard out and the jay
+  // is up to its oak before the glade's line — played 2026-10-05, seed 554580926: 'Hier is
+  // zijn plekje.' cut 'De gaai verstopt ook nootjes!' 1.6 s in, as in the ek-day review)
+  if (jayRun) await k.guard(jayRun);
   k.say(c.plekje);
   chatter();
   // it takes acorns from its store: it starts burying with its cheeks full
