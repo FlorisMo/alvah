@@ -27,7 +27,7 @@ import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { atLocal, dist, headingTo, segDist, uniformLocal, type Frame } from '../places.ts';
-import { barkRadius, trunkFadeUpright, trunkOutline } from '../squirrel-math.ts';
+import { ANTIC_KINDS, barkRadius, dashPath, lineClear, trunkFadeUpright, trunkOutline, trunkUpright, type AnticKind, type Upright } from '../squirrel-math.ts';
 import type { TreeStub } from '../../world/Forest.ts';
 
 /** The eekhoorn marker: the bos anchor it has always had (the test checks it). */
@@ -169,6 +169,14 @@ const WAY_SPECS: Readonly<Record<RouteId, readonly Spec[]>> = {
 /** The way that plants each shared tree is laid first (its stub is that way's wait). */
 const PLANT_ORDER: readonly RouteId[] = ['noord', 'zuid', 'midden'];
 
+/** Run 7 (ek-day, design §6.8): the pine of each way it hides round a SECOND time on some
+ *  plays ("Nog een keer!"), close to its first hide tree. The old line's hide pine and the
+ *  left way's stand 4.2 m apart, each the other's; the right way's is a pine of its own
+ *  4.7 m south-west of its hide pine, toward the glade (open forest floor: no other tree of
+ *  the wood there, `__ranger.treeSpots()` 2026-10-04). Each in its own open ring, as a hide
+ *  tree (the places test plays hide-and-seek round it from where the first one is found). */
+const Z5 = { id: 'z5', x: 20.3, z: -61.3, h: 13.6, rotY: 4.4 } as const;
+
 /** The trees of the home (the forest draws them with its own; the scatter keeps clear).
  *  [0] its den by the marker; then every way's trees; then the glade's oak and the pine
  *  by the store. */
@@ -201,6 +209,10 @@ export const HOME_TREES: readonly HomeTree[] = (() => {
   // the pine by the store, left of the stump: a small bird sits on its dead stub, a
   // woodpecker or a nuthatch on its bark, and after the mission the squirrel lives in it
   out.push({ id: 'storePine', ...g(-2.45, 1.7), species: 'prop-pine-scots', h: 12, rotY: 3.3, branch: { ang: headingTo(g(-2.45, 1.7), CALLERS_STAND) - 0.6, h: 1.75, out: 0.34 } });
+  // run 7 (ek-day): the right way's second hide pine (its stub where it lands from the
+  // hide pine before, as on a pine it passes)
+  const z4 = out.find((t) => t.id === 'z4')!;
+  out.push({ ...Z5, species: 'prop-pine-scots', branch: { ang: headingTo(Z5, z4) + 0.2, h: 1.55, out: 0.26 } });
   return out;
 })();
 
@@ -261,6 +273,87 @@ export const JAY_GROUND: Spot = g(-0.2, 1.45);
  *  axis out to it, square to the lens), so it is seen in profile against the wood behind,
  *  never half behind the trunk. */
 export const WOODPECKER = { tree: TREE.storePine, h: 1.2, ang: headingTo(TREE.storePine, g(-1.0, -1.9)) + 1.5 } as const;
+
+/** Run 7 (ek-day, the ending `begraaf`): where it buries one last acorn by its stump and
+ *  pats it down — beside the stump on the side away from its store and the jay's way, in
+ *  the callers' picture, a little further from the lens than the stump (it runs there
+ *  across the picture, never toward the lens), off every caching spot (the places test). */
+export const BURY_AT: Spot = g(-2.0, 0.75);
+
+/**
+ * Run 7 (ek-day, the surprise `gaai`): where the jay buries an acorn of its own on a play
+ * with that surprise — on the needles at the glade's edge, ahead of him and beside his
+ * way as he walks from the pine he found the squirrel round to the glade (3.5-8.5 m on,
+ * within 45° of his way there and 1.1-3 m off his straight line: he walks up past it, near
+ * enough that it acts — from the second hide pine too, but for the south way's, which stands
+ * too near the glade for it: `drawDay` gives that play another surprise), off the caching
+ * spots, the store and the
+ * trunks (the places test, from wherever he may have found it). It waits there from the
+ * briefing (a jay foraging on the ground), and when he comes it pushes its acorn into the
+ * needles, looks at him and flies up to the glade oak — where it waits for the store.
+ */
+export const JAY_CACHE: Readonly<Record<RouteId, Spot>> = {
+  midden: { x: 15.0, z: -56.75 }, noord: { x: 15.0, z: -56.75 }, zuid: { x: 16.25, z: -59.25 },
+};
+/** It acts only while its flight up to the glade oak goes off across his picture or away
+ *  from him, never back at him: the flight's heading within `fly` rad of his way to it. */
+export const JAY_FLY = (100 * Math.PI) / 180;
+/**
+ * When the jay buries its acorn (review r1: it acted 12-25 px tall, with the squirrel
+ * running through the same picture or sitting by its fern, so 'De gaai verstopt ook
+ * nootjes!' named something he could not find): only while it stands at least `px` tall in
+ * his picture (its `h` m: about 8 m from the lens, 3-3.5 m ahead of him) and inside the
+ * picture's middle `mid` (−mid…mid across, and the middle share of its height), off his own
+ * body (`body` across), mostly clear of the trunks, he still `close` m from it or more and
+ * its flight up away from him (jayFliesAway); and only while the squirrel is on its stump or
+ * clearly elsewhere (not in the lower half of his picture, `apart` m from the jay at least).
+ * Not in the first `after` s of his walk. If that never comes on his walk, it flies up
+ * without a word, as when he comes on it from the side (within `close` m).
+ */
+export const JAY_SEE = { h: 0.3, px: 28, mid: 0.7, body: 0.1, close: 2.5, apart: 3.0, after: 1.2 } as const;
+export function jayFliesAway(me: Spot, at: Spot = JAY_CACHE.midden): boolean {
+  return Math.abs(wrapA(headingTo(at, JAY_WAIT) - headingTo(me, at))) < JAY_FLY;
+}
+
+/**
+ * Run 7 (ek-day, the surprise `denappel`): where a pine cone from the crown of the pine he
+ * walks up to (where the squirrel waits for him) lands — in front of its trunk on his side,
+ * `r` m out from it (under its crown, nearest him first) and turned `turn` rad off his line
+ * to it, on the side away from the stub the squirrel sits on (`seat` m from its seat at
+ * least) — the first that fits: beside his way, never on it (`beside` m off it at least),
+ * never on a trunk's root spurs (`clear`) nor a dining spot, and big enough where it lies
+ * (its `len` m at least `px` of an 800 px picture through the follow lens behind him facing
+ * `heading`) — while he is `from` m off the pine; else null. Walking up to the squirrel he
+ * looks there (played 2026-10-04, review r1: dropped 3-6 m ahead of him it lay 15-25 px on
+ * the needles, and its fall from 6.5 m up was above his picture: nobody saw it fall).
+ */
+export const CONE_DROP = { r: [2.1, 1.8, 1.5], turn: [0.6, 0.75, 0.9], from: [3.0, 5.0], beside: 0.9, clear: 1.25, seat: 1.0, len: 0.25, px: 25 } as const;
+/**
+ * …and how it falls (eekhoorn.home): from `from` m up — just above the top of his picture
+ * (under the line card), so it is never seen to start in the air, while its last `see` s at
+ * least fall inside it (the follow lens shows ~2.7 m of air over the needles there: a cone
+ * from the crown, 6.5 m up, crossed it in a third of a second) — gathering speed `g` m/s²
+ * (a cone through pine twigs), one bounce keeping `bounce` of it.
+ */
+export const CONE_FALL = { from: 3.1, g: 5, bounce: 0.3, see: 0.6 } as const;
+/** How tall `size` m at `d` m reads through the 55° follow lens, as a share of the picture. */
+const shareAt = (size: number, d: number): number => size / (2 * d * Math.tan((55 / 2) * Math.PI / 180));
+export function coneDrop(me: Spot, t: HomeTree, heading: number = headingTo(me, t)): Spot | null {
+  const d = dist(me, t);
+  if (d < CONE_DROP.from[0] || d > CONE_DROP.from[1]) return null;
+  const toMe = headingTo(t, me);
+  const seat = seatOf(t);
+  const stub = t.branch ? Math.sign(wrapA(t.branch.ang - toMe)) || 1 : 1;
+  const lens = { x: me.x - Math.sin(heading) * FOUND_RUN.back, z: me.z - Math.cos(heading) * FOUND_RUN.back };
+  for (const r of CONE_DROP.r) for (const a of CONE_DROP.turn) for (const s of [-stub, stub]) {
+    const p = { x: t.x + Math.sin(toMe + s * a) * r, z: t.z + Math.cos(toMe + s * a) * r };
+    if (HOME_TREES.some((o) => dist(o, p) < CONE_DROP.clear) || segDist(p, me, t) < CONE_DROP.beside) continue;
+    if (DINING.some((q) => dist(q, p) < 1.0) || dist(p, seat) < CONE_DROP.seat) continue;
+    if (shareAt(CONE_DROP.len, Math.hypot(dist(lens, p), 2.4)) * 800 < CONE_DROP.px) continue;
+    return p;
+  }
+  return null;
+}
 
 /** Where a forgotten acorn grows into an oak seedling (after, on a later visit): in the
  *  glade between the caching spots and the big oak, off every spot (the acorns the child
@@ -381,7 +474,7 @@ const STUB_AT: Spot = (() => {
 })();
 const INTRO_OFF = 0.7;
 const INTRO_D = 2.8; // (≈ where the lens fit lands: for choosing the side only)
-export function introView(me: Spot, toward: Spot = ROUTES.midden.waits[0], tall = 1.85): {
+export function introView(me: Spot, toward: Spot = ROUTES.midden.waits[0], tall = 1.85, at: Spot = STUB_AT): {
   at: Spot; heading: number; halfW: number; halfD: number; tall: number; pitchDeg: number; insetTop: number; insetBottom: number;
 } {
   const toStub = headingTo(me, STUB_AT);
@@ -391,7 +484,30 @@ export function introView(me: Spot, toward: Spot = ROUTES.midden.waits[0], tall 
   const lensOf = (h: number): Spot => ({ x: STUB_AT.x - Math.sin(h) * INTRO_D, z: STUB_AT.z - Math.cos(h) * INTRO_D });
   const a = toStub + INTRO_OFF, b = toStub - INTRO_OFF;
   const heading = Math.hypot(lensOf(a).x - follow.x, lensOf(a).z - follow.z) < Math.hypot(lensOf(b).x - follow.x, lensOf(b).z - follow.z) ? a : b;
-  return { at: STUB_AT, heading, halfW: 0.55, halfD: 0.3, tall, pitchDeg: 8, insetTop: 104, insetBottom: 60 };
+  return { at, heading, halfW: 0.55, halfD: 0.3, tall, pitchDeg: 8, insetTop: 104, insetBottom: 60 };
+}
+
+/**
+ * Run 7 (ek-day, design §6.8): where it is in the den look, by this play's den. `omlaag`: head
+ * down on the bark under its stub (its feet `downH` m up), turned `downTurn` rad from the
+ * stub toward the lens — it hangs there looking out, its tail up the trunk. `voet`: sitting
+ * on the needles at the pine's foot, out past its root spurs (`footOut` m beyond them), turned
+ * `footTurn` rad round from the lens toward the stub's side — nibbling a pine cone. `lens`:
+ * where the den look's lens stands. (`tak` and `spiraal` end on its stub, as it always sat.)
+ */
+export const DEN_DAY = { downH: 0.95, downTurn: 0.4, footTurn: 0.75, footOut: 0.2, footTall: 1.2 } as const;
+export function denSpot(lens: Spot, me: Spot): { down: { ang: number; h: number }; foot: Spot; footFace: number } {
+  const t = HOME_TREES[0], b = t.branch!;
+  const tr = { x: t.x, z: t.z, H: t.h, species: t.species };
+  const camAng = headingTo(t, lens);
+  const toCam = Math.sign(wrapA(camAng - b.ang)) || 1;
+  const down = { ang: b.ang + toCam * DEN_DAY.downTurn, h: DEN_DAY.downH };
+  // (round from the lens on the side away from him: never at his feet)
+  const r = Math.max(trunkOutline(tr, 0), barkRadius(tr, 0)) + DEN_DAY.footOut;
+  const at = (a: number): Spot => ({ x: t.x + Math.sin(a) * r, z: t.z + Math.cos(a) * r });
+  const [a1, a2] = [camAng + DEN_DAY.footTurn, camAng - DEN_DAY.footTurn];
+  const foot = dist(at(a1), me) >= dist(at(a2), me) ? at(a1) : at(a2);
+  return { down, foot, footFace: headingTo(foot, lens) };
 }
 
 /** The framed views (design §3.6): the glade floor from above for the acorns (corsi),
@@ -613,6 +729,222 @@ export function foundStand(tree: HomeTree, sqAng: number, me: Spot): Spot {
 export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
   const side = Math.sign(wrapA(headingTo(tree, me) - sqAng)) || 1;
   return headingTo(tree, me) - side * FOUND.turns[0] * 0.7;
+}
+
+/**
+ * Run 7 (ek-day, review r1): after a find — the first and the second, round every pine it
+ * hides round, the young one's play too — the squirrel's way from the bark to its stump
+ * plays in his picture, across it or away from the lens, never at it (played 2026-10-04:
+ * he still faced the tree from the found view, so where he found it from the glade's side
+ * the stump stood behind him, and the squirrel ran from the bark past him into the
+ * picture's bottom corner, big, at the lens, in 3 of 3 plays with a second hide).
+ *
+ * So he turns first — the lens comes round behind him (kit `behind`: `back` m back) — to
+ * the heading nearest his way to the glade from which: the squirrel on the bark is in the
+ * picture (`half` rad either side of its middle), on the bark's side toward the lens
+ * (`face`), not behind his body (`body`) nor another trunk; the stump stands at least
+ * `front` m in front of the lens (its run never goes round behind the lens); and its whole
+ * real way — down the bark (round to the side `sides` picks), off the bark, the dash to
+ * where it pops up in front of him (`pops`: m ahead of him, rad off his heading, on the
+ * stump's side first), and on to its stump as its dash plans it (round him and round the
+ * lens: squirrel-math `dashPath`) — never comes nearer the lens than it has been by more
+ * than `toward` m, never through a trunk's foot nor within `feet` m of his, and its first `runIn` m on from the pop
+ * stay in the picture (above `low` of it, where −1 is its bottom edge, as the pop and its
+ * whole way off the bark; its pine `lensD` m from the lens at least), and at most `hid` of its dash from off the bark to the pop (and of
+ * that run on) is behind his body or a trunk (squirrel-math `lineClear`), never its last
+ * `seeLast` m into the pop. The pop is in the picture too, off his body, off every trunk's foot.
+ * Where no heading from where he stands does it, a few calm steps first (`steps` m, the way
+ * back from the tree first). `ok`: one did.
+ */
+export const FOUND_RUN = {
+  back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, face: (75 * Math.PI) / 180, toward: 0.25, front: 3.0, feet: 1.15,
+  step: (2.5 * Math.PI) / 180, runIn: 2, hid: 0.2, seeLast: 0.5, low: -0.75, lensD: 3.0, roomy: 4.5,
+  pops: [[1.6, 0.7], [1.6, 0.9], [1.9, 0.6], [1.9, 0.8], [2.3, 0.5], [2.3, 0.7], [1.9, 1.0], [2.7, 0.45], [2.7, 0.65], [3.2, 0.4], [3.2, 0.6], [1.6, 1.2], [2.3, 1.1], [3.0, 0.9]] as readonly (readonly [number, number])[],
+  sides: [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2, 1.5, -1.5],
+  steps: [0.6, 1.0, 1.4, 1.8],
+} as const;
+/** The picture's whole half-width (rad) through the 55° follow lens at 1280×800 (a little in
+ *  from its edge). */
+const FOLLOW_HALF = Math.atan(Math.tan((55 / 2) * Math.PI / 180) * 1.6 * 0.9);
+/** Where it clings on the bark once found (its found face, `HIDE.h` up). */
+export function barkSpot(tree: HomeTree, ang: number): Spot {
+  const r = barkRadius({ x: tree.x, z: tree.z, H: tree.h, species: tree.species }, HIDE.h) + 0.08;
+  return { x: tree.x + Math.sin(ang) * r, z: tree.z + Math.cos(ang) * r };
+}
+/** The squirrel's real way after a find, over the ground (x/z): from the bark at `sqAng`
+ *  round and down to `side`, off the bark, its dash to `pop`, and its dash on to its stump's
+ *  foot — each dash as squirrel-math plans it (round `me`, round `lens`). `pop`: the index
+ *  of the pop in `pts`; `foot`: of the spot it comes off the bark. */
+export function foundRunPath(me: Spot, tree: HomeTree, sqAng: number, side: number, pop: Spot, lens: Spot): { pts: Spot[]; foot: number; pop: number } {
+  const tr = { x: tree.x, z: tree.z, H: tree.h, species: tree.species };
+  const pts: Spot[] = [barkSpot(tree, sqAng)];
+  const da = wrapA(side - sqAng);
+  const n = Math.max(1, Math.ceil(Math.abs(da) / 0.15));
+  for (let i = 1; i <= n; i++) {
+    const a = sqAng + (da * i) / n, r = barkRadius(tr, HIDE.h + ((0.25 - HIDE.h) * i) / n) + 0.08;
+    pts.push({ x: tree.x + Math.sin(a) * r, z: tree.z + Math.cos(a) * r });
+  }
+  const r0 = barkRadius(tr, 0) + 0.35; // (squirrel-math dismountPlan)
+  pts.push({ x: tree.x + Math.sin(side) * r0, z: tree.z + Math.cos(side) * r0 });
+  const foot = pts.length - 1;
+  const avoid = { x: me.x, z: me.z, r: 1.6 }; // (squirrel.ts: a dash goes round him)
+  const toPop = dashPath(pts[foot], pop.x, pop.z, lens, avoid);
+  pts.push(...toPop.slice(1));
+  const at = pts.length - 1;
+  const d = dist(pop, STUMP) || 1;
+  const sf = { x: STUMP.x + ((pop.x - STUMP.x) / d) * (STUMP.r + 0.3), z: STUMP.z + ((pop.z - STUMP.z) / d) * (STUMP.r + 0.3) }; // (squirrel.ts toStumpPlan)
+  pts.push(...dashPath(pop, sf.x, sf.z, lens, avoid).slice(1));
+  return { pts, foot, pop: at };
+}
+/** Points every `step` m along a way. */
+function along(pts: readonly Spot[], step = 0.1): Spot[] {
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], n = Math.max(1, Math.ceil(dist(a, b) / step));
+    for (let k = 1; k <= n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, z: a.z + ((b.z - a.z) * k) / n });
+  }
+  return out;
+}
+/** The follow lens behind him facing `h` (x/z). */
+export function lensBehind(me: Spot, h: number, back: number = FOUND_RUN.back): Spot {
+  return { x: me.x - Math.sin(h) * back, z: me.z - Math.cos(h) * back };
+}
+/** From `me` facing `h`: where it pops up and the side it comes down, when its run plays in
+ *  his picture (FOUND_RUN); else null. */
+function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: Spot; side: number } | null {
+  const lens = lensBehind(me, h);
+  const off = (q: Spot): number => Math.abs(wrapA(headingTo(lens, q) - h));
+  // (how far down the picture a spot on the ground is: −1 its bottom edge, 0 its middle — the
+  // follow lens 2.4 m up looks down at 0.65 of his height on him; eekhoorn.ts hands the lens
+  // back to it as soon as it has come round behind him, before the squirrel comes down)
+  const pitch = Math.atan2(2.4 - 0.65 * RANGER_STAND_HEIGHT, FOUND_RUN.back);
+  const yOf = (q: Spot): number => {
+    const along = (q.x - lens.x) * Math.sin(h) + (q.z - lens.z) * Math.cos(h);
+    return along <= 0.3 ? -9 : -Math.tan(Math.atan2(2.4 - 0.1, along) - pitch) / Math.tan((55 / 2) * Math.PI / 180);
+  };
+  const rOf = (t: HomeTree): number => barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, 1) + 0.3;
+  const footOf = (t: HomeTree): number => trunkOutline({ x: t.x, z: t.z, H: t.h, species: t.species }, 0.15) + 0.05;
+  const sq = barkSpot(tree, sqAng);
+  // (the lens clear of every trunk, its own pine not between the lens and him, the stump in
+  // front of the lens, the squirrel's side of the bark toward the lens, in the picture, not
+  // behind his body nor another trunk)
+  if (HOME_TREES.some((t) => dist(t, lens) < rOf(t) + 0.7) || segDist(tree, lens, me) < rOf(tree) + 0.2) return null;
+  if ((STUMP.x - lens.x) * Math.sin(h) + (STUMP.z - lens.z) * Math.cos(h) < FOUND_RUN.front) return null;
+  if (Math.abs(wrapA(headingTo(tree, lens) - sqAng)) > FOUND_RUN.face || off(sq) > FOUND_RUN.half) return null;
+  if (off(sq) < FOUND_RUN.body && dist(lens, sq) > dist(lens, me) - 0.3) return null;
+  // (never big by the lens: its pine `lensD` m from it at least)
+  if (dist(lens, sq) < FOUND_RUN.lensD) return null;
+  if (HOME_TREES.some((t) => t !== tree && segDist(t, lens, sq) < rOf(t))) return null;
+  const toStump = Math.sign(wrapA(headingTo(me, STUMP) - h)) || 1;
+  // (what hides it from the lens, heights over the ground: the trunks — but the ones the
+  // follow camera fades between the lens and him — and his own body)
+  const eye = { x: lens.x, y: 2.4, z: lens.z };
+  const fadeOk = (t: HomeTree): boolean => {
+    const f = trunkFadeUpright({ x: t.x, z: t.z, H: t.h, species: t.species }, 0);
+    return lineClear(eye, { ...me, y: RANGER_STAND_HEIGHT }, [f]) && lineClear(eye, { ...me, y: 0.9 }, [f]);
+  };
+  const body: Upright = { x: me.x, z: me.z, y0: 0, y1: RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 };
+  const hiders: Upright[] = [...HOME_TREES.filter(fadeOk).map((t) => trunkUpright({ x: t.x, z: t.z, H: t.h, species: t.species }, 0)), body];
+  // (on its own bark: the other trunks and his body; its own pine hides it only round the back)
+  const others: Upright[] = [...HOME_TREES.filter((t) => t !== tree && fadeOk(t)).map((t) => trunkUpright({ x: t.x, z: t.z, H: t.h, species: t.species }, 0)), body];
+  const hiddenAt = (q: Spot): boolean => !lineClear(eye, { x: q.x, y: 0.15, z: q.z }, hiders);
+  const tr = { x: tree.x, z: tree.z, H: tree.h, species: tree.species };
+  const r0 = barkRadius(tr, 0) + 0.35;
+  for (const k of FOUND_RUN.sides) {
+    const side = sqAng + k;
+    // (it comes down the bark round to `side` where he sees it: that side of the bark toward
+    // the lens all the way down, clear of his body and the other trunks, and where it comes
+    // off the bark too)
+    const down = [0, 0.5, 1].map((u) => ({ a: sqAng + wrapA(side - sqAng) * u, y: HIDE.h + (0.25 - HIDE.h) * u }));
+    if (down.some((q) => Math.abs(wrapA(headingTo(tree, lens) - q.a)) > FOUND_RUN.face)) continue;
+    if (down.some((q) => { const r = barkRadius(tr, q.y) + 0.1; return !lineClear(eye, { x: tree.x + Math.sin(q.a) * r, y: q.y + 0.12, z: tree.z + Math.cos(q.a) * r }, others); })) continue;
+    const foot = { x: tree.x + Math.sin(side) * r0, z: tree.z + Math.cos(side) * r0 };
+    if (!lineClear(eye, { ...foot, y: 0.15 }, others)) continue;
+    // where it sits up facing him: at the foot of its pine there, or out on the ground in front
+    // of him (the stump's side first)
+    const pops: Spot[] = [foot, ...FOUND_RUN.pops.flatMap(([d, turn]) => [toStump, -toStump].map((s2) => ({ x: me.x + Math.sin(h + s2 * turn) * d, z: me.z + Math.cos(h + s2 * turn) * d })))];
+    for (const pop of pops) {
+      const atFoot = pop === foot;
+      if (HOME_TREES.some((t) => !(atFoot && t === tree) && dist(t, pop) < footOf(t) + 0.35) || off(pop) > FOUND_RUN.half || yOf(pop) < FOUND_RUN.low) continue;
+      // (level with him or ahead of him, never between him and the lens; off his body)
+      if (off(pop) < FOUND_RUN.body || (pop.x - me.x) * Math.sin(h) + (pop.z - me.z) * Math.cos(h) < -0.5) continue;
+      const way = foundRunPath(me, tree, sqAng, side, pop, lens);
+      let far = -Infinity, bad = false;
+      for (const q of along(way.pts)) {
+        const dq = dist(lens, q);
+        if (dq < far - FOUND_RUN.toward) { bad = true; break; }
+        far = Math.max(far, dq);
+      }
+      if (bad) continue;
+      // (over the ground: never through a trunk's foot — its own pine's: never back in past
+      // where it comes off the bark, round it, not through it — nor by his feet)
+      const dash = along(way.pts.slice(way.foot));
+      // (off the bark it runs above the picture's bottom edge, to the pop and on)
+      if (along(way.pts.slice(way.foot, way.pop + 1)).some((q) => yOf(q) < FOUND_RUN.low)) continue;
+      const off0 = Math.min(dist(tree, way.pts[way.foot]), footOf(tree)) - 0.02;
+      if (dash.some((q) => dist(q, me) < FOUND_RUN.feet || HOME_TREES.some((t) => dist(t, q) < (t === tree ? off0 : footOf(t))))) continue;
+      // (its first `runIn` m on from the pop in the picture: it runs off where he sees it)
+      let run = 0, prev = pop;
+      const on = along(way.pts.slice(way.pop)).filter((q) => { run += dist(prev, q); prev = q; return run <= FOUND_RUN.runIn; });
+      if (on.some((q) => off(q) > FOLLOW_HALF || yOf(q) < FOUND_RUN.low)) continue;
+      // (and he sees it run: at most `hid` of its dash to the pop, and of that run on, behind
+      // his body or a trunk, never its last `seeLast` m into the pop — played 2026-10-04: its
+      // dash across in front of him went behind his legs and the trunk, gone for 1.5 s)
+      const toPop = along(way.pts.slice(way.foot, way.pop + 1)).map(hiddenAt);
+      const runOn = on.map(hiddenAt);
+      const last = toPop.length - Math.ceil(FOUND_RUN.seeLast / 0.1);
+      if (toPop.filter(Boolean).length > FOUND_RUN.hid * toPop.length || runOn.filter(Boolean).length > FOUND_RUN.hid * runOn.length
+        || toPop.slice(Math.max(0, last)).some(Boolean)) continue;
+      return { pop, side };
+    }
+  }
+  return null;
+}
+/** After a find (`sqAng`: its found face on `tree`'s bark, `me`: where he stands): where he
+ *  turns to (and, where he must, a few calm steps first) so that its run to its stump plays
+ *  in his picture (FOUND_RUN). `step: false`: from where he stands only (once his steps are
+ *  done: its dash round him is planned from where he really stopped). */
+export function foundRun(me: Spot, sqAng: number, tree: HomeTree, o: { step?: boolean } = {}): { at: Spot; face: number; pop: Spot; side: number; ok: boolean } {
+  // (the turn nearest his way to the glade that does it — and, where one does it with its pine
+  // `roomy` m off the lens or more, the nearest such: not its pine at the picture's edge right
+  // by the lens, the squirrel coming down low in the picture)
+  const sq = barkSpot(tree, sqAng);
+  const turnFrom = (at: Spot): { face: number; pop: Spot; side: number } | null => {
+    const want = headingTo(at, wayTo(at, STAND));
+    let first: { face: number; pop: Spot; side: number } | null = null;
+    for (let a = 0; a <= Math.PI + 1e-9; a += FOUND_RUN.step) {
+      for (const s of a === 0 ? [1] : [1, -1]) {
+        const h = want + s * a;
+        if (first && dist(lensBehind(at, h), sq) < FOUND_RUN.roomy) continue;
+        const r = foundRunAt(at, tree, sqAng, h);
+        if (!r) continue;
+        if (dist(lensBehind(at, h), sq) >= FOUND_RUN.roomy) return { face: wrapA(h), ...r };
+        first ??= { face: wrapA(h), ...r };
+      }
+    }
+    return first;
+  };
+  const roomy = (at: Spot, t: { face: number }): boolean => dist(lensBehind(at, t.face), sq) >= FOUND_RUN.roomy;
+  const here = turnFrom(me);
+  if (here && (roomy(me, here) || o.step === false)) return { at: me, ...here, ok: true };
+  if (o.step === false) return { at: me, face: headingTo(me, wayTo(me, STAND)), pop: me, side: sqAng, ok: false };
+  // (else a few calm steps first — the way back from the tree first — to where a turn does it,
+  // roomy; or, where none is roomy, the turn from where he stands, or else the first that does)
+  const back = headingTo(tree, me);
+  const ways = Array.from({ length: 16 }, (_, i) => back + ((i % 2 ? 1 : -1) * Math.ceil(i / 2) * Math.PI) / 8);
+  let stepped: { at: Spot; face: number; pop: Spot; side: number } | null = null;
+  for (const r of FOUND_RUN.steps) for (const a of ways) {
+    const at = { x: me.x + Math.sin(a) * r, z: me.z + Math.cos(a) * r };
+    if (HOME_TREES.some((t) => dist(t, at) < trunkClear(t) || segDist(t, me, at) < trunkClear(t) - 0.15)) continue;
+    const t = turnFrom(at);
+    if (t && roomy(at, t)) return { at, ...t, ok: true };
+    if (t) stepped ??= { at, ...t };
+  }
+  if (here) return { at: me, ...here, ok: true };
+  if (stepped) return { ...stepped, ok: true };
+  // (none: as before — toward the glade, it pops up ahead of him)
+  const face = headingTo(me, wayTo(me, STAND));
+  return { at: me, face, pop: { x: me.x + Math.sin(face + 0.6) * 1.9, z: me.z + Math.cos(face + 0.6) * 1.9 }, side: sqAng, ok: false };
 }
 
 /* -------------------------------------------- what he can find (run 7) ---- */
@@ -1026,30 +1358,79 @@ export function jayStep(step: number, steps: number): Spot {
  *  its caching pattern (and the look of its cushions), its three neighbours; run 7 (its
  *  finds, design §6.7): which wait tree of the way carries its nest (`nest`: an index into
  *  `nestTrees(route)`) and the look of it, and at which of the way's two dining spots its
- *  gnawed cones lie (`kegels`) and how they lie. */
-export interface EekhoornPlay { route: RouteId; veld: FieldSym; veldSeed: number; buren: Trio; nest: number; nestSeed: number; kegels: DiningId; kegelSeed: number }
+ *  gnawed cones lie (`kegels`) and how they lie; run 7 (ek-day, design §6.8): the
+ *  squirrel's own day (`day`). */
+export interface EekhoornPlay { route: RouteId; veld: FieldSym; veldSeed: number; buren: Trio; nest: number; nestSeed: number; kegels: DiningId; kegelSeed: number; day: Day }
+
+/* ------------------------------------------------- the squirrel's day (ek-day) ---- */
+
+/** How it is when he comes to the marker (design §6.8, `den`): on its stub (as it always
+ *  was), hanging head down on the trunk under it, nibbling a pine cone at the pine's foot,
+ *  or a spiral run up the trunk to its stub as he arrives. */
+export type DenKind = 'tak' | 'omlaag' | 'voet' | 'spiraal';
+export const DEN_KINDS: readonly DenKind[] = ['tak', 'omlaag', 'voet', 'spiraal'];
+/** How the mission ends (`einde`): it eats an acorn on its stump (as it always did), it
+ *  buries one last acorn by the stump and pats it down (a forgotten one: the seedling a
+ *  later visit finds), or it grooms on its stump with its tail curled. */
+export type Einde = 'eet' | 'begraaf' | 'poets';
+export const EINDES: readonly Einde[] = ['eet', 'begraaf', 'poets'];
+/** One small surprise on a walk (`verrassing`), or none: a pine cone drops beside his path,
+ *  the jay buries an acorn of its own ahead of him, a drum roll from the glade (only when
+ *  the great spotted woodpecker is today's neighbour on the bark). */
+export type Verrassing = 'geen' | 'denappel' | 'gaai' | 'roffel';
+export const SURPRISES: readonly Exclude<Verrassing, 'geen'>[] = ['denappel', 'gaai', 'roffel'];
+/** What it does at each wait while he comes, none twice in a play (squirrel-math
+ *  `anticPlan`); lying flat in the sun only in a sunny light. */
+export type Antic = AnticKind;
+export const ANTICS: readonly Antic[] = ANTIC_KINDS;
+export const SUN_MOODS: readonly string[] = ['zonnig', 'gouden-uur'];
+/** The squirrel's day: its den, an antic per wait (in order), the surprise, a second hide
+ *  (round `SECOND_HIDE[route]`), the ending. */
+export interface Day { den: DenKind; antics: readonly Antic[]; verrassing: Verrassing; verstop2: boolean; einde: Einde }
+/** How often (design §6.8): a surprise in about 2 of 3 plays, a second hide in about 1 of 3
+ *  — and never three plays in a row without one (the third has it). */
+export const DAY_ODDS = { verrassing: 2 / 3, verstop2: 1 / 3 } as const;
 
 /** The history's key for this mission's variant (the play notes it as `ek`). */
 export const VARIANT_KEY = 'ek';
 const ROUTE_LETTER: Record<RouteId, string> = { midden: 'm', noord: 'n', zuid: 'z' };
 const SYM_LETTER: Record<FieldSym, string> = { recht: 'r', 'spiegel-u': 'u', 'spiegel-v': 'v', om: 'o' };
+const DEN_LETTER: Record<DenKind, string> = { tak: 't', omlaag: 'o', voet: 'v', spiraal: 's' };
+const EINDE_LETTER: Record<Einde, string> = { eet: 'e', begraaf: 'b', poets: 'p' };
+const VERR_LETTER: Record<Verrassing, string> = { geen: 'x', denappel: 'd', gaai: 'g', roffel: 'r' };
+const ANTIC_LETTER: Record<Antic, string> = { kijken: 'k', poetsen: 'p', knabbelen: 'n', zonnen: 'z', mopperen: 'm' };
+const byLetter = <T extends string>(m: Record<T, string>, l: string): T => (Object.keys(m) as T[]).find((k) => m[k] === l)!;
 
-/** The variant as the history keeps it: way, pattern, trio ('n-u-kgr'). */
-export function variantOf(p: Pick<EekhoornPlay, 'route' | 'veld' | 'buren'>): string {
-  return `${ROUTE_LETTER[p.route]}-${SYM_LETTER[p.veld]}-${trioCode(p.buren)}`;
+/** The variant as the history keeps it: way, pattern, trio ('n-u-kgr'); run 7 (ek-day), with
+ *  its day: the nest's tree, the den, the ending, the surprise, the second hide and the
+ *  antic at each wait ('n-u-kgr-1obg2pkm'), so the next play's day is drawn against it.
+ *  ≤ 16 characters: after the mood and a rare it still fits the history's 60 (the places
+ *  test). */
+export function variantOf(p: Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> & Partial<Pick<EekhoornPlay, 'nest' | 'day'>>): string {
+  const base = `${ROUTE_LETTER[p.route]}-${SYM_LETTER[p.veld]}-${trioCode(p.buren)}`;
+  if (!p.day || p.nest === undefined) return base;
+  const d = p.day;
+  return `${base}-${p.nest}${DEN_LETTER[d.den]}${EINDE_LETTER[d.einde]}${VERR_LETTER[d.verrassing]}${d.verstop2 ? 2 : 1}${d.antics.map((a) => ANTIC_LETTER[a]).join('')}`;
 }
-export function parseVariant(v: string): Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> | null {
-  const m = /^([mnz])-([ruvo])-([a-z]{3})$/.exec(v);
+
+/** A last play as the draw reads it: its way, pattern and trio, and (when the history kept
+ *  it) the tree its nest was on (`nest`: its index in that way's nest trees) and its day's
+ *  den, ending, surprise and second hide. */
+export type Drawn = Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> & Partial<Pick<EekhoornPlay, 'nest'>>
+  & Partial<Pick<Day, 'den' | 'einde' | 'verrassing' | 'verstop2' | 'antics'>>;
+
+export function parseVariant(v: string): Drawn | null {
+  const m = /^([mnz])-([ruvo])-([a-z]{3})(?:-(\d)([tovs])([ebp])([xdgr])([12])([kpnzm]{0,3}))?$/.exec(v);
   if (!m) return null;
   const route = ROUTE_IDS.find((r) => ROUTE_LETTER[r] === m[1])!;
   const veld = FIELD_SYMS.find((s) => SYM_LETTER[s] === m[2])!;
   const buren = trioOf(m[3]);
-  return buren ? { route, veld, buren } : null;
+  if (!buren) return null;
+  if (m[4] === undefined) return { route, veld, buren };
+  const day = { nest: Number(m[4]), den: byLetter(DEN_LETTER, m[5]), einde: byLetter(EINDE_LETTER, m[6]), verrassing: byLetter(VERR_LETTER, m[7]), verstop2: m[8] === '2' };
+  // (its antics, kept since ek-day's review: a variant from before reads without them)
+  return m[9] ? { route, veld, buren, ...day, antics: [...m[9]].map((l) => byLetter(ANTIC_LETTER, l)) } : { route, veld, buren, ...day };
 }
-
-/** A last play as the draw reads it: its way, pattern and trio, and (when the history kept
- *  it) the tree its nest was on (`nest`: its index in that way's nest trees). */
-type Drawn = Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> & Partial<Pick<EekhoornPlay, 'nest'>>;
 
 /** The squirrel's game's last plays' variants, newest first (at most `n`), from the save's
  *  beat history (each play logs it with every beat as `ek:<variant>`; a play's two beats
@@ -1064,6 +1445,7 @@ export function lastVariants(history: readonly { m: string; sd?: number; va?: st
     const v = pair ? parseVariant(pair.slice(VARIANT_KEY.length + 1)) : null;
     if (!v || (b.sd !== undefined && b.sd === lastSeed)) continue;
     lastSeed = b.sd;
+    if (v.nest !== undefined) { out.push(v); continue; } // (ek-day: its day kept the nest)
     // (its nest's tree, noted after the variant: `nest:<tree id>`)
     const tree = b.va.split(',').find((p) => p.startsWith('nest:'))?.slice(5);
     const nest = tree ? nestTrees(ROUTES[v.route]).findIndex((t) => t.id === tree) : -1;
@@ -1086,12 +1468,54 @@ function freshPick<T>(rng: { pick<U>(l: readonly U[]): U }, list: readonly T[], 
   return rng.pick(list);
 }
 
+/** The forks a draw reads (a `Play`'s). */
+type Forks = { fork(label: string): { pick<T>(l: readonly T[]): T; int(a: number, b: number): number; shuffle<T>(l: readonly T[]): T[]; chance(p: number): boolean } };
+
+/**
+ * The squirrel's day (pure, ek-day, design §6.8), each choice from a fork of its own: its
+ * den (never one of the last two plays'; with the rare dark visitor at the den, one that
+ * ends on its stub, where the visitor meets it), an antic per wait of the way (none twice,
+ * none at the wait it held last play; lying in the sun only in `SUN_MOODS`), a surprise in about 2 of 3 plays (never the last
+ * play's; the drum roll only with the great spotted woodpecker on the bark), a second
+ * hide in about 1 of 3 (the third play surely, after two without), its ending (never one of
+ * the last two plays': three plays, three endings).
+ */
+export function drawDay(play: Forks, o: { route: RouteId; buren: Trio; mood?: string; rare?: string | null; recent: readonly Drawn[] }): Day {
+  const dens = o.rare === 'eekhoorn.donkere-eekhoorn' || o.rare === 'donkere-eekhoorn' ? DEN_KINDS.filter((d) => d === 'tak' || d === 'spiraal') : DEN_KINDS;
+  const known = (k: 'den' | 'einde' | 'verrassing' | 'verstop2' | 'antics') => o.recent.filter((r) => r[k] !== undefined);
+  const den = freshPick(play.fork('den'), dens, known('den').map((r) => r.den!));
+  // (nibbling a cone at its den already: not again at a wait)
+  const pool = ANTICS.filter((a) => (a !== 'zonnen' || SUN_MOODS.includes(o.mood ?? '')) && (a !== 'knabbelen' || den !== 'voet'));
+  // (in a shuffled order, wait by wait: never the one that wait had last play — three plays in
+  // a row, the third wait grooming every time, read alike — where the pool leaves another)
+  const lastAntics = known('antics')[0]?.antics ?? [];
+  const order = play.fork('antics').shuffle(pool);
+  const antics: Antic[] = [];
+  for (let w = 0; w < ROUTES[o.route].waits.length; w++) {
+    const free = order.filter((a) => !antics.includes(a));
+    antics.push(free.find((a) => a !== lastAntics[w]) ?? free[0]);
+  }
+  const twice = known('verstop2');
+  const verstop2 = play.fork('verstop2').chance(DAY_ODDS.verstop2) || (twice.length >= 2 && !twice[0].verstop2 && !twice[1].verstop2);
+  const vf = play.fork('verrassing');
+  // (the jay's own cache waits on his way from the hide pine to the glade: not after the south
+  // way's second hide, whose pine stands too near the glade — JAY_CACHE)
+  const can = SURPRISES.filter((s) => (s !== 'roffel' || o.buren.stam === 'grote-bonte-specht') && (s !== 'gaai' || !(verstop2 && o.route === 'zuid')));
+  const lastSurprise = known('verrassing')[0]?.verrassing;
+  // (never the last play's: where today's way leaves none other, no surprise this play)
+  const fresh = can.filter((x) => x !== lastSurprise);
+  const verrassing: Verrassing = vf.chance(DAY_ODDS.verrassing) && fresh.length ? vf.pick(fresh) : 'geen';
+  const einde = freshPick(play.fork('einde'), EINDES, known('einde').map((r) => r.einde!));
+  return { den, antics, verrassing, verstop2, einde };
+}
+
 /** This play's draw (pure, from the play's own forks, design §6.1): another way and
  *  pattern than the last two plays' (three plays in a row: the three ways), a trio that
  *  came in neither of the last two, with at least two neighbours another than last time
- *  where the trios allow it. `recent`: the last plays' variants, newest first. */
-export function drawEekhoornPlay(play: { fork(label: string): { pick<T>(l: readonly T[]): T; int(a: number, b: number): number } },
-  recent: readonly Drawn[] | Drawn | null): EekhoornPlay {
+ *  where the trios allow it; run 7 (ek-day): the squirrel's day (`drawDay`; `ctx`: the play's
+ *  mood and rare, as the briefing drew them). `recent`: the last plays' variants, newest
+ *  first. */
+export function drawEekhoornPlay(play: Forks, recent: readonly Drawn[] | Drawn | null, ctx: { mood?: string; rare?: string | null } = {}): EekhoornPlay {
   const lasts: readonly Drawn[] = recent === null ? [] : Array.isArray(recent) ? recent : [recent as Drawn];
   const route = freshPick(play.fork('route'), ROUTE_IDS, lasts.map((l) => l.route));
   const veldFork = play.fork('veld');
@@ -1114,7 +1538,8 @@ export function drawEekhoornPlay(play: { fork(label: string): { pick<T>(l: reado
   const kegelFork = play.fork('kegels');
   const kegels = ROUTE_DINING[route][kegelFork.int(0, 1)];
   const kegelSeed = kegelFork.int(1, 9999);
-  return { route, veld, veldSeed, buren, nest, nestSeed, kegels, kegelSeed };
+  const day = drawDay(play, { route, buren, mood: ctx.mood, rare: ctx.rare, recent: lasts });
+  return { route, veld, veldSeed, buren, nest, nestSeed, kegels, kegelSeed, day };
 }
 
 /* --------------------------------------------------------------- the home ---- */
@@ -1141,6 +1566,90 @@ export const EEKHOORN_HOME: HomeSpec = {
 /** The trees it hides round (one per way). */
 export const HIDE_TREES: readonly HomeTree[] = ROUTE_IDS.map((id) => ROUTES[id].hide);
 
+/** Run 7 (ek-day): each way's second hide pine (see Z5 above). */
+export const SECOND_HIDE: Readonly<Record<RouteId, HomeTree>> = {
+  midden: ROUTES.noord.hide, noord: ROUTES.midden.hide, zuid: HOME_TREES.find((t) => t.id === Z5.id)!,
+};
+/** Every tree it may hide round (the hide trees and the second hide pines), each once. */
+export const ALL_HIDE_TREES: readonly HomeTree[] = [...new Set([...HIDE_TREES, ...ROUTE_IDS.map((id) => SECOND_HIDE[id])])];
+
+/**
+ * Run 7 (ek-day): how he turns before the second hide, so the squirrel's dash to the second
+ * pine plays in his picture (played 2026-10-04: with the found view's lens left where it
+ * was, the second pine stood behind it and the squirrel ran at the lens). The lens comes
+ * round behind him (kit `behind`: `back` m back, looking the way he faces); from there the
+ * squirrel where it sits on the first pine (`sq`) and the second pine both stand in the
+ * picture (`half` rad either side of its middle), neither behind a trunk, its way between
+ * them over the ground at most a moment behind his body (`body` rad either side of him) or
+ * a trunk's foot (`hid` of five bits, never as it reaches the pine), the second pine in
+ * front of him and the first not far behind him nor near the lens, the lens clear of every trunk, and its run from the one to the other goes
+ * across the picture or away from the lens (at most `toward` of it toward the lens). The
+ * turn nearest his way to the second pine that does it (`ok`); else that way.
+ */
+export const HIDE2_TURN = { back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, toward: 0.3, step: (2.5 * Math.PI) / 180, most: (85 * Math.PI) / 180, ahead: 0.4, behind: 0.8, lensD: 3.0, hid: 2 } as const;
+export function hide2Turn(me: Spot, sq: Spot, from: HomeTree, t2: HomeTree): { face: number; ok: boolean } {
+  const want = headingTo(me, t2);
+  const run = { x: t2.x - sq.x, z: t2.z - sq.z };
+  const len = Math.hypot(run.x, run.z) || 1;
+  const rOf = (t: HomeTree): number => barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, 1) + 0.3;
+  const footOf = (t: HomeTree): number => trunkOutline({ x: t.x, z: t.z, H: t.h, species: t.species }, 0.15) + 0.05;
+  const fits = (h: number): boolean => {
+    const f = { x: Math.sin(h), z: Math.cos(h) };
+    const lens = { x: me.x - f.x * HIDE2_TURN.back, z: me.z - f.z * HIDE2_TURN.back };
+    const off = (q: Spot): number => Math.abs(wrapA(headingTo(lens, q) - h));
+    if (off(sq) > HIDE2_TURN.half || off(t2) > HIDE2_TURN.half) return false;
+    // (the pine it runs to in front of him, the one it leaves at most `behind` m back from
+    // him and well off the lens (`lensD` m): it never starts under the picture's edge by the
+    // lens, its trunk faded between him and the lens — played 2026-10-04)
+    const ahead = (q: Spot): number => (q.x - me.x) * f.x + (q.z - me.z) * f.z;
+    if (ahead(t2) < HIDE2_TURN.ahead || ahead(sq) < -HIDE2_TURN.behind || dist(lens, sq) < HIDE2_TURN.lensD) return false;
+    if (segDist(from, lens, me) < rOf(from) + 0.2) return false;
+    // (its way over the ground not behind his own body: off to his side, or nearer the lens
+    // than he is — played 2026-10-04: facing the second pine square on, his back hid the
+    // whole dash; up on the bark, where it sits and where it climbs, it shows over his head)
+    // (nor behind a trunk's foot — the pine it leaves too: played 2026-10-04, standing close
+    // to that pine he saw it go down the bark and the rest of its run hid behind the trunk):
+    // a moment of it may (`hid` of five bits, never the last two: he sees it reach the pine)
+    let hid = 0;
+    for (let k = 1; k <= 5; k++) {
+      const q = { x: sq.x + (run.x * k) / 6, z: sq.z + (run.z * k) / 6 };
+      if ((off(q) < HIDE2_TURN.body && dist(lens, q) > dist(lens, me) - 0.3)
+        || HOME_TREES.some((t) => { const r = footOf(t); return dist(t, q) > r && dist(lens, t) < dist(lens, q) && segDist(t, lens, q) < r; })) {
+        if (k >= 4) return false;
+        hid += 1;
+      }
+    }
+    if (hid > HIDE2_TURN.hid) return false;
+    if ((run.x * f.x + run.z * f.z) / len < -HIDE2_TURN.toward) return false;
+    return HOME_TREES.every((t) => dist(t, lens) > rOf(t) + 0.7
+      && (t === from || segDist(t, lens, sq) > rOf(t))
+      && (t === t2 || segDist(t, lens, t2) > rOf(t)));
+  };
+  for (let a = 0; a <= HIDE2_TURN.most; a += HIDE2_TURN.step) {
+    for (const s of a === 0 ? [1] : [1, -1]) if (fits(want + s * a)) return { face: wrapA(want + s * a), ok: true };
+  }
+  return { face: want, ok: false };
+}
+/** Where he watches its dash from: where he stands when a turn there does it (`hide2Turn`);
+ *  else — standing between the two pines, or with them too far apart in his picture — a few
+ *  calm steps back from them (the nearest spot, `HIDE2_STEP` m at most, the way straight
+ *  back from the two pines first) that is clear of the trunks, his steps there too, and
+ *  from which one does; else where he stands. */
+export const HIDE2_STEP = [0.6, 1.0, 1.4, 1.8] as const;
+export function hide2Stand(me: Spot, sq: Spot, from: HomeTree, t2: HomeTree): { at: Spot; face: number; ok: boolean } {
+  const here = hide2Turn(me, sq, from, t2);
+  if (here.ok) return { at: me, ...here };
+  const back = headingTo({ x: (sq.x + t2.x) / 2, z: (sq.z + t2.z) / 2 }, me);
+  const ways = Array.from({ length: 16 }, (_, i) => back + ((i % 2 ? 1 : -1) * Math.ceil(i / 2) * Math.PI) / 8);
+  for (const r of HIDE2_STEP) for (const a of ways) {
+    const at = { x: me.x + Math.sin(a) * r, z: me.z + Math.cos(a) * r };
+    if (HOME_TREES.some((t) => dist(t, at) < trunkClear(t) || segDist(t, me, at) < trunkClear(t) - 0.15)) continue;
+    const t = hide2Turn(at, sq, from, t2);
+    if (t.ok) return { at, ...t };
+  }
+  return { at: me, ...here };
+}
+
 /**
  * The one scattered pine the squirrel's wood takes out (run 7, the triangle budget): the
  * small bos pine 4 m east of its den, between the den and the zuid way's first pine.
@@ -1160,8 +1669,9 @@ export function eekhoornTreeClear(): { x: number; z: number; r: number }[] {
     // behind the stands, where the lens holds its views
     { ...g(0.6, -6), r: 4.2 },
     ...HOME_TREES.map((t) => ({ x: t.x, z: t.z, r: 3.2 })),
-    // round each hide tree, where he walks round it (hide-and-seek), a wider ring
-    ...HIDE_TREES.map((t) => ({ x: t.x, z: t.z, r: 4.6 })),
+    // round each hide tree, where he walks round it (hide-and-seek), a wider ring (run 7,
+    // ek-day: the second hide pines too)
+    ...ALL_HIDE_TREES.map((t) => ({ x: t.x, z: t.z, r: 4.6 })),
     { ...SCATTER_TAKEN, r: 0.6 },
     // its dining stumps and logs: no stray pine on them
     ...DINING.map((d) => ({ x: d.x, z: d.z, r: 1.6 })),
@@ -1176,7 +1686,7 @@ export function eekhoornClearings(): { x: number; z: number; r: number }[] {
     ...FIELD_SYMS.flatMap((s) => gladeSpots(s)).map((s) => ({ x: s.x, z: s.z, r: 0.7 })),
     { x: STUMP.x, z: STUMP.z, r: 0.9 },
     // round each hide tree, where it plays hide-and-seek: no fern to hide it when it pops out
-    ...HIDE_TREES.map((t) => ({ x: t.x, z: t.z, r: 4.2 })),
+    ...ALL_HIDE_TREES.map((t) => ({ x: t.x, z: t.z, r: 4.2 })),
     // round each pine of its ways and where he stands to see it waiting: open needle litter,
     // no fern in front of a squirrel on a low stub (each fern also costs the picture ~8k
     // triangles, which the view over this wood cannot spare: measured 2026-10-03)

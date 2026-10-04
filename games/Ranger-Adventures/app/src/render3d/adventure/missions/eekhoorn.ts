@@ -39,7 +39,7 @@ import { routeBeat } from '../beats/route';
 import { callersBeat, type Caller } from '../beats/callers';
 import { CALL_GLOW, WarmGlow } from '../beats/callers-glow';
 import { Squirrel, type SquirrelTree } from '../squirrel';
-import { barkRadius, lineClear, trunkFadeUpright, trunkPose, trunkUpright, wrap, type Upright } from '../squirrel-math';
+import { barkRadius, lineClear, patPlan, trunkFadeUpright, trunkPose, trunkUpright, wrap, type Upright } from '../squirrel-math';
 import { dist, headingTo } from '../places';
 import type { Spot } from '../types';
 import { TREE_BASE_H } from '../../world/Forest';
@@ -50,6 +50,7 @@ import {
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
   DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, nestWatch, youngPeek,
+  ANTICS, DEN_KINDS, DEN_DAY, denSpot, EINDES, BURY_AT, SECOND_HIDE, coneDrop, CONE_FALL, jayFliesAway, hide2Stand, foundRun, JAY_SEE,
 } from './eekhoorn.places';
 import { ontdekking } from '../../../content/ontdekkingen';
 
@@ -91,6 +92,27 @@ const SWEEP_DIG = 0.25;
 /** Each neighbour's call in the echo game is held to this snippet (s): a blackbird's long
  *  song and a great tit's short pump give the same listening tempo, whoever came today. */
 const CALL_CAP: readonly [number, number] = [0.6, 1.2];
+/** The jay's own cache (run 7, ek-day): it acts in its window (eekhoorn.places JAY_SEE).
+ *  The drum roll comes once he is within DRUM_NEAR m of the bird on the store pine's bark
+ *  (it is awake and in sight from there). */
+const DRUM_NEAR = 11;
+/** The second hide (run 7, ek-day): a short one — it slips round at most `most` times, and
+ *  stays once he has walked `round` rad round its pine. */
+const HIDE2 = { most: 1, round: HIDE.round * 0.6 } as const;
+/** Its antic at a wait (run 7, ek-day): `first` s after it sits down (wherever he is) it
+ *  plays its antic, and again `again` s after the last one while he is still further than
+ *  `near` m off; when he has come close (the wait's own rule) it finishes the one it is in,
+ *  `grace` s more at most, sits up facing him and runs on. Lying in the sun it lies along
+ *  its stub, turned `lie` rad from the way the stub points. */
+const ANTIC = { first: 0.25, again: 2.2, near: SEE_D + 0.2, lie: 0, grace: 1.1 } as const;
+/** How he turns on the spot after a find (rad/s at most, s at least). */
+const TURN = { rate: 3.2, min: 0.35 } as const;
+/** After a find it runs home to its stump: his keys are his this long (s) after it is off,
+ *  so it stays ahead of him (it runs at its full run, ~2.4 m/s; he walks a little slower). */
+const RUN_LEAD = 0.7;
+/** He has stood right by it (within SEE_D + 0.6 m) this long (s): it runs on, whatever the
+ *  lens shows of it (ek-finds review: a wait that never finished). */
+const BY_WAIT = 5;
 
 /** This play's day, drawn and laid under the briefing card (`prepare`). */
 let drawn: { seed: number; p: EekhoornPlay } | null = null;
@@ -100,11 +122,19 @@ let drawn: { seed: number; p: EekhoornPlay } | null = null;
 function lay(world: { residents: Residents }, play: Play): EekhoornPlay | null {
   const home = world.residents.dressing('eekhoorn') as EekhoornHome | null;
   if (!home) return null;
-  const p = drawEekhoornPlay(play, lastVariants(store.get().geschiedenis, 2));
+  const v = play.variant;
+  const p = drawEekhoornPlay(play, lastVariants(store.get().geschiedenis, 2), { mood: typeof v.mood === 'string' ? v.mood : undefined, rare: typeof v.rare === 'string' ? v.rare : null });
+  // (its way, pattern, trio — and its day, folded in: the next play draws against it)
   play.note(VARIANT_KEY, variantOf(p));
   // (its finds: which of the way's trees carries its nest, where its gnawed cones lie)
   play.note('nest', nestTrees(ROUTES[p.route])[p.nest].id);
   play.note('kegels', p.kegels);
+  // (its day, each choice by name: design §6.8)
+  play.note('den', p.day.den);
+  play.note('antics', p.day.antics.join('+'));
+  play.note('verrassing', p.day.verrassing);
+  play.note('verstop2', p.day.verstop2 ? 1 : 0);
+  play.note('einde', p.day.einde);
   home.layPlay(p, { cosmetic: play.fork('cosmetic').rng, squirrel: play.fork('squirrel').int(1, 0x7fffffff) });
   drawn = { seed: play.seed, p };
   return p;
@@ -129,6 +159,7 @@ export const eekhoornAdventure: Adventure = {
     const sq = new Squirrel(spec.key, env, { height: SQUIRREL_H, trees: dressing.trees, seed: 11 });
     sq.stumps.push({ x: STUMP.x, z: STUMP.z, top: STUMP.top, r: STUMP.r });
     sq.onDig = (x, z) => dressing.puffAt(x, z, env.reduced());
+    sq.onScale = (x, y, z) => dressing.scaleAt(x, y, z, env.reduced());
     dressing.squirrel = sq;
     dressing.actorEnv = env; // (a play's rare visitor is made the same way)
     return sq;
@@ -351,6 +382,19 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   };
   void fam;
   const sight = (): Sight => sightOf(k, sq, home.trees);
+  /** He turns on the spot to `h` — calmly, in the held picture (at most `TURN.rate` rad/s, at
+   *  least `TURN.min` s; at once under reduced motion) — before the lens comes round behind
+   *  him (his heading set at once was a jump of his whole body in the held view). */
+  const turnRanger = async (h: number): Promise<void> => {
+    const from = k.ranger().heading, turn = wrap(h - from);
+    const secs = k.reduced ? 0 : Math.max(TURN.min, Math.abs(turn) / TURN.rate);
+    if (secs > 0) {
+      let t = 0;
+      const off = k.onTick((dt) => { t = Math.min(secs, t + dt); const u = t / secs; k.world.faceRanger(from + turn * u * u * (3 - 2 * u)); });
+      try { await k.wait(secs); } finally { off(); }
+    }
+    k.world.faceRanger(h);
+  };
   /** the stats a playtest reads (`__ranger.adventure().stats`): how tall it is now (px) */
   const measure = (): Sight => { const s = sight(); k.stats.sq_px = Math.round(s.px); k.stats.sq_seen = s.seen ? 1 : 0; return s; };
   /** while it hides: could any of it show in his picture, edge and all? (the stats too) */
@@ -358,6 +402,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   /** it is where he sees it: in the middle 80 % of his picture */
   const inMiddle = (): boolean => { const s = sightOf(k, sq, home.trees, 'peek'); return s.glimpse && Math.abs(s.x) <= RUN_ON_X; };
   k.stats.route = ['midden', 'noord', 'zuid'].indexOf(p.route);
+  const lens = (): Spot => ({ x: k.world.camera.position.x, z: k.world.camera.position.z });
 
   // run 7 (its finds): this play's rare visitor (k.rare(), rolled at the briefing: a seeded
   // chance, and surely within about three plays), made now and laid out of his sight where
@@ -378,10 +423,39 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   //     runs up to its stub), so the child meets the squirrel he is going to follow;
   //     then the follow camera is back. (A play with the dark-brown visitor frames it a
   //     little higher: the two of them meet on the trunk.)
+  //     Run 7 (ek-day, design §6.8): what it is doing as he comes is this play's den — on
+  //     its stub, hanging head down on the bark under it, nibbling a pine cone at the
+  //     pine's foot, or a spiral run up round the trunk to its stub as the lens turns to it.
   k.beat = 'den';
-  const up = k.guard(sq.goBranch(oak, faceMe(sq.branchPose(oak))));
-  await k.frame(introView(k.ranger(), route.waits[0], dark ? DEN_VISITOR.tall : undefined), { face: headingTo(k.ranger(), oak.trunk) });
+  const den = p.day.den;
+  k.stats.den = DEN_KINDS.indexOf(den);
+  const meAtDen = k.ranger();
+  const denLook = introView(meAtDen, route.waits[0], dark ? DEN_VISITOR.tall : undefined);
+  const denLens = k.lensFor(denLook).cam;
+  const ds = denSpot({ x: denLens.x, z: denLens.z }, meAtDen);
+  const sitFace = faceMe(sq.branchPose(oak));
+  const up = k.guard((async (): Promise<boolean> => {
+    if (den === 'omlaag') {
+      // (up its pine above where it hangs, if it is not on it, then down head first to there)
+      if (sq.onTree !== oak && !(await sq.goTrunk(oak, { ang: ds.down.ang, h: ds.down.h + 0.9 }))) return false;
+      return sq.goRound(oak, ds.down, 0.8, 0, false);
+    }
+    if (den === 'voet') return sq.run(sq.dashTo(ds.foot.x, ds.foot.z, ds.footFace));
+    if (den === 'spiraal') {
+      // (down round the back of its pine, and up again, round and round, to its stub)
+      const low = { ang: oak.branch.ang + Math.PI, h: 0.4 };
+      if (sq.onTree === oak ? !(await sq.goRound(oak, low, 0.9, 0, false)) : !(await sq.goTrunk(oak, low))) return false;
+      if (!(await sq.goRound(oak, { ang: oak.branch.ang, h: oak.branch.h - 0.12 }, 2.2, 1, true))) return false;
+      return sq.goBranch(oak, sitFace);
+    }
+    return sq.goBranch(oak, sitFace);
+  })());
+  await k.frame(den === 'voet' ? introView(meAtDen, route.waits[0], DEN_DAY.footTall, ds.foot) : denLook, { face: headingTo(k.ranger(), oak.trunk) });
   await up;
+  // (nibbling at the pine's foot: a cone in its paws, its scales falling, while the look holds)
+  let nibbling = den === 'voet';
+  const nibble = async (): Promise<void> => { while (nibbling) if (!(await sq.antic('knabbelen', ds.footFace))) return; };
+  const nibbled = nibble().catch(() => {});
   k.say(c.daar);
   k.stats.den_px = Math.round(measure().px);
   chatter();
@@ -429,6 +503,12 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     chatter();
   }
   await k.wait(1.2);
+  if (nibbling) {
+    // (it stops nibbling and sits up, looking at him, before it runs off)
+    nibbling = false;
+    await k.guard(sq.settleTo(faceMe(sq), 0.3));
+  }
+  await nibbled;
   // (out of the picture he turns the way the squirrel will go: the follow camera comes
   // back behind him looking there, and the keys walk him after it)
   k.world.faceRanger(headingTo(k.ranger(), wayTo(k.ranger(), watchSpot(route.waits[0]))));
@@ -459,6 +539,69 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       }
     }
   });
+  // run 7 (ek-day, design §6.8): at most one small surprise this play, only while he walks —
+  // a pine cone drops beside his path from a pine he passes under (`denappel`, on the way
+  // tree to tree), the jay buries an acorn of its own ahead of him (`gaai`) or a drum roll
+  // comes from the glade (`roffel`, with the great spotted woodpecker on the bark: both on
+  // his walk into the glade)
+  const verr = p.day.verrassing;
+  let verrDone = verr === 'geen';
+  k.stats.verr = ['geen', 'denappel', 'gaai', 'roffel'].indexOf(verr);
+  /** in his picture now, well inside it (the follow lens): a spot `up` m above the ground */
+  const inPicture = (q: Spot, up: number, xMax = 0.7, yMin = -0.8): boolean => {
+    const cam = k.world.camera;
+    cam.updateMatrixWorld();
+    V1.set(q.x, k.ctx.groundY(q.x, q.z) + up, q.z);
+    if (V1.clone().applyMatrix4(cam.matrixWorldInverse).z > -0.5) return false;
+    V1.project(cam);
+    return Math.abs(V1.x) <= xMax && V1.y >= yMin && V1.y <= 0.5;
+  };
+  /** where a point `up` m over the ground at `q` is in his picture now (ndc), or null behind
+   *  the lens */
+  const ndcOf = (q: { x: number; z: number }, up: number): THREE.Vector3 | null => {
+    const cam = k.world.camera;
+    cam.updateMatrixWorld();
+    V1.set(q.x, k.ctx.groundY(q.x, q.z) + up, q.z);
+    if (V3.copy(V1).applyMatrix4(cam.matrixWorldInverse).z > -0.5) return null;
+    return V1.project(cam);
+  };
+  /** the cone: as he walks up to the pine the squirrel waits on, one drops from its crown in
+   *  front of its trunk, beside his way, away from the squirrel's stub, in the middle of his
+   *  picture, near enough to read where it lands (eekhoorn.places coneDrop) — from just above
+   *  the top of his picture, so its fall plays in it (CONE_FALL; review r1: from the crown it
+   *  fell above his picture and lay a speck); 'Plof! Een dennenappel.' as it lands */
+  const coneTick = (walkFrom: number, t: HomeTree, name: string, line: string): void => {
+    if (verrDone || verr !== 'denappel') return;
+    const m = k.ranger();
+    if (k.now - walkFrom < 1.5) return;
+    const spot = coneDrop(m, t, m.heading);
+    if (!spot || !inPicture(spot, 0.1, 0.5, -0.5)) return;
+    // (where it starts: over the top of his picture or under the line card, never in sight)
+    const H = k.ctx.canvas.clientHeight || 800;
+    const top = ndcOf(spot, CONE_FALL.from);
+    if (top && top.y < 1 - (2 * 92) / H) return;
+    verrDone = true;
+    k.stats.verr_go = 1;
+    let inFall = 0, lastT = k.now;
+    const offFall = k.onTick(() => {
+      const c = home.coneNow(), dt = k.now - lastT;
+      lastT = k.now;
+      const q = c ? ndcOf(c, c.y - k.ctx.groundY(c.x, c.z)) : null;
+      if (q && Math.abs(q.x) <= 1 && q.y <= 1 - (2 * 96) / H && q.y >= -1) inFall += dt;
+    });
+    home.dropCone(spot, lens(), () => {
+      offFall();
+      k.stats.verr_land = 1;
+      k.stats.verr_fall_s = Math.round(inFall * 100) / 100;
+      // (how long it reads where it lies)
+      const e = home.coneEnds();
+      const a = e && ndcOf(e[0], e[0].y - k.ctx.groundY(e[0].x, e[0].z))?.clone(), b = e && ndcOf(e[1], e[1].y - k.ctx.groundY(e[1].x, e[1].z))?.clone();
+      if (a && b) k.stats.verr_px = Math.round(Math.hypot((a.x - b.x) * (k.ctx.canvas.clientWidth || 1280), (a.y - b.y) * H) / 2);
+      if (settings.geluid) Sound.dig();
+      k.say(c.plof);
+      void k.wait(1.8).then(() => { if (k.beat === `walk:${name}`) k.say(line); }).catch(() => {});
+    });
+  };
   // run 7 (its finds): along the way he may see its gnawed cones — into his veldgids once he
   // really saw them (big enough in his picture, for a moment); its nest goes in with its own
   // moment (nestMoment), or — when he walked past it without a look — once he does see it
@@ -471,10 +614,22 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   /** while it waits in its nest (and peeks out of it): the spot to see it from, and which
    *  leg of the way there he is on (to the spot; the step that turns him to the nest) */
   let nestWait: { watch: ReturnType<typeof nestWatch>; leg: 'go' | 'look' | 'hold'; at?: Spot } | null = null;
-  const hop = async (name: string, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
+  const hop = async (name: string, wi: number, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
     k.say(line);
     lastMove = false;
-    const there = k.guard(go());
+    // (every wait can finish: should its way there be taken over part way — a plan replaced —
+    // it runs straight to its stub after all; ek-finds review, seed 45: a wait that never
+    // finished after the nest moment)
+    const face = headingTo(t, comesFrom(route, wi));
+    const there = k.guard((async () => {
+      let ok = await go();
+      for (let i = 1; !ok && i <= 3; i++) {
+        k.check();
+        k.stats[`${name}_retry`] = i;
+        ok = await sq.goBranch(st(t), face);
+      }
+      return ok;
+    })());
     // (a breath before the way on shows: he sees it set off from where he stands — and
     // leap on through a pine it only passes — before the chip and the keys turn him
     // toward where it goes)
@@ -486,11 +641,42 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     let toldWait = false;
     /** since when he has been within SEE_D of it with it in his view (−1: not now) */
     let closeFrom = -1;
+    /** since when he has stood right by it (−1: not now): standing there a while, it runs on
+     *  whatever the lens shows (never a wait that cannot finish) */
+    let byFrom = -1;
+    // run 7 (ek-day, design §6.8): its antic while he comes — a moment looking at him first,
+    // then it grooms, nibbles, basks, scolds or looks round, and again while he is still on
+    // his way; as he comes close it sits up and looks at him (it runs on as before)
+    const antic = p.day.antics[wi] ?? 'kijken';
+    let anticNext = Infinity, anticOn = false, anticN = 0, scoldAt = Infinity;
+    const faceHim = (): number => headingTo(sq, k.ranger());
     void there.then((ok) => {
       if (!ok) return;
       arrived = true; sitFrom = k.now; sq.glow(true); void sq.lookAt(me); chatter();
       k.stats[`${name}_arrive_px`] = Math.round(measure().px);
+      k.stats[`${name}_there`] = Math.round(k.now * 10) / 10;
+      anticNext = k.now + ANTIC.first;
     }).catch(() => {});
+    const anticTick = (): void => {
+      if (!arrived) return;
+      const d = dist(k.ranger(), sq);
+      // (its first antic as it sits down, wherever he is — he sees what it does as he comes
+      // up; again while he is still on his way)
+      if (!anticOn && k.now >= anticNext && (anticN === 0 || d > ANTIC.near)) {
+        anticOn = true;
+        anticN += 1;
+        k.stats[`antic_${wi + 1}`] = ANTICS.indexOf(antic);
+        k.stats[`antic_go_${wi + 1}`] = anticN;
+        if (antic === 'mopperen') { chatter(); scoldAt = k.now + 1.05; }
+        void sq.antic(antic, faceHim(), { along: t.branch!.ang + ANTIC.lie }).then((ok) => {
+          if (!anticOn) return;
+          anticOn = false;
+          anticNext = k.now + ANTIC.again;
+          if (ok) void sq.lookAt(me);
+        }).catch(() => {});
+      }
+      if (k.now >= scoldAt) { scoldAt = Infinity; chatter(); }
+    };
     const spot = watchSpot(t);
     const seat = seatOf(t);
     const hint = seeHint(k, name, () => {
@@ -511,6 +697,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       if (arrived && (dist(k.ranger(), spot) <= WATCH_R || dist(k.ranger(), seat) <= AT_IT)) return { ...seat, r: SEAT_STOP };
       return wayTo(k.ranger(), spot);
     });
+    const walkFrom = k.now;
     try {
       await k.walk({
         // (the chip's way, if he needs it: to the squirrel on its stub itself)
@@ -519,15 +706,20 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
         // the ranger wanders off, the line says so once
         tick: () => {
           hint.tick();
+          // (as he walks up to the pine it is off to — where he looks — a cone drops in front
+          // of it; never with its nest's own moment)
+          if (wi !== p.nest) coneTick(walkFrom, t, name, line);
           if (!arrived) return;
-          if (k.now - lastChatter > 3.2) chatter();
+          anticTick();
+          if (k.now - lastChatter > 3.2 && !anticOn) chatter();
           const far = dist(k.ranger(), sq) > 9;
           if (far && !toldWait) { toldWait = true; k.say(c.wacht); } else if (!far && toldWait && dist(k.ranger(), sq) < 6) { toldWait = false; k.say(line); }
         },
         // (close: within SEE_D of it, it well in his view and big enough there (SET_OFF_H, or
         // SET_OFF_WAIT s on) — or right at it, under it, a bit of it showing past his own
         // head — and it sits up on its stub a moment first, even when he is there before
-        // it: it waits for him, looking at him)
+        // it: it waits for him, looking at him; or he has stood right by it BY_WAIT s, where
+        // the lens may not show it — it runs on all the same, never a wait without an end)
         reached: () => {
           if (!arrived || k.now - sitFrom < SIT) return false;
           const d = dist(k.ranger(), sq);
@@ -535,14 +727,24 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
           const close = d <= SEE_D && s.seen;
           if (!close) closeFrom = -1;
           else if (closeFrom < 0) closeFrom = k.now;
+          if (d > SEE_D + 0.6) byFrom = -1;
+          else if (byFrom < 0) byFrom = k.now;
           const big = s.px >= SET_OFF_H * (k.ctx.canvas.clientHeight || 800);
-          return (close && (big || k.now - closeFrom >= SET_OFF_WAIT)) || (d <= AT_IT && sightOf(k, sq, home.trees, 'near').glimpse);
+          if (byFrom >= 0 && k.now - byFrom >= BY_WAIT && !(close || d <= AT_IT)) k.stats[`${name}_by`] = 1;
+          return (close && (big || k.now - closeFrom >= SET_OFF_WAIT)) || (d <= AT_IT && sightOf(k, sq, home.trees, 'near').glimpse)
+            || (byFrom >= 0 && k.now - byFrom >= BY_WAIT);
         },
       });
     } finally {
       hint.off();
     }
     await there;
+    // (it was in the middle of an antic as he came close: it finishes it — a moment more at
+    // most — and sits up facing him; then it is off)
+    if (anticOn) {
+      await k.until(() => !anticOn, ANTIC.grace);
+      if (anticOn) { anticOn = false; scoldAt = Infinity; await k.guard(sq.settleTo(faceHim(), 0.25)); }
+    }
     // it saw him come: a chatter and a flick — and it is off as soon as it is where he
     // sees it (a moment for the lens to swing round after him, at most RUN_ON_WAIT s)
     chatter();
@@ -673,7 +875,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     for (const [wi, t] of route.waits.entries()) {
       const to = route.hops.findIndex((h) => h.tree === t);
       const line = wi === 0 ? c.volg : c.weer;
-      await hop(`wacht-${wi + 1}`, goTo(from, to, headingTo(t, comesFrom(route, wi)), wi === p.nest && wi < route.waits.length - 1 ? { wi, line } : null), t, line);
+      await hop(`wacht-${wi + 1}`, wi, goTo(from, to, headingTo(t, comesFrom(route, wi)), wi === p.nest && wi < route.waits.length - 1 ? { wi, line } : null), t, line);
       from = to + 1;
     }
   } finally {
@@ -687,91 +889,112 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   // half round the pine (or it slipped a few times) it stays, and he has found it the
   // moment it is in his view (the live lens: on the screen, most of it clear of the trunk
   // and of his own body): then the lens holds the two of them while it peeks out at him.
-  k.beat = 'verstop';
-  const cT = route.hide;
-  const hideTree = st(cT);
-  const lens = (): Spot => ({ x: k.world.camera.position.x, z: k.world.camera.position.z });
-  let sqAng = hideStart(cT, [k.ranger(), lens()], STUMP);
   let slipping = 0;
-  const slip = (ang: number, secs?: number): void => {
-    const token = ++slipping;
-    void k.guard(sq.goRound(hideTree, { ang, h: HIDE.h }, secs)).then(() => { if (slipping === token) slipping = 0; }, () => {});
-  };
-  slip(sqAng, slipSecs(headingTo(hideTree.trunk, sq), sqAng) * 0.6);
-  chatter();
-  k.say(c.waarIsHij);
-  await k.until(() => slipping === 0, 3);
-  k.stats.hide_shifts = 0;
-  let lastB = headingTo(hideTree.trunk, k.ranger());
-  let walked = 0;
-  let hid = false;
-  let hiding = true;
-  const step = { ...roundStep(cT, k.ranger(), sqAng) };
-  const hint = seeHint(k, 'om-de-boom', () => roundStep(cT, k.ranger(), sqAng));
-  const nearIt = (): boolean => { const m = k.ranger(); return dist(m, sq) < HIDE.near && Math.abs(wrap(headingTo(hideTree.trunk, m) - sqAng)) < HIDE.nearAng; };
-  try {
-    await k.walk({
-      name: 'om-de-boom', to: step, r: 0.01, line: c.waarIsHij, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 14,
-      tick: () => {
-        hint.tick();
-        const mb = headingTo(hideTree.trunk, k.ranger());
-        walked += Math.abs(wrap(mb - lastB));
-        lastB = mb;
-        Object.assign(step, roundStep(cT, k.ranger(), sqAng)); // (the chip's way, if he needs it)
-        if (!slipping && !hid) {
-          // (he kept walking while it slipped off its stub: it hides anew across from where
-          // his eye is now, until it is out of sight — only then does the game begin)
-          if (peeks()) { sqAng = hideStart(cT, [k.ranger(), lens()], STUMP); slip(sqAng, 0.6); } else hid = true;
-        } else if (!slipping && hiding) {
-          // he has been round far enough: it stays where it is and lets him find it
-          if (walked >= HIDE.round || k.stats.hide_shifts >= HIDE.most) hiding = false;
-          else {
-            // it slips round when he (or his eye, the lens) comes round toward it — or the
-            // moment a bit of it peeks out past the bark in his view (the tail: a clue,
-            // not a find)
-            const next = hideShift(cT, sqAng, [mb, headingTo(hideTree.trunk, lens())], peeks());
-            if (next !== null) {
-              k.stats.hide_shifts += 1;
-              slip(next, slipSecs(sqAng, next));
-              sqAng = next;
-              chatter();
+  /** One round of hide-and-seek round `cT` (its own walk, `name`): it hides across the
+   *  trunk from him and his eye, slips round as he comes (at most `most` times, until he has
+   *  walked `round` rad round), and he has found it once it is in his view. Returns the side
+   *  of the trunk it stopped on. (`stat`: the stats' prefix.) */
+  const hideAndSeek = async (cT: HomeTree, name: string, most: number, round: number, stat: string): Promise<number> => {
+    const hideTree = st(cT);
+    let sqAng = hideStart(cT, [k.ranger(), lens()], STUMP);
+    const slip = (ang: number, secs?: number): void => {
+      const token = ++slipping;
+      void k.guard(sq.goRound(hideTree, { ang, h: HIDE.h }, secs)).then(() => { if (slipping === token) slipping = 0; }, () => {});
+    };
+    slip(sqAng, slipSecs(headingTo(hideTree.trunk, sq), sqAng) * 0.6);
+    chatter();
+    k.say(c.waarIsHij);
+    await k.until(() => slipping === 0, 3);
+    k.stats[`${stat}_shifts`] = 0;
+    let lastB = headingTo(hideTree.trunk, k.ranger());
+    let walked = 0;
+    let hid = false;
+    let hiding = true;
+    const step = { ...roundStep(cT, k.ranger(), sqAng) };
+    const hint = seeHint(k, name, () => roundStep(cT, k.ranger(), sqAng));
+    const nearIt = (): boolean => { const m = k.ranger(); return dist(m, sq) < HIDE.near && Math.abs(wrap(headingTo(hideTree.trunk, m) - sqAng)) < HIDE.nearAng; };
+    try {
+      await k.walk({
+        name, to: step, r: 0.01, line: c.waarIsHij, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 14,
+        tick: () => {
+          hint.tick();
+          const mb = headingTo(hideTree.trunk, k.ranger());
+          walked += Math.abs(wrap(mb - lastB));
+          lastB = mb;
+          Object.assign(step, roundStep(cT, k.ranger(), sqAng)); // (the chip's way, if he needs it)
+          if (!slipping && !hid) {
+            // (he kept walking while it slipped off its stub: it hides anew across from where
+            // his eye is now, until it is out of sight — only then does the game begin)
+            if (peeks()) { sqAng = hideStart(cT, [k.ranger(), lens()], STUMP); slip(sqAng, 0.6); } else hid = true;
+          } else if (!slipping && hiding) {
+            // he has been round far enough: it stays where it is and lets him find it
+            if (walked >= round || k.stats[`${stat}_shifts`] >= most) hiding = false;
+            else {
+              // it slips round when he (or his eye, the lens) comes round toward it — or the
+              // moment a bit of it peeks out past the bark in his view (the tail: a clue,
+              // not a find)
+              const next = hideShift(cT, sqAng, [mb, headingTo(hideTree.trunk, lens())], peeks());
+              if (next !== null) {
+                k.stats[`${stat}_shifts`] += 1;
+                slip(next, slipSecs(sqAng, next));
+                sqAng = next;
+                chatter();
+              }
             }
           }
-        }
-        if (k.now - lastChatter > 2.6) chatter();
-      },
-      // (found: in view once it stopped hiding — while it hides, a glimpse of it sends it
-      // round the bark again; or, right up at the bark on its side of the tree — where a
-      // child steering at its chatter ends up, his own back between it and the lens — as
-      // soon as a bit of it shows beside him)
-      reached: () => hid && !hiding && !slipping && dist(k.ranger(), hideTree.trunk) <= FIND_R && (measure().seen || (nearIt() && measure().glimpse)),
-    });
-  } finally {
-    hint.off();
-  }
-  k.stats.hide_round = Math.round((walked * 180) / Math.PI);
+          if (k.now - lastChatter > 2.6) chatter();
+        },
+        // (found: in view once it stopped hiding — while it hides, a glimpse of it sends it
+        // round the bark again; or, right up at the bark on its side of the tree — where a
+        // child steering at its chatter ends up, his own back between it and the lens — as
+        // soon as a bit of it shows beside him)
+        reached: () => hid && !hiding && !slipping && dist(k.ranger(), hideTree.trunk) <= FIND_R && (measure().seen || (nearIt() && measure().glimpse)),
+      });
+    } finally {
+      hint.off();
+    }
+    k.stats[`${stat}_round`] = Math.round((walked * 180) / Math.PI);
+    return sqAng;
+  };
+  /** Found: he stops (a moment with the keys resting) and the lens eases round to hold the
+   *  two of them, on his side of the tree; the squirrel peeks its head round the bark at him
+   *  and comes out onto the bark's near face, flicks its tail and chatters. Returns where he
+   *  stands and the side of the trunk it is on. */
+  const foundAt = async (cT: HomeTree, sqAng0: number, young0: boolean): Promise<{ at0: Spot; face: number }> => {
+    const hideTree = st(cT);
+    k.lockFollow();
+    await k.until(() => k.ranger().speed < 0.1 && !slipping, 1.5);
+    // (found from further off: a few calm steps nearer it first, so the two of them fit close)
+    const near0 = foundStand(cT, foundFace(cT, sqAng0, k.ranger()), k.ranger());
+    if (dist(near0, k.ranger()) > 0.2) await k.walkRanger(near0.x, near0.z, 0.05);
+    const at0 = k.ranger();
+    const face = foundFace(cT, sqAng0, at0);
+    const out = k.guard(sq.goRound(hideTree, { ang: face, h: HIDE.h }, 0.9));
+    out.catch(() => {});
+    const rr = barkRadius(hideTree.trunk, HIDE.h) + 0.08;
+    const sqAt = { x: cT.x + Math.sin(face) * rr, z: cT.z + Math.cos(face) * rr };
+    await k.frame(foundView(cT, face, at0, young0), { face: headingTo(at0, sqAt) });
+    await out;
+    sq.flick();
+    chatter();
+    return { at0, face };
+  };
+
+  // it plays hide-and-seek: it slips off its stub round the trunk, across it from him (as
+  // red squirrels do), and as he walks round — or the moment a bit of it peeks out in his
+  // view — it slips round again, keeping the bark between them, never faster than he
+  // walks, its chatter from behind the bark telling him where. Once he has walked about
+  // half round the pine (or it slipped a few times) it stays, and he has found it the
+  // moment it is in his view (the live lens: on the screen, most of it clear of the trunk
+  // and of his own body): then the lens holds the two of them while it peeks out at him.
+  k.beat = 'verstop';
+  let cT = route.hide;
+  let hideTree = st(cT);
+  let sqAng = await hideAndSeek(cT, 'om-de-boom', HIDE.most, HIDE.round, 'hide');
   // (found: a held view now, no walk — a new find's reveal waits for the walk to its glade)
   k.beat = 'gevonden';
-  // found: he stops (a moment with the keys resting) and the lens eases round to hold the
-  // two of them, on his side of the tree; the squirrel peeks its head round the bark at
-  // him and comes out onto the bark's near face, flicks its tail and chatters — and THEN
-  // "Gevonden!", with it big in the picture
-  k.lockFollow();
-  await k.until(() => k.ranger().speed < 0.1 && !slipping, 1.5);
-  // (found from further off: a few calm steps nearer it first, so the two of them fit close)
-  const near0 = foundStand(cT, foundFace(cT, sqAng, k.ranger()), k.ranger());
-  if (dist(near0, k.ranger()) > 0.2) await k.walkRanger(near0.x, near0.z, 0.05);
-  const at0 = k.ranger();
-  const face = foundFace(cT, sqAng, at0);
-  const out = k.guard(sq.goRound(hideTree, { ang: face, h: HIDE.h }, 0.9));
-  out.catch(() => {});
-  const rr = barkRadius(hideTree.trunk, HIDE.h) + 0.08;
-  const sqAt = { x: cT.x + Math.sin(face) * rr, z: cT.z + Math.cos(face) * rr };
-  await k.frame(foundView(cT, face, at0, !!young), { face: headingTo(at0, sqAt) });
-  await out;
+  const { at0, face } = await foundAt(cT, sqAng, !!young);
   sqAng = face;
-  sq.flick();
-  chatter();
   // run 7 (the rare young one): it was hiding with ours, round the back of the trunk; now
   // a little head peeks round the wood, and out it comes onto the ground, out past the
   // pine's root spurs, and sits up facing him ("Gevonden! En nog een kleintje!"); once he
@@ -812,44 +1035,227 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     sq.called();
     await k.wait(1.6);
   }
-  // the lens back behind him; it pours straight down the bark on its side (in his view)
-  // and pops up on the ground in front of him, sits up facing him, chatters
+  const dropYoung = async (): Promise<void> => {
+    if (!youngGone) return;
+    // (the young one is up in the crown by now, out of his picture: it goes)
+    await youngGone.catch(() => false);
+    youngGone = null;
+    youngSeen?.off();
+    k.stats.jong = youngSeen?.seen ? 1 : 0;
+    home.dropVisitor();
+  };
+
+  // run 7 (ek-day, design §6.8): on some plays it is off again at once — "Nog een keer!" —
+  // to a close pine of its way, and hides round that one too: a short one (it slips round
+  // once at most), found the same way, the lens holding the two of them close
+  if (p.day.verstop2) {
+    const t2 = SECOND_HIDE[p.route];
+    const tree2 = st(t2);
+    k.stats.hide2 = 1;
+    await dropYoung();
+    // "Nog een keer!": it chatters and flicks on the bark, still in the found view
+    k.say(c.nogEenKeer);
+    chatter();
+    sq.flick();
+    await k.wait(0.6);
+    // he turns toward the pine it is off to and the lens comes round behind him on an arc,
+    // to where his picture holds it on this pine and the next one both (eekhoorn.places
+    // hide2Stand: where he stands, or a few calm steps off first); then it pours down the
+    // bark and dashes across his picture, up the near side of that trunk — never at the lens
+    const rr0 = barkRadius(hideTree.trunk, HIDE.h) + 0.08;
+    const turn = hide2Stand(k.ranger(), { x: cT.x + Math.sin(sqAng) * rr0, z: cT.z + Math.cos(sqAng) * rr0 }, cT, t2);
+    k.stats.hide2_turn = turn.ok ? 1 : 0;
+    if (dist(turn.at, k.ranger()) > 0.05) {
+      k.stats.hide2_step = Math.round(dist(turn.at, k.ranger()) * 10) / 10;
+      await k.walkRanger(turn.at.x, turn.at.z, 0.05);
+    }
+    const me0 = k.ranger();
+    await turnRanger(turn.face);
+    await k.behind();
+    k.stats.hide2_go = 1;
+    await k.guard(sq.goTrunk(tree2, { ang: headingTo(t2, me0), h: HIDE.h + 0.25 }));
+    chatter();
+    sq.flick();
+    await k.wait(0.5);
+    k.beat = 'verstop-2';
+    cT = t2;
+    hideTree = tree2;
+    const a2 = await hideAndSeek(t2, 'om-de-boom-2', HIDE2.most, HIDE2.round, 'hide2');
+    k.beat = 'gevonden-2';
+    const f2 = await foundAt(t2, a2, false);
+    sqAng = f2.face;
+    await k.wait(0.5);
+    k.say(c.weerGevonden);
+    const found2 = measure();
+    k.stats.hide2_found_px = Math.round(found2.px);
+    k.stats.hide2_found_x = Math.round(found2.x * 100) / 100;
+    sq.called();
+    await k.wait(1.4);
+  }
+  // he turns toward its glade (or, where he must, a few calm steps first) and the lens comes
+  // round behind him on an arc: from there his picture holds it on the bark and its whole
+  // run to its stump (eekhoorn.places foundRun, review r1: still facing the tree from the
+  // found view, the stump stood behind him where he found it from the glade's side, and it
+  // ran past him at the lens). It pours down the bark on its side toward the glade and pops
+  // up on the ground in front of him, sits up facing him, chatters — and runs on across the
+  // picture or away from the lens, never at it
+  let run = foundRun(k.ranger(), sqAng, cT);
+  k.stats.run_ok = run.ok ? 1 : 0;
+  // (dev read: how far he turns from the found view — over 90°: he found it from its glade's side)
+  k.stats.run_turn = Math.round((Math.abs(wrap(run.face - k.ranger().heading)) * 180) / Math.PI);
+  if (dist(run.at, k.ranger()) > 0.05) {
+    k.stats.run_step = Math.round(dist(run.at, k.ranger()) * 10) / 10;
+    await k.walkRanger(run.at.x, run.at.z, 0.05);
+    // (planned again from where his steps really ended: its dash goes round him from there)
+    const again = foundRun(k.ranger(), sqAng, cT, { step: false });
+    if (again.ok) run = again;
+    else k.stats.run_again = 0;
+  }
+  await turnRanger(run.face);
+  await k.behind();
+  // (the follow lens takes over from there — the same spot, it only looks down at him a
+  // little more — so the picture its run is planned in is the one he walks on with:
+  // eekhoorn.places foundRun; under the held lens it ran lower in the picture, along its edge)
   k.lockFollow();
   await k.wait(0.6);
   const m = k.ranger();
-  const ahead = m.heading; // (where he looks: the follow camera looks there too)
-  // (ahead of him but off to the side away from the tree, on the open floor: straight
-  // ahead his own body would hide it from the camera behind him, by the trunk it is a
-  // small dark thing against the dark bark)
-  const toTree = headingTo(m, hideTree.trunk);
-  const side = Math.sin(toTree - ahead) >= 0 ? -1 : 1;
-  const popAt = ahead + side * 0.75;
-  const pop = { x: m.x + Math.sin(popAt) * 1.8, z: m.z + Math.cos(popAt) * 1.8 };
-  await k.guard(sq.run(sq.dashTo(pop.x, pop.z, headingTo(pop, m), sqAng)));
+  const pop = run.pop;
+  const runPlan = sq.dashTo(pop.x, pop.z, headingTo(pop, m), run.side);
+  {
+    // (dev read: how its real way goes in his picture — the most it comes back toward the
+    // lens (m), and how near his feet it passes)
+    const L = lens();
+    let far = -Infinity, toward = 0, nearMe = Infinity;
+    for (const sgm of runPlan) for (let u = 0; u <= 1.001; u += 0.1) {
+      const q = sgm.at(Math.min(1, u)), dq = dist(L, q);
+      toward = Math.max(toward, far - dq); far = Math.max(far, dq);
+      if (q.alt < 0.3) nearMe = Math.min(nearMe, dist(q, m));
+    }
+    Object.assign(k.stats, {
+      run_toward: Math.round(toward * 100) / 100, run_near_me: Math.round(nearMe * 100) / 100,
+      run_mx: Math.round(m.x * 100) / 100, run_mz: Math.round(m.z * 100) / 100, run_h: Math.round(m.heading * 100) / 100, run_face: Math.round(run.face * 100) / 100,
+      run_lx: Math.round(L.x * 100) / 100, run_lz: Math.round(L.z * 100) / 100, run_sx: Math.round(sq.x * 100) / 100, run_sz: Math.round(sq.z * 100) / 100,
+      run_px: Math.round(pop.x * 100) / 100, run_pz: Math.round(pop.z * 100) / 100, run_side: Math.round(run.side * 100) / 100, run_ang: Math.round(sqAng * 100) / 100,
+    });
+  }
+  await k.guard(sq.run(runPlan));
   chatter();
   await k.wait(0.7);
   sq.flick();
   await k.wait(1.1);
-  if (youngGone) {
-    // (the young one is up in the crown by now, out of his picture: it goes)
-    await youngGone.catch(() => false);
-    youngSeen?.off();
-    k.stats.jong = youngSeen?.seen ? 1 : 0;
-    home.dropVisitor();
-  }
+  await dropYoung();
 
-  // into its glade: down the pine and over the ground onto its stump by the store
+  // into its glade: over the ground onto its stump by the store, in one run (review r1:
+  // dashing with its stops to look, he walked after it faster than it went, overtook it and
+  // it passed under the lens) — and his keys are his a moment after it is off, so it stays
+  // ahead of him
   k.say(c.weer);
   const stumpFace = headingTo(STUMP, P.stand);
-  const toStump = k.guard(sq.goStump(STUMP.x, STUMP.z, STUMP.top, STUMP.r, stumpFace));
+  const toStump = k.guard(sq.goStump(STUMP.x, STUMP.z, STUMP.top, STUMP.r, stumpFace, true));
   toStump.catch(() => {}); // (a stop during the walk: the walk throws, this one is let go)
   // (on its stump it waits for him: it chatters now and then, the warm light on its outline)
   let onStump = false;
   void toStump.then((ok) => { if (ok) { onStump = true; sq.glow(true); chatter(); } }, () => {});
+  const gladeFrom = k.now;
+  let walkingIn = true;
+  /** the jay in his picture now: how tall (px), where across (−1…1), and whether that is in
+   *  its window (eekhoorn.places JAY_SEE: big enough, in the picture's middle, off his body,
+   *  mostly clear of the trunks and of him) */
+  const jayPicture = (): { px: number; cx: number; ok: boolean } | null => {
+    const t = home.jaySight(JAY_SEE.h);
+    if (!t) return null;
+    const cam = k.world.camera, me = k.ranger();
+    const H = k.ctx.canvas.clientHeight || 800, W = k.ctx.canvas.clientWidth || 1280;
+    const g = k.ctx.groundY(me.x, me.z);
+    const pic = pictureOf(cam, H, W, t.box, t.pts, [...home.trunks(cam.position, me), { x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 }]);
+    const edge = (1 - JAY_SEE.mid) / 2;
+    const ok = pic.px >= JAY_SEE.px && Math.abs(pic.cx) <= JAY_SEE.mid && Math.abs(pic.cx) >= JAY_SEE.body
+      && pic.cy >= H * edge && pic.cy <= H * (1 - edge) && pic.clear >= 0.5;
+    return { px: pic.px, cx: pic.cx, ok };
+  };
+  /** the squirrel in the lower half of his picture now (out of it: not) */
+  const squirrelLow = (): boolean => {
+    if (!sq.body || !sq.group.visible) return false;
+    const cam = k.world.camera;
+    cam.updateMatrixWorld();
+    const c = BOX.setFromObject(sq.body).getCenter(V2);
+    if (V1.copy(c).applyMatrix4(cam.matrixWorldInverse).z > -0.3) return false;
+    const s = V1.copy(c).project(cam);
+    return Math.abs(s.x) <= 1 && s.y < 0 && s.y >= -1;
+  };
+  /** the jay's own cache: it pushes its acorn into the needles, looks at him, flies up */
+  // (it plays while he comes up to it — he walks on meanwhile: short, the line at once)
+  const jayMoment = async (): Promise<void> => {
+    k.stats.verr_go = 1;
+    home.jayBury();
+    if (settings.geluid) Sound.dig();
+    k.say(c.gaaiVerstopt);
+    k.discover('eekhoorn.gaai', { quiet: true });
+    await k.wait(0.8);
+    home.jayLook(k.ranger());
+    await k.wait(0.4);
+    if (settings.geluid) { const j = home.jayAt(); Sound.callAt('gaai', j.x, j.z, listenerOf(k.world.camera), 25, CALL_CAP[1]); }
+    await k.wait(0.6);
+    home.jayUp(1.8);
+    await k.wait(1.8);
+    if (walkingIn) k.say(c.weer);
+  };
+  await k.wait(RUN_LEAD);
   await k.walk({
     name: 'open-plek', to: P.stand, r: 1.6, line: c.weer, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 18,
-    tick: () => { if (onStump && k.now - lastChatter > 3.2) chatter(); if (onStump) measure(); },
+    tick: () => {
+      if (onStump && k.now - lastChatter > 3.2) chatter();
+      if (onStump) measure();
+      else if (sq.body) {
+        // (dev read, its run home: how near the lens it came, and whether it was ever at the
+        // picture's bottom edge)
+        const L = lens();
+        k.stats.home_near = Math.round(Math.min(k.stats.home_near ?? 99, dist(L, sq)) * 10) / 10;
+        const cam = k.world.camera;
+        cam.updateMatrixWorld();
+        const c0 = BOX.setFromObject(sq.body).getCenter(V2);
+        if (V1.copy(c0).applyMatrix4(cam.matrixWorldInverse).z < -0.3 && V1.copy(c0).project(cam).y < -0.8 && Math.abs(V1.x) < 1) k.stats.home_low = 1;
+      }
+      if (verrDone) return;
+      const m = k.ranger();
+      if (verr === 'gaai') {
+        const j = home.jayAt(), d = dist(m, j);
+        k.stats.gaai_d = Math.round(Math.min(k.stats.gaai_d ?? 99, d) * 10) / 10; // (dev read: how near he came)
+        // (in its window — big and well inside his picture, the squirrel on its stump or
+        // clearly elsewhere: eekhoorn.places JAY_SEE — he walks up to it as it buries its
+        // acorn; not at the walk's first moment)
+        if (k.now - gladeFrom < JAY_SEE.after || d < JAY_SEE.close) { /* wait; or it flies up below */ } else {
+          const pic = jayPicture();
+          const away = jayFliesAway(m, j);
+          const sqElse = onStump || (dist(sq, j) >= JAY_SEE.apart && !squirrelLow());
+          if (pic) { k.stats.gaai_px = Math.round(pic.px); k.stats.gaai_x = Math.round(pic.cx * 100) / 100; }
+          if (pic && pic.ok && away && sqElse) {
+            k.stats.gaai_sq = Math.round(dist(sq, j) * 10) / 10;
+            k.stats.gaai_stump = onStump ? 1 : 0;
+            verrDone = true;
+            void jayMoment().catch(() => {});
+          } else if (pic?.ok && !sqElse) k.stats.gaai_wait_sq = 1;
+        }
+        if (!verrDone && d < JAY_SEE.close) {
+          // (he came on it from the side or straight at it, or its window never came: it simply
+          // flies up to its oak, without a word)
+          verrDone = true;
+          k.stats.gaai_up = 1;
+          home.jayUp(1.8);
+        }
+      } else if (verr === 'roffel' && k.now - gladeFrom >= 1.2 && dist(m, home.stamAt()) <= DRUM_NEAR) {
+        // a drum roll from the glade, and a second one a moment later
+        verrDone = true;
+        k.stats.verr_go = 1;
+        const drum = (): void => { home.drumOn(); if (settings.geluid) { const q = home.stamAt(); Sound.callAt('grote-bonte-specht', q.x, q.z, listenerOf(k.world.camera), 30); } };
+        drum();
+        void k.wait(1.6).then(drum).catch(() => {});
+      }
+    },
   });
+  walkingIn = false;
+  // (the jay he did not come by: it flies up to the glade oak all the same, before the glade)
+  if (verr === 'gaai' && !verrDone) { verrDone = true; home.jayUp(1.8); }
   await toStump;
   sq.glow(false);
   // (the way is behind him: what he saw of it is his, the rest stays for another visit)
@@ -1016,11 +1422,35 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   home.jayFlies();
   await k.wait(2.4);
 
-  // 6 · the squirrel sits on its stump and eats an acorn: all its nuts are back
+  // 6 · all its nuts are back: its day ends one of three ways (run 7, ek-day §6.8) — it
+  //     eats an acorn on its stump; or it fetches one more from its store, buries it by
+  //     the stump and pats it down (a forgotten one: the seedling a later visit finds); or
+  //     it grooms on its stump, its tail curled round
   home.seedlingWaits = true; // (a later visit finds the forgotten one grown)
+  const einde = p.day.einde;
+  k.stats.einde = EINDES.indexOf(einde);
   await k.reunion(async () => {
+    k.stats.einde_go = 1;
     sq.flick();
-    await sq.eat(3.6);
+    if (einde === 'begraaf') {
+      // (it turns to the side of its stump away from the store, an acorn it kept in its
+      // mouth, hops down there and buries it)
+      if (!(await sq.look(headingTo(STUMP, BURY_AT), 0.25))) return;
+      sq.carry(true);
+      if (!(await sq.goDash(BURY_AT.x, BURY_AT.z))) return;
+      sq.carry(false);
+      const y = sq.now.yaw;
+      home.buryAcorn(BURY_AT.x + Math.sin(y) * 0.07, BURY_AT.z + Math.cos(y) * 0.07, 0.8);
+      if (settings.geluid) Sound.dig();
+      if (!(await sq.dig(0.8))) return;
+      if (!(await sq.run(patPlan(sq.now, headingTo(BURY_AT, P.callers))))) return;
+      sq.flick();
+      await sq.goStump(STUMP.x, STUMP.z, STUMP.top, STUMP.r, stumpFace);
+    } else if (einde === 'poets') {
+      if (!(await sq.antic('poetsen', stumpFace))) return;
+      sq.flick();
+      await sq.antic('poetsen', stumpFace);
+    } else await sq.eat(3.6);
   });
   k.stats.store = dist(sq, HEAP) < 1.2 ? 1 : 0;
   // the raaf: the squirrel wakes up in winter to eat (the store is its winter food)
