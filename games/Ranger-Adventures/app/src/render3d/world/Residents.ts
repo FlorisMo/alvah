@@ -240,13 +240,17 @@ export class Residents {
    * the spec's pose until the next call. When the home is in that state and nobody borrows
    * it, the resident goes there now: `walk` = a calm walk (within its reach), else at once
    * (under the briefing card: a calf lying hidden in tall grass). A stop then lays it back
-   * here, where the play had it, never at a spot from another play.
+   * here, where the play had it, never at a spot from another play. Run 7 (ree-discover,
+   * additive): `pose` null gives the resident its spec's pose in that state back (a twin
+   * that only some plays have: the spec has none, so it is not there).
    */
-  repose(missionId: string, key: string, state: HomeState, pose: ResidentPose, opts: { walk?: boolean; cover?: Shy['to'] } = {}): void {
+  repose(missionId: string, key: string, state: HomeState, pose: ResidentPose | null, opts: { walk?: boolean; cover?: Shy['to'] } = {}): void {
     const home = this.homes.get(missionId);
     const r = home?.spec.residents.find((q) => q.key === key);
     if (!home || !r) return;
-    home.poses.set(key, { ...home.poses.get(key), [state]: pose });
+    const poses = { ...home.poses.get(key) };
+    if (pose) poses[state] = pose; else delete poses[state];
+    home.poses.set(key, poses);
     // (a shy one slips into THIS play's cover, never one across the heath: a cover too far
     // to walk to was a jump)
     if (opts.cover) home.covers.set(key, { ...home.covers.get(key), [state]: opts.cover });

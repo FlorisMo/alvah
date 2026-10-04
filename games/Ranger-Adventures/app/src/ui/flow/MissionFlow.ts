@@ -50,7 +50,7 @@ import { rollRare } from '../../core/discover';
 import { ONTDEKKINGEN, ontdekkingenVan, type Ontdekking } from '../../content/ontdekkingen';
 import { lastMoodAt, lastMoodsAt, playMood, type MoodId } from '../../render3d/Moods';
 import { providePlay } from '../../core/devhook';
-import { revealDiscovery, setRevealGate } from '../hud/Reveal';
+import { revealDiscovery, revealsWaiting, setRevealGate } from '../hud/Reveal';
 
 type PlayFn = (host: HTMLElement, step: Step, play?: Play) => Promise<BeatSummary>;
 const ENGINE_VIEWS: Partial<Record<string, PlayFn>> = {
@@ -379,7 +379,8 @@ async function runAdventure(mission: Mission, adv: Adventure, drawn: Drawn): Pro
         store.logBeat(ef, summary, { missionId: mission.id, view: 'world', play: drawn.play });
         played.push(ef);
       },
-      reveal: (o) => revealDiscovery(o),
+      reveal: (o, opts) => revealDiscovery(o, opts),
+      revealsWaiting: () => revealsWaiting(),
       fact: async (i) => {
         const st = mission.stappen[i];
         if (!st.skin.feit) return;
@@ -387,7 +388,7 @@ async function runAdventure(mission: Mission, adv: Adventure, drawn: Drawn): Pro
         await showFact(st, ++factN, facts);
         clearOverlays();
       },
-      reunion: async (play) => {
+      reunion: async (play, holdS) => {
         // won: from here on it is the ending (the pause chip goes, as on the classic path)
         unmountMissionPause();
         missionStop = null;
@@ -400,7 +401,7 @@ async function runAdventure(mission: Mission, adv: Adventure, drawn: Drawn): Pro
         notePatrolCompletion();
         clueId = capturedClue(mission, true, before);
         finale = !seasonBefore && seasonDone();
-        await showReunion(mission, play());
+        await showReunion(mission, play(), holdS);
       },
       paused: () => !!session.host.querySelector('.mission-pause-menu'),
     },
@@ -448,7 +449,7 @@ function seasonDone(): boolean {
  * happened, read aloud. The camera stays where it is; under reduced motion the family
  * simply stands there. Then the reward card. Never longer than a few seconds.
  */
-function showReunion(mission: Mission, moment?: Promise<void>): Promise<void> {
+function showReunion(mission: Mission, moment?: Promise<void>, holdS = 0): Promise<void> {
   narrator.stop();
   const tekst = mission.reunion?.tekst ?? '';
   const el = card(
@@ -463,7 +464,9 @@ function showReunion(mission: Mission, moment?: Promise<void>): Promise<void> {
   const ra = textEl ? mountReadAloud({ segments: sentenceSegments(textEl, tekst), autoStart: store.get().settings.voorlezen }) : null;
   const inWorld = tellWorldMissionDone(mission.id, true);
   const read = new Promise<void>((r) => window.setTimeout(r, REUNION_MIN_MS));
-  const cap = new Promise<void>((r) => window.setTimeout(r, moment ? REUNION_MAX_MS + 4000 : REUNION_MAX_MS)); // a slow model load never holds the reward
+  // (a slow model load never holds the reward; `holdS`: an adventure's moment that still
+  // shows new finds' cards may hold it that much longer)
+  const cap = new Promise<void>((r) => window.setTimeout(r, (moment ? REUNION_MAX_MS + 4000 : REUNION_MAX_MS) + Math.max(0, holdS) * 1000));
   // an adventure's own reunion (the family together again in the world) plays under the line
   const all = Promise.all([inWorld, read, moment?.catch(() => {})]).then(() => {});
   return Promise.race([all, cap]).then(() => { ra?.stop(); leave(el); }); // (the line eases out)
