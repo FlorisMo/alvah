@@ -386,6 +386,10 @@ const MISSIE_REE = {
       hierheen: 'Ze kijkt hierheen. Sta stil.',
       roept: 'Ze roept zacht.',
       kalfKomt: 'Daar komt het kalf!',
+      // run 7 (ree-discover): a cuckoo calls in one of her listening pauses (after its
+      // call); a second calf comes out to her at the reunion (the rare twins)
+      koekoek: 'Hoor je de koekoek?',
+      tweeling: 'Kijk! Een tweeling!',
       // the flip played with his feet: he walks away himself
       loopWeg: 'Mama is terug. Loop stil weg.',
       chipWeg: 'Een eindje weg',

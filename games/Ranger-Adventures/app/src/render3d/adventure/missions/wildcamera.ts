@@ -150,6 +150,11 @@ const FAMILY_FILL = 0.55;
 /** …and a nose at the lens in the night: its face lit, the ground behind it a little dimmer. */
 const NEUS_IR = 0.03;
 const NEUS_FILL = 0.7;
+/** …and (lane close) every animal he aims the camera at in the night: its body lit by the
+ *  flash, the night's fill round it dimmer, so it stands clear of the leaves round it and
+ *  keeps its own shading. */
+const AIM_IR = 0.06;
+const AIM_FILL = 0.7;
 /** Run 7 (wc-album r2): how long a rare's reveal is up before its look ends (s): long enough
  *  to read and hear "Nieuw in je veldgids! …" (it shows ~4 s). */
 const REVEAL_READ = 3.4;
@@ -740,9 +745,14 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       const where = walker ? { x: walker.x, z: walker.z } : { x: home.birdAtOf(id as BirdId).x, z: home.birdAtOf(id as BirdId).z };
       // (a bird: a close-up on its perch — a small bird fills the picture, and what stands
       // round its perch, the sett, stays out of it)
+      // (lane close: at night the camera's infrared flash lights the animal it fired on, as it
+      // lights the fox family and a nose at the lens: it stands out pale against the dark
+      // leaves of the thicket and the grass, never a grey animal among grey leaves)
+      const ir = night ? (): (() => void) => home.irLit([bird ? home.birdOf(id as BirdId) : walker!.body ?? walker!.group], AIM_IR) : undefined;
+      const fill = night ? AIM_FILL : undefined;
       const p = bird
-        ? await photograph(where, home.birdAtOf(id as BirdId).y - k.ctx.groundY(where.x, where.z) + h * 0.45, id === 'gaai' ? 0.9 : 0.72, id, night ? 'nacht' : 'dag', undefined, 8)
-        : await photograph(where, h * 0.5, Math.max(1.1, h * (h > 1 ? 1.6 : 2.3)), id, night ? 'nacht' : 'dag');
+        ? await photograph(where, home.birdAtOf(id as BirdId).y - k.ctx.groundY(where.x, where.z) + h * 0.45, id === 'gaai' ? 0.9 : 0.72, id, night ? 'nacht' : 'dag', ir, 8, fill, { flash: night })
+        : await photograph(where, h * 0.5, Math.max(1.1, h * (h > 1 ? 1.6 : 2.3)), id, night ? 'nacht' : 'dag', ir, undefined, fill, { flash: night });
       if (p) photos.add(p);
       // run 7 (wc-album): he saw the fox walk in and stand for its photo
       if (id === 'vos') foxFound();
@@ -833,6 +843,10 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     if (a.lies) await a.lie(false);
     if (!a.group.visible) { a.place(slot.from.x, slot.from.z, headingTo(slot.from, slot.at)); a.group.visible = true; }
     await k.guard(Promise.race([a.go(slot.at.x, slot.at.z, { speed: (PACE[id] ?? 1) * 0.8, face: slot.yaw }), k.wait(10).then(() => false)]));
+    // (lane close: the fox whose fresh prints he followed in walks into the night and stands
+    // there the whole echo: he saw it, so it is in his veldgids whether or not it calls — a
+    // short echo often leaves one of the four out)
+    if (id === 'vos') foxFound();
   };
   await k.wait(0.6);
   await Promise.all(wp.callers.map((n) => comeOut(n.id, n.slot, n.delay)));
