@@ -47,7 +47,11 @@ function quietNow(): boolean {
   if (!session.host.querySelector('.explore-hud, .adventure-hud')) return false; // (the title, the maker)
   if (menuOpen() || speaking()) return false;
   if (missionGate && !missionGate()) return false;
-  if (guideSnapshot().active !== null) return false;
+  // (Bram's teaching lives in the explore HUD: a lesson left waiting there while an
+  // adventure runs is not on screen, and never holds that adventure's reveals back —
+  // review r2 of ree-discover: a fresh save's 'rennen' lesson, shown on his way to the
+  // marker, held every card of the mission until it was over)
+  if (guideSnapshot().active !== null && session.host.querySelector('.explore-hud')) return false;
   return queue.current ? true : !voiceBusy(); // (its own voice keeps it up)
 }
 
@@ -66,6 +70,12 @@ export function revealDiscovery(o: Ontdekking, opts: { heard?: boolean } = {}): 
   if (o.model) void portrait(o.model);
   queue.push({ id: o.id, o, heard: !!opts.heard });
   if (!raf) raf = requestAnimationFrame(tick);
+}
+
+/** How many reveals wait or show now (ree-discover, additive: the reunion holds its
+ *  picture until the mission's new finds have all had their card). */
+export function revealsWaiting(): number {
+  return queue.waiting + (queue.current ? 1 : 0);
 }
 
 /**

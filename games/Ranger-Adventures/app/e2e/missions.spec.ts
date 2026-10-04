@@ -389,7 +389,7 @@ async function worldReacted(log: Log, mission: Mission, marker: P2, before: Seat
  * how high the search's lens hangs, and that the walks to the grass and to the hide are
  * walks. Read while it plays (the stats are gone once it ends).
  */
-function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv: { beat: string; stats?: Record<string, number> } | null) => Promise<void>; report: () => void } {
+function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv: { beat: string; stats?: Record<string, number> } | null) => Promise<void>; report: () => void; cards: () => Promise<void> } {
   const page = log.page;
   let target: { x: number; y: number } | null = null;
   let lens: number | null = null;
@@ -397,10 +397,26 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
   let share: number | null = null;
   let stats: Record<string, number> = {};
   let variant = '';
+  let carding = false;
   return {
     async observe(adv) {
       if (!adv) return;
       if (adv.stats) stats = adv.stats;
+      // (review r2, ree-discover: each new find's card, with the beat it came in — the page
+      // notes it the moment it shows, also on a walk the loop is busy walking)
+      if (!carding) {
+        carding = true;
+        await page.evaluate(() => {
+          const w = window as unknown as { __cards?: string[]; __ranger?: { adventure(): { beat: string } | null } };
+          w.__cards = [];
+          let last = '';
+          new MutationObserver(() => {
+            const n = document.querySelector('.reveal .rv-name')?.textContent ?? '';
+            if (n && n !== last) w.__cards!.push(`${n}@${w.__ranger?.adventure()?.beat ?? '-'}`);
+            last = n;
+          }).observe(document.getElementById('ui')!, { childList: true, subtree: true, characterData: true });
+        });
+      }
       if (!variant) variant = String((await R<{ variant?: Record<string, string> } | null>(page, 'r.play ? r.play() : null'))?.variant?.ree ?? '');
       if (adv.beat !== 'search' || target) return;
       // (before the player clicks: wait for the framed view to settle on the target)
@@ -415,6 +431,15 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
       const cam = await R<{ x: number; y: number; z: number } | null>(page, 'r.cam()');
       if (cam) lens = cam.y - (await R<number>(page, `r.groundAt(${cam.x}, ${cam.z})`));
       share = (await R<Record<string, { knobs: { glimpse?: number } }> | null>(page, 'r.skills()'))?.zoeken?.knobs?.glimpse ?? null;
+    },
+    async cards() {
+      // (no card lands on the twin coming to its mother: a waiting one shows with the reunion)
+      const cards = await page.evaluate(() => (window as unknown as { __cards?: string[] }).__cards ?? []).catch(() => [] as string[]);
+      log.note(`ree: new finds' cards ${cards.join(', ') || 'none'}`);
+      log.soft(!cards.some((c2) => c2.endsWith('@twin:comes')), `ree: a card came while the twin came to its mother (${cards.join(', ')})`);
+      // (review r2: what he meets on a walk has its card on a walk, never held for the reunion)
+      const off = cards.filter((c2) => /^(De leeuwerik|De buizerd|Het geschuurde boompje)@/.test(c2) && !/@walk:/.test(c2));
+      log.soft(!off.length, `ree: a walk's find had its card away from the walks (${off.join(', ')})`);
     },
     report() {
       log.note(`ree: morning ${variant || '?'}; calf hint at ${target ? `(${Math.round(target.x)}, ${Math.round(target.y)})` : '?'}; lens ${lens?.toFixed(2) ?? '?'} m over the ground; glimpse ${stats.glimpse}; walks ${stats.walk_meadow_m} m to the grass, ${stats.walk_hide_m} m to the hide`);
@@ -448,6 +473,12 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
       log.soft(lens !== null && lens <= 4.1, `ree: the search's lens hangs ${lens?.toFixed(2)} m over the ground`);
       log.soft(stats.walk_meadow_m >= 9, `ree: the walk to the grass is ${stats.walk_meadow_m} m`);
       log.soft(stats.walk_hide_m >= 11, `ree: the walk to the hide is ${stats.walk_hide_m} m`);
+      // run 7 (ree-discover): what there was to notice this morning, and how big it showed
+      // (the play's `vr` note says which small things it held); a twin is laid out of his
+      // picture, never at the last moment in view
+      const finds = ['leeuwerik', 'buizerd', 'koekoek', 'tweeling', 'tapuit', 'vlinder'].filter((f) => stats[f]);
+      log.note(`ree: to notice ${finds.join(', ') || 'none'}${stats.birch_x !== undefined ? `, a rubbed birch at (${stats.birch_x}, ${stats.birch_z})` : ''}; seen ${Object.entries(stats).filter(([k2]) => k2.startsWith('px_')).map(([k2, v]) => `${k2.slice(3)} ${v} px`).join(', ')}`);
+      if (stats.tweeling) log.soft(stats.twin_laid === 1, `ree: the twin was laid out of his picture (${stats.twin_laid})`);
     },
   };
 }
@@ -527,6 +558,7 @@ for (const mission of missions) {
       await playSteps(log, mission, undefined, watch?.observe);
       await watch?.report();
       await finish(log, mission);
+      await watch?.cards();
       await worldReacted(log, mission, marker, before);
       log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
     } finally {
@@ -568,6 +600,7 @@ test('Het reekalf in het gras on a practised save: the same game, harder, with r
     log.soft(ree.some((b) => b.e === 'zoeken' && b.n === 1 && b.lv >= 4) && ree.some((b) => b.e === 'dagnacht' && b.n === 5 && b.lv >= 4),
       `the beats logged at the practised level, the same trials (${JSON.stringify(ree.map((b) => [b.e, b.n, b.lv]))})`);
     await finish(log, mission);
+    await watch.cards();
     await worldReacted(log, mission, marker, before);
     log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
   } finally {
