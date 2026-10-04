@@ -161,7 +161,27 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          den, a young one sitting up at the hide pine's foot in the found
                          view), each recorded only once he saw
                          it (`seenFor`: big enough in his picture, for a moment)): the four
-                         missions met first
+                         missions met first; run 7: ven (the north bank of the ven: a shore
+                         path, three coves of sedge, cotton-grass and veenmos where the
+                         heikikkers live; ven.places.ts the coves — each with six nooks of
+                         its own along its water's edge, searched from either side (from his
+                         left the lens mirrors his right about the cove's water line, so the
+                         edge runs corner to corner either way), their place in the search
+                         picture pinned (`px`) so a play keeps the frog away from where it
+                         sat in the plays before (`venLayout`); the late hint's rings on open
+                         water 0.9-1.0 m in front of him at every nook (`hintRingOf`, decision
+                         1); the dry path's walk on set from where he stands (`padGoal`) — two stations a cove and
+                         `wayOf` — his way there with the adder, the soft moss and the dry
+                         path in the dagnacht trial's own order (`venOrder`), the listening
+                         stops, the song at the water's edge (`singOf`) and the answer's
+                         pulled-back view; ven.listen.ts the chorus he follows by ear (a run
+                         hushes it); ven.home.ts the bank (one ground mesh; the coves' sedge,
+                         cotton-grass and clods one detail resting from the middle cove) and
+                         `Frog`, an Actor whose throat bubble swells, that floats, hops,
+                         leaps and dives, and otherwise sits dead still (`Actor` opts.recipe:
+                         no idle hop; its body rests beyond 18 m); ven.ts the beats: look,
+                         follow, the three moments with his feet, the search, the song, the
+                         answer, the plop)
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          run 7: a home may record what he saw of it in free roam
                          (`DressingEnv.discover`, wired by WorldSession to the save and the
@@ -184,7 +204,9 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
 - *the lens*: `await k.frame({ at, heading, halfW, halfD, pitchDeg, include }, { face })`
   holds a framed view (a Stage fit at a world anchor, the ranger's spot among `include`),
   eased, ≤ 90°/s, a cut under reduced motion (run 7: `{ dip: true }` — a view that would turn
-  more than 90° is one soft dip-cut, the jeep's warm veil, never a swing round him); `k.free()` gives the follow camera back with a
+  more than 90° is one soft dip-cut, the jeep's warm veil, never a swing round him; a view's
+  `near` and `lensUp` let the lens come nearer than 3 m and lower than 1.4 m over the ground —
+  the ven's singing frog seen from just over the water); `k.free()` gives the follow camera back with a
   blended hand-over; `await k.look(spot, line, hold, { turn })` is one calm look
   (binoculars) and back (`turn`: he ends facing it); `k.ui.watching(on)` draws a long
   watch through the glasses' two round lenses (the ree's hide; under the cards, no zoom).
@@ -204,7 +226,9 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   the ranger, so the card makes way first and its line follows); `.still(id, { line, hands |
   feet, tempt, wrong, right })` plays an encounter with the BODY instead of a card (keep your
   hands off the animal, or your feet still: a reach is the wrong answer, the same moment comes
-  back; the pure core is `beats/hold-math.ts`); run 7: `.go(id, { line, family, to, via, doel,
+  back; the pure core is `beats/hold-math.ts`; run 7 `room: { at, r, warn }`: keep your
+  distance — his feet stay free, coming within `r` of `at()` is the reach, the ven's adder);
+  run 7: `.go(id, { line, family, to, via, doel,
   hush, wrong, right })` plays the flip with his FEET — he walks away himself (`GoCore`: 4 m off
   at a walk and farther from the animals; standing the level's `goWaitS` or 2.5 m closer is the
   old rule, the moment comes back; running is neither); `.answer(id, goed)` answers the next

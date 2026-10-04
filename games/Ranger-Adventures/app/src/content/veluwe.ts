@@ -1077,16 +1077,17 @@ const MISSIE_VEN = {
   status: 'actief',
   kort: 'Een heikikker zit verstopt bij het ven. Vind hem en blijf rustig.',
   briefing: {
+    // run 7: the briefing names what he already hears from the north bank: the frogs
     simpel: [
-      'Bij het ven zit een kleine kikker.',
-      'Hij is goed verstopt in het riet.',
+      'Bij het ven roepen de kikkers.',
+      'Eén zit verstopt bij het water.',
       'Kun jij hem vinden?',
-      'Blijf rustig bij het water.',
+      'Kijk goed waar je loopt.',
     ],
     knap: [
-      'In het ven zit een heikikker.',
-      'Hij verstopt zich tussen het riet.',
-      'Zoek hem en blijf rustig.',
+      'Bij het ven roepen de heikikkers.',
+      'Eén zit verstopt tussen het veenmos.',
+      'Kun jij hem vinden?',
       'Soms ligt een adder in de zon.',
     ],
   },
@@ -1095,6 +1096,43 @@ const MISSIE_VEN = {
     vaktermBadge: { id: 'knap-ven', naam: 'Knap woord: ven' },
   },
   reunion: { sprite: 'heikikker', tekst: 'De kikker plonst terug het ven in.' },
+  /* run 7: De kikker in het ven as an adventure on the north bank (render3d/adventure/
+     missions/ven.ts): the frogs heard from the far bank, followed by ear along the shore
+     path, the three calm moments with his feet on the way, the frog found at the water,
+     his song, the plons. One line per beat. */
+  avontuur: {
+    simpel: {
+      kijk: 'Hoor je de kikkers?',
+      volg: 'Loop naar de kikkers.',
+      chipKikkers: 'De kikkers',
+      luister: 'luister goed',
+      sst: 'Sst. Nu zijn ze stil.',
+      staStil: 'Sta stil. Luister.',
+      weer: 'Hoor je? Daar roepen ze weer.',
+      // the adder on the path (her own words are the encounter's): what to do with his feet
+      afstand: 'Hou afstand. Wacht even.',
+      // the soft moss: after the second boot in it the chip shows the way round
+      chipRond: 'Om het mos heen',
+      eromheen: 'Loop over de hei eromheen.',
+      // the dry path (the flip): the encounter's words, then go
+      loopDoor: 'Loop maar door.',
+      chipPad: 'Verder over het pad',
+      chipWater: 'Naar het water',
+      zoek: 'Waar zit de kikker? Tik op hem.',
+      mis: 'Hier niet. Zoek verder.',
+      hint: 'Luister. Hij roept.',
+      zingen: 'Sta stil. Hij gaat zingen.',
+      wacht: 'Sst. Hij wacht even.',
+      terug: 'Hoor je? Ze roepen terug.',
+    },
+    knap: {
+      kijk: 'Hoor je de heikikkers?',
+      volg: 'Loop naar de heikikkers.',
+      chipKikkers: 'De heikikkers',
+      chipRond: 'Om het veenmos heen',
+      zoek: 'Waar zit de heikikker? Tik op hem.',
+    },
+  },
   stappen: [
     {
       ef: 'zoeken',
@@ -1125,14 +1163,18 @@ const MISSIE_VEN = {
         copy: { instructie: 'Blijf rustig bij het ven.' },
         regels: ['Slang? Hou afstand.', 'Water? Loop er omheen.'],
         metgezel: 'geen',
+        /* run 7: the three moments come in a drawn order each play, on the shore path to
+           the frogs (the 2D floor asks them as cards in the same order, from the same
+           seed); the dry path (the flip) is never the first */
+        rustPlan: [{ slot: 'ven' }],
         encounters: [
-          { id: 'adder-ven', subject: 'adder', dier: 'adder', vraag: 'Een adder ligt in de zon.',
+          { id: 'adder-ven', slot: 'ven', subject: 'adder', dier: 'adder', vraag: 'Een adder ligt in de zon.',
             opties: [{ label: 'Aaien', goed: false }, { label: 'Hou afstand', goed: true }],
             uitleg: 'Rustig zo. Je laat hem met rust.', gevolg: 'De adder schrikt. Hou afstand.', reactie: 'rear' },
-          { id: 'modder-ven', subject: 'modderpoel', vraag: 'De rand van het ven is zacht.',
+          { id: 'modder-ven', slot: 'ven', subject: 'modderpoel', vraag: 'De rand van het ven is zacht.',
             opties: [{ label: 'Erdoor', goed: false }, { label: 'Eromheen', goed: true }],
             uitleg: 'Goed. Je loopt om het natte stuk heen.', gevolg: 'Je zakt weg in de modder. Loop eromheen.', reactie: 'mud' },
-          { id: 'pad-ven', subject: 'pad-veilig', flip: true, vraag: 'Het droge pad is vrij.',
+          { id: 'pad-ven', slot: 'ven', subject: 'pad-veilig', flip: true, vraag: 'Het droge pad is vrij.',
             opties: [{ label: 'Wachten', goed: false }, { label: 'Loop door', goed: true }],
             uitleg: 'Precies. Hier mag je gewoon doorlopen.', gevolg: 'Dit pad is veilig. Loop maar door.', reactie: 'recede' },
         ],

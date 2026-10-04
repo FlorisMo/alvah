@@ -76,3 +76,21 @@ test('capturedClue is deterministic + pure — inputs untouched', () => {
   assert.equal(JSON.stringify(m), beforeM);
   assert.equal([...found].join(','), beforeF);
 });
+
+test('the story order: the adventures in the order the game meets them, then the rest in the area\'s order (run 7)', async () => {
+  const { storyOrderOf } = await import('./patrol.ts');
+  const { AREA_VELUWE } = await import('../content/veluwe.ts');
+  const order = storyOrderOf(AREA_VELUWE.missies, ['frisling', 'ree-niet-aanraken', 'wildcamera', 'eekhoorn', 'ven']).map((m) => m.id);
+  console.log(`  story order: ${order.join(', ')}`);
+  assert.deepEqual(order, ['frisling', 'ree-niet-aanraken', 'wildcamera', 'eekhoorn', 'ven', 'ecoduct', 'stuifzand', 'nachtronde', 'vos', 'herstel']);
+  // (the four met first keep their order whatever comes after them)
+  assert.deepEqual(storyOrderOf(AREA_VELUWE.missies, ['frisling', 'ree-niet-aanraken', 'wildcamera', 'eekhoorn']).map((m) => m.id).slice(0, 5),
+    ['frisling', 'ree-niet-aanraken', 'wildcamera', 'eekhoorn', 'ven']);
+  // with three of them done the next is the squirrel, then the frogs
+  const done: Record<string, boolean> = { frisling: true, 'ree-niet-aanraken': true, wildcamera: true };
+  const ids = storyOrderOf(AREA_VELUWE.missies, ['frisling', 'ree-niet-aanraken', 'wildcamera', 'eekhoorn', 'ven']);
+  assert.equal(nextPatrolTarget(ids, done), 'eekhoorn');
+  assert.equal(nextPatrolTarget(ids, { ...done, eekhoorn: true }), 'ven');
+  // an id the area does not have is left out; nothing is lost or doubled
+  assert.equal(storyOrderOf(AREA_VELUWE.missies, ['nope', 'ven', 'ven']).length, AREA_VELUWE.missies.length);
+});
