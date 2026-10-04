@@ -348,9 +348,12 @@ export class EekhoornHome implements HomeDressing {
     return this.nestAt ? { ...this.nestAt, world: this.nest.position.clone() } : null;
   }
 
-  /** The nest's box and a few points on it (what he sees of it). */
+  /** The nest's box and a few points on it (what he sees of it) — only while it stands
+   *  solid: faded near the lens (nestSolid) there is nothing to see (played 2026-10-04,
+   *  seed 3: the lens trailing him past it had it faded out, 125 px "in view", and it
+   *  peeked out of a nest that was not there). */
   nestSight(): { box: THREE.Box3; pts: THREE.Vector3[] } | null {
-    if (!this.nestAt || !this.nest.visible) return null;
+    if (!this.nestAt || !this.nest.visible || this.nestShow < 0.95) return null;
     const c = this.nest.position, r = NEST.r;
     const box = new THREE.Box3(c.clone().subScalar(r), c.clone().addScalar(r));
     const pts = [[0, 0, 0], [0, 0.6, 0], [0.6, 0.1, 0], [-0.6, 0.1, 0], [0, 0.1, 0.6], [0, 0.1, -0.6], [0, -0.5, 0]]
@@ -846,7 +849,7 @@ const viewW = (): number => (typeof window !== 'undefined' ? window.innerWidth :
  *  stands in the picture (px), whether it is in the picture (its middle in front of the
  *  lens, inside the picture's width and under the line card at the top), and the share of
  *  its points no trunk of the home hides (`trunks`). */
-export interface Picture { px: number; across: number; inside: boolean; clear: number }
+export interface Picture { px: number; across: number; inside: boolean; clear: number; /** its middle across the picture (−1 the left edge … 1 the right) */ cx: number }
 const CORNER = new THREE.Vector3();
 export function pictureOf(cam: THREE.Camera, h: number, w: number, box: THREE.Box3, pts: readonly THREE.Vector3[], trunks: readonly Upright[]): Picture {
   cam.updateMatrixWorld();
@@ -857,11 +860,11 @@ export function pictureOf(cam: THREE.Camera, h: number, w: number, box: THREE.Bo
     CORNER.project(cam);
     minX = Math.min(minX, CORNER.x); maxX = Math.max(maxX, CORNER.x); minY = Math.min(minY, CORNER.y); maxY = Math.max(maxY, CORNER.y);
   }
-  if (behind) return { px: 0, across: 0, inside: false, clear: 0 };
+  if (behind) return { px: 0, across: 0, inside: false, clear: 0, cx: 9 };
   const cx = (minX + maxX) / 2, cy = (1 - (minY + maxY) / 2) * 0.5 * h;
   const inside = Math.abs(cx) <= 0.92 && cy >= 96 && cy <= h - 8;
   const clear = pts.length ? pts.filter((p) => lineClear(cam.position, p, trunks)).length / pts.length : 0;
-  return { px: (maxY - minY) * 0.5 * h, across: (maxX - minX) * 0.5 * w, inside, clear };
+  return { px: (maxY - minY) * 0.5 * h, across: (maxX - minX) * 0.5 * w, inside, clear, cx };
 }
 
 /** A colour with a little of the stream's own variety (every twig, every flake its own). */

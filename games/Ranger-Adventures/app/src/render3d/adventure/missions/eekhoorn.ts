@@ -49,7 +49,7 @@ import {
   CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, FIND_R, GLADE_VIEW, HEAP, HEAP_GRAB, AT_IT, HIDE, HOME_TREES, ROUTES, RUN_ON_WAIT, RUN_ON_X, SEAT_STOP, SEE_D, SEEN_X, STUMP,
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
-  DEN_VISITOR, DINING_SEE, NEST, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, youngPeek,
+  DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, nestWatch, youngPeek,
 } from './eekhoorn.places';
 import { ontdekking } from '../../../content/ontdekkingen';
 
@@ -77,14 +77,15 @@ const VISIT = { dig: 0.65, gap: 0.12 } as const;
 /** On a pine it only passes, it waits at most this long (s) for him to turn to it before it
  *  leaps on (the way on shows after RUN_ON_WAIT + 2 s, turning him toward it). */
 const PASS_WAIT = 9;
-/** Its nest (run 7): it peeks out once he is within `near` m and the nest stands at least
- *  `px` tall in his picture (its 0.46 m from the follow lens ~6 m off) — or, once he has stood
- *  near its tree `nearWait` s without the nest in his picture (or `wait` s on in all), all the
- *  same, and then says nothing of a nest he did not see. While it waits in its nest and he is
- *  by its tree, the way on is to the nest's foot (`face` m short): walking at it turns him,
- *  and the lens, to the nest (played 2026-10-03, the right way's first pine: a bot that stood
- *  at the watch spot facing past the trunk saw nothing for 14 s, and the moment was lost). */
-const NEST_PEEK = { near: 5.5, px: 44, wait: 16, nearWait: 4, face: 1.3 } as const;
+/** Its nest (run 7): it peeks out once he has seen the nest (NEST_SEE: big enough in his
+ *  picture for a moment, the threshold the places test pins from the spot to see it from) —
+ *  or, once he has stood right under it (NEST_WATCH.under) `nearWait` s, or `wait` s on in
+ *  all, it comes out all the same and says nothing of a nest he did not see. While it waits
+ *  in its nest the way on is to the spot to see it from (nestWatch), then a step that turns
+ *  him to it — and he stands there while it peeks out and its line plays (played
+ *  2026-10-04: walked on to the nest's foot, or away to the stub's watch spot while the line
+ *  played, the moment was lost in 2 of 9 plays). */
+const NEST_PEEK = { wait: 16, nearWait: 4 } as const;
 /** Its sweep after a round: each acorn dug up in a quick bob (s). */
 const SWEEP_DIG = 0.25;
 /** Each neighbour's call in the echo game is held to this snippet (s): a blackbird's long
@@ -322,10 +323,12 @@ function squirrelSight(q: Squirrel): (() => { box: THREE.Box3; pts: readonly THR
  *  golden: a spot a perfect player walks to straight, with a real radius, read anew each
  *  time he gets there. It replaces the walk's own hint on the walk's first tick, under
  *  its own id (so a reader still holding the walk's own sees it change). */
-function seeHint(k: AdventureKit, name: string, spot: () => Spot & { r?: number }): { tick(): void; off(): void } {
+function seeHint(k: AdventureKit, name: string, spot: () => Spot & { r?: number; tag?: string }): { tick(): void; off(): void } {
   let off: (() => void) | null = null;
   return {
-    tick: () => { off ??= k.hint(() => { const s = spot(); return { id: `walk:${name}:see`, walk: { x: s.x, z: s.z, r: s.r ?? WATCH_R } }; }); },
+    // (`tag`: a leg of its own — the nest's — under its own id, so a reader walking the last
+    // leg sees it change at once)
+    tick: () => { off ??= k.hint(() => { const s = spot(); return { id: `walk:${name}:${s.tag ?? 'see'}`, walk: { x: s.x, z: s.z, r: s.r ?? WATCH_R } }; }); },
     off: () => { off?.(); off = null; },
   };
 }
@@ -456,16 +459,18 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       }
     }
   });
-  // run 7 (its finds): along the way he may see its nest and its gnawed cones — each goes
-  // into his veldgids once he really saw it (big enough in his picture, for a moment)
-  const nestSeen = seenFor(k, home, 'eekhoorn.nest', () => home.nestSight(), { px: 40, secs: 1, stat: 'nest' });
+  // run 7 (its finds): along the way he may see its gnawed cones — into his veldgids once he
+  // really saw them (big enough in his picture, for a moment); its nest goes in with its own
+  // moment (nestMoment), or — when he walked past it without a look — once he does see it
+  let nestSeen = null as { off(): void; readonly seen: boolean } | null;
   const kegelsSeen = seenFor(k, home, 'eekhoorn.kale-kegels', () => { const q = home.kegelsSight(); return q && { box: q.box, pts: q.pts, at: q.at }; },
     { across: DINING_SEE.across, within: DINING_SEE.within, secs: DINING_SEE.secs, stat: 'kegels' });
   /** set once the last move to the next wait has begun (a leap through a pine it only
    *  passes comes first) */
   let lastMove = false;
-  /** while it waits in its nest: where the nest is (its foot on the ground) */
-  let inNest: Spot | null = null;
+  /** while it waits in its nest (and peeks out of it): the spot to see it from, and which
+   *  leg of the way there he is on (to the spot; the step that turns him to the nest) */
+  let nestWait: { watch: ReturnType<typeof nestWatch>; leg: 'go' | 'look' } | null = null;
   const hop = async (name: string, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
     k.say(line);
     lastMove = false;
@@ -489,12 +494,20 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     const spot = watchSpot(t);
     const seat = seatOf(t);
     const hint = seeHint(k, name, () => {
+      // (it waits in its nest: the way is to the spot to see it from, then one step on toward
+      // a point beside the nest — it turns him, and the lens, to it — and there he stands)
+      if (nestWait) {
+        const w = nestWait.watch, d = dist(k.ranger(), w);
+        if (nestWait.leg === 'go' && d <= NEST_WATCH.r) nestWait.leg = 'look';
+        else if (nestWait.leg === 'look' && d > NEST_WATCH.r + NEST_WATCH.step + 0.8) nestWait.leg = 'go';
+        if (nestWait.leg === 'look') return { x: w.aim.x, z: w.aim.z, r: w.stop, tag: 'nest-look' };
+        const way = wayTo(k.ranger(), w);
+        return way === w ? { x: w.x, z: w.z, r: NEST_WATCH.r * 0.7, tag: 'nest' } : { x: way.x, z: way.z, tag: 'nest' };
+      }
       // (at the spot to see it from — or right by it already — with it on its stub: the way
       // is on toward it, never away from it: walking at it turns him, and the lens, to it,
       // and brings him within SEE_D)
       if (arrived && (dist(k.ranger(), spot) <= WATCH_R || dist(k.ranger(), seat) <= AT_IT)) return { ...seat, r: SEAT_STOP };
-      // (it waits in its nest: by its tree, the way is on to the nest's foot — he turns to it)
-      if (inNest && (dist(k.ranger(), spot) <= WATCH_R + 0.5 || dist(k.ranger(), inNest) <= NEST_PEEK.near * 0.6)) return { ...inNest, r: NEST_PEEK.face };
       return wayTo(k.ranger(), spot);
     });
     try {
@@ -543,52 +556,71 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   };
   /**
    * Its nest (run 7): at the wait whose tree carries it, it runs up into the nest instead
-   * of onto its stub; once he has come near enough to see the nest it peeks out of it at
-   * him from the nest's crown ("Kijk, zijn nest!"), then comes down to its stub to wait.
+   * of onto its stub and waits there, chattering from the twigs, while the way on takes him
+   * to the spot to see it from. Once he has SEEN the nest (NEST_SEE: big enough in his
+   * picture, NEST_SEE.secs in a row) it peeks out of it at him ("Kijk, zijn nest!") and the
+   * nest goes into his veldgids — that moment is the find; he stands while it peeks and
+   * flicks its tail, then it comes down to its stub to wait. A child who walks on under it
+   * without a look: it comes out all the same and nothing is said of a nest he did not see
+   * (it is his once he does see it, from then on).
    */
-  const nestMoment = async (t: HomeTree, face: number, line: string): Promise<boolean> => {
+  const nestMoment = async (t: HomeTree, wi: number, face: number, line: string): Promise<boolean> => {
     const n = home.nestNow;
     if (!n) return sq.goBranch(st(t), face);
     const tree = st(t);
     if (!(await sq.goTrunk(tree, { ang: n.ang, h: NEST.h - NEST.r - 0.1 }))) return false;
     // into it (the ball of twigs hides it; a bit of tail may show)
     if (!(await sq.moveTo({ x: n.x, z: n.z, alt: n.world.y - k.ctx.groundY(n.x, n.z) - NEST.r * 0.55, yaw: n.ang, pitch: 0, roll: 0, act: 'sit' }, 0.45))) return false;
-    // (it waits in its nest — its chatter from the twigs — until he is near and the nest
-    // is big in his picture; a child who walks on past it without a look: it comes out
-    // and goes to its stub all the same, and nothing is said about a nest he did not see)
-    let nextChatter = k.now + 1.5;
-    let nearFor = 0, lastT = k.now;
-    inNest = { x: n.x, z: n.z };
+    /** the nest in his picture now: big enough, well inside it (not at its edge), under the
+     *  line card, mostly clear of the trunks (not the ones the camera fades) and of his head */
     const nestInView = (): boolean => {
       const me = k.ranger();
-      if (dist(me, n) > NEST_PEEK.near) return false;
+      if (dist(me, n) > NEST_SEE.near) return false;
       const t0 = home.nestSight();
       if (!t0) return false;
-      const pic = pictureOf(k.world.camera, k.ctx.canvas.clientHeight || 800, k.ctx.canvas.clientWidth || 1280, t0.box, t0.pts, home.trunks(k.world.camera.position, me));
-      return pic.inside && pic.px >= NEST_PEEK.px && pic.clear >= 0.5;
+      const cam = k.world.camera;
+      const g = k.ctx.groundY(me.x, me.z);
+      const hiders = [...home.trunks(cam.position, me), { x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 }];
+      const pic = pictureOf(cam, k.ctx.canvas.clientHeight || 800, k.ctx.canvas.clientWidth || 1280, t0.box, t0.pts, hiders);
+      const ok = pic.inside && Math.abs(pic.cx) <= NEST_SEE.x && pic.px >= NEST_SEE.px && pic.clear >= 0.5;
+      if (ok) { k.stats.nest_px = Math.round(pic.px); k.stats.nest_x = Math.round(pic.cx * 100) / 100; }
+      return ok;
     };
-    const inView = await k.until(() => {
+    nestWait = { watch: nestWatch(route, wi), leg: 'go' };
+    const clock = new SeenClock(NEST_SEE.secs);
+    let nextChatter = k.now + 1.5, under = 0, last = k.now;
+    const t0 = k.now;
+    const seen = await k.until(() => {
+      const dt = k.now - last;
+      last = k.now;
       if (k.now >= nextChatter) { nextChatter = k.now + 2.8; chatter(); }
-      if (nestInView()) return true;
-      // (he stands by its tree and does not look up at it: it comes out to him all the same)
-      nearFor = dist(k.ranger(), n) <= NEST_PEEK.near * 0.6 ? nearFor + (k.now - lastT) : 0;
-      lastT = k.now;
-      return nearFor >= NEST_PEEK.nearWait;
-    }, NEST_PEEK.wait).then((ok) => ok && nestInView());
-    inNest = null;
+      if (clock.step(dt, nestInView())) return true;
+      // (he stands right under it and does not look up at it: it comes out to him all the same)
+      under = dist(k.ranger(), n) <= NEST_WATCH.under ? under + dt : 0;
+      return under >= NEST_PEEK.nearWait;
+    }, NEST_PEEK.wait).then(() => clock.seen);
+    k.stats.nest_wait_s = Math.round((k.now - t0) * 10) / 10;
     const pk = nestPeek(n, k.ranger());
     sq.glow(true);
-    if (!(await sq.moveTo({ x: pk.x, z: pk.z, alt: pk.y, yaw: pk.yaw, pitch: 0, roll: 0, act: 'sit' }, 0.5))) return false;
-    chatter();
-    if (inView && nestInView()) {
+    const out = sq.moveTo({ x: pk.x, z: pk.z, alt: pk.y, yaw: pk.yaw, pitch: 0, roll: 0, act: 'sit' }, 0.5);
+    out.catch(() => {});
+    if (seen) {
+      // its moment, in his picture: the line as its head comes out, and the nest is his
+      await k.wait(0.25);
       k.say(c.nestKijk);
       k.stats.nest_peek = 1;
+      k.discover('eekhoorn.nest');
     }
+    if (!(await out)) { nestWait = null; return false; }
+    chatter();
     await k.wait(0.6);
     sq.flick();
     await k.wait(1.2);
     chatter();
     await k.wait(0.6);
+    nestWait = null;
+    // (a nest he did not see: his once he does — from here on, as he walks on)
+    if (!seen) nestSeen ??= seenFor(k, home, 'eekhoorn.nest', () => home.nestSight(), { px: NEST_SEE.px, secs: 1, stat: 'nest' });
     sq.glow(false);
     k.say(line);
     // down the bark under its nest, round to its stub
@@ -596,7 +628,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     return sq.goBranch(tree, face);
   };
   /** the hops after the wait before up to and including `w` (a leap or a dash each) */
-  const goTo = (from: number, to: number, face: number, nest: { line: string } | null = null): (() => Promise<boolean>) => async () => {
+  const goTo = (from: number, to: number, face: number, nest: { wi: number; line: string } | null = null): (() => Promise<boolean>) => async () => {
     const hops = route.hops.slice(from, to + 1);
     for (const [i, h] of hops.entries()) {
       const last = i === hops.length - 1;
@@ -605,7 +637,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       // 2026-10-03: from the middle way's A, its leap to B lands left of his picture)
       if (i > 0 && !inMiddle()) { chatter(); await k.until(() => inMiddle(), PASS_WAIT); }
       if (last) lastMove = true;
-      const ok = last && nest && h.how === 'dash' ? await nestMoment(h.tree, face, nest.line)
+      const ok = last && nest && h.how === 'dash' ? await nestMoment(h.tree, nest.wi, face, nest.line)
         : h.how === 'leap' ? await sq.goLeap(st(h.tree), last ? face : undefined) : await sq.goBranch(st(h.tree), last ? face : undefined);
       if (!ok) return false;
       if (!last) await k.wait(0.25);
@@ -617,7 +649,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     for (const [wi, t] of route.waits.entries()) {
       const to = route.hops.findIndex((h) => h.tree === t);
       const line = wi === 0 ? c.volg : c.weer;
-      await hop(`wacht-${wi + 1}`, goTo(from, to, headingTo(t, comesFrom(route, wi)), wi === p.nest && wi < route.waits.length - 1 ? { line } : null), t, line);
+      await hop(`wacht-${wi + 1}`, goTo(from, to, headingTo(t, comesFrom(route, wi)), wi === p.nest && wi < route.waits.length - 1 ? { wi, line } : null), t, line);
       from = to + 1;
     }
   } finally {
@@ -797,7 +829,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   await toStump;
   sq.glow(false);
   // (the way is behind him: what he saw of it is his, the rest stays for another visit)
-  nestSeen.off();
+  nestSeen?.off();
   kegelsSeen.off();
   k.say(c.plekje);
   chatter();

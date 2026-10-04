@@ -27,7 +27,7 @@ import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { atLocal, dist, headingTo, segDist, uniformLocal, type Frame } from '../places.ts';
-import { barkRadius, trunkOutline } from '../squirrel-math.ts';
+import { barkRadius, trunkFadeUpright, trunkOutline } from '../squirrel-math.ts';
 import type { TreeStub } from '../../world/Forest.ts';
 
 /** The eekhoorn marker: the bos anchor it has always had (the test checks it). */
@@ -638,6 +638,79 @@ export function nestOf(route: Route, i: number): NestSpot {
   const ang = back - side * NEST.turn;
   const r = barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, NEST.h) + NEST.r * NEST.hug;
   return { tree: t, x: t.x + Math.sin(ang) * r, z: t.z + Math.cos(ang) * r, y: NEST.h, ang };
+}
+/**
+ * Where he stands to see its nest while it waits in it (the walk hint's end then; design
+ * §6.7): out from the nest on its own side of the trunk, one of `d` m off, turned one of
+ * `turns` toward where he comes from — the first that keeps every pine clear of him and of
+ * the line from the follow lens to the nest. The hint's last step: from within `r` m of
+ * the spot he walks at a point `aside` m beside the nest (toward its stub: where the
+ * squirrel goes next), about `step` m on — he turns to it, the follow lens comes round
+ * behind him, and the nest stands off the middle of his picture (a find, never dead
+ * centre). From the spot and from wherever that step leaves him the nest stands at least
+ * NEST_SEE.px + a margin tall in his picture, under the line card, no trunk and not his
+ * head in front of it (eekhoorn.places.test, for every nest tree of every way). `under`:
+ * nearer the nest than this he is under it (m).
+ * Played 2026-10-04 (seeds 3, 45, a zuid play): the hint walked him on past the nest to its
+ * foot, or away to the stub's watch spot while the line played, and the moment was lost.
+ */
+export const NEST_WATCH = { d: [3.2, 2.9, 3.5, 3.8], turns: [0.25, 0, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, 1.25, -1.0], r: 0.5, aside: 2.0, step: 1.0, under: 1.8 } as const;
+/** He has SEEN the nest (its moment: it peeks out, "Kijk, zijn nest!", and into his
+ *  veldgids): within `near` m of it, at least `px` tall in his picture (its box, as
+ *  eekhoorn.home pictureOf measures it), its middle within `x` of the half-width from the
+ *  picture's middle (well in it, not at its edge: played 2026-10-04, seed 3, it peeked out
+ *  at the very right edge while he walked past) and under the line card, mostly clear of
+ *  the trunks and his head — for `secs` in a row (SeenClock). The runtime and the places
+ *  test read this one row. */
+export const NEST_SEE = { px: 44, x: 0.7, secs: 0.5, near: 5.5 } as const;
+/** The point the hint's last step walks at: `aside` m beside the nest, toward its stub. */
+export function nestAim(n: NestSpot): Spot {
+  const toStub = Math.sign(wrapA(n.tree.branch!.ang - n.ang)) || 1;
+  const a = n.ang + toStub * (Math.PI / 2);
+  return { x: n.x + Math.sin(a) * NEST_WATCH.aside, z: n.z + Math.cos(a) * NEST_WATCH.aside };
+}
+/** Where the hint's last step leaves him, from `from` (within NEST_WATCH.r of the spot):
+ *  walking at `aim`, `stop` m short of it (or where he is, nearer than that already). */
+export function nestStep(aim: Spot, from: Spot, stop: number): Spot {
+  const d = dist(from, aim);
+  if (d <= stop) return { x: from.x, z: from.z };
+  const f = stop / d;
+  return { x: aim.x + (from.x - aim.x) * f, z: aim.z + (from.z - aim.z) * f };
+}
+export function nestWatch(route: Route, i: number): Spot & { heading: number; aim: Spot; stop: number } {
+  const n = nestOf(route, i);
+  const from = comesFrom(route, i);
+  // (toward where he comes from: the nest's side turned that way)
+  const toFrom = Math.sign(wrapA(headingTo(n, from) - n.ang)) || 1;
+  const spotAt = (d: number, turn: number): Spot => {
+    const a = n.ang + toFrom * turn;
+    return { x: n.x + Math.sin(a) * d, z: n.z + Math.cos(a) * d };
+  };
+  // (clear: he stands clear of every pine there and wherever the last step leaves him, and
+  // there the follow lens 4.6 m behind him looks at the nest past his shoulder with no pine
+  // between — a trunk the camera fades, between the lens and him, hides nothing:
+  // world/CameraRig)
+  const aim = nestAim(n);
+  const clear = (w: Spot): boolean => {
+    const stop = dist(w, aim) - NEST_WATCH.step;
+    const stands: Spot[] = [w];
+    for (let k = 0; k < 12; k++) for (const rr of [NEST_WATCH.r * 0.5, NEST_WATCH.r]) stands.push(nestStep(aim, { x: w.x + Math.sin((k * Math.PI) / 6) * rr, z: w.z + Math.cos((k * Math.PI) / 6) * rr }, stop));
+    return stands.every((st) => dist(st, n) > NEST_WATCH.under + 0.2 && HOME_TREES.every((o) => {
+      if (dist(o, st) <= trunkClear(o)) return false;
+      if (o === n.tree) return true;
+      const ot = { x: o.x, z: o.z, H: o.h, species: o.species };
+      const back = headingTo(aim, st);
+      const lens = { x: st.x + Math.sin(back) * 4.6, z: st.z + Math.cos(back) * 4.6 };
+      if (segDist(o, lens, st) < trunkFadeUpright(ot, 0).r(1.0)) return true; // (faded)
+      return segDist(o, lens, n) > trunkOutline(ot, 1.5) + 0.35;
+    }));
+  };
+  for (const d of NEST_WATCH.d) for (const t of NEST_WATCH.turns) {
+    const w = spotAt(d, t);
+    if (clear(w)) return { ...w, heading: headingTo(w, aim), aim, stop: dist(w, aim) - NEST_WATCH.step };
+  }
+  const w = spotAt(NEST_WATCH.d[0], NEST_WATCH.turns[0]);
+  return { ...w, heading: headingTo(w, aim), aim, stop: dist(w, aim) - NEST_WATCH.step };
 }
 /** How solid the nest stands (1) or how far it fades (0), as the follow lens trailing him
  *  sees it: like a home tree's crown, it never fills the lens nor stands between the lens
