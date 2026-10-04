@@ -224,7 +224,7 @@ export const COVES: Readonly<Record<BayId, CoveSpec>> = {
       { u: 1.2, v: 0.24, side: -1, turn: -0.9, px: [804, 277] }, { u: 1.8, v: 0.19, side: -1, turn: 0.9, px: [890, 234] },
     ],
     clods: [{ u: 0.8, v: -0.2 }, { u: 0.3, v: 0.75 }, { u: -0.6, v: -0.7 }, { u: 0.6, v: -0.7 }, { u: -0.4, v: 0.1 }],
-    butterflies: [{ u: -1.2, v: 0.0 }, { u: -0.8, v: -0.2 }],
+    butterflies: [{ u: -1.2, v: 0.0 }, { u: 0.25, v: -0.3 }],
     birds: [{ u: 0.0, v: -0.7 }, { u: 0.0, v: 0.4 }],
   },
   B: {
@@ -244,7 +244,7 @@ export const COVES: Readonly<Record<BayId, CoveSpec>> = {
       { u: 0.15, v: 0.55, side: -1, turn: 0.9, px: [589, 292] }, { u: 1.2, v: 0.36, side: -1, turn: -0.9, px: [774, 203] },
     ],
     clods: [{ u: -1.2, v: 0.4 }, { u: -0.4, v: 0.2 }, { u: -0.6, v: -0.7 }, { u: 0.5, v: -0.7 }, { u: -0.3, v: -0.4 }],
-    butterflies: [{ u: 1.1, v: 0.0 }, { u: 0.8, v: -0.3 }],
+    butterflies: [{ u: 1.1, v: 0.0 }, { u: 0.2, v: -0.15 }],
     birds: [{ u: 0.0, v: -0.7 }, { u: -0.8, v: -0.2 }],
   },
 };
@@ -365,16 +365,25 @@ export function hintRingOf(b: Bay, at: Spot, near: number = HINT_RING.near, dept
 export const BAYS: Readonly<Record<BayId, Bay>> = { A: bay('A'), B: bay('B'), C: bay('C') };
 
 /** Is `q` hidden behind the boy in the search's picture from `side` (seen from above his big
- *  hair shades the ground beyond him, away from the lens)? A look-alike is never laid there. */
-export function underBoy(b: Bay, side: Side, q: Spot): boolean {
+ *  hair shades the ground beyond him, away from the lens)? A look-alike is never laid there.
+ *  `up` (run 7 ven-life): a look-alike that stands up — the stonechat at the top of its
+ *  0.62 m stalk, the heath blue on its cotton-grass head — counts by its top: seen down the
+ *  steep lens it sits further from the lens than its foot, and beside his big hair (wider than
+ *  his shoulders) it reads as perched on him. */
+export function underBoy(b: Bay, side: Side, q: Spot, up = 0): boolean {
   const L = searchLensNear(b.frame, b.turns[side]), B = b.stands[side];
   const ex = B.x - L.x, ez = B.z - L.z, e2 = ex * ex + ez * ez || 1;
   const dx = q.x - L.x, dz = q.z - L.z;
-  const t = (dx * ex + dz * ez) / e2;
-  if (t < 0.8 || t > 2.3) return false;
+  const t0 = (dx * ex + dz * ez) / e2;
+  // (a top `up` m over its foot lands ~0.7·up further on down the lens's 56° view)
+  const t = t0 + (up * 0.7) / Math.sqrt(e2);
+  if (t < 0.8 || t > 2.3 + (up > 0 ? 0.4 : 0)) return false;
   const lateral = Math.abs(dx * ez - dz * ex) / Math.sqrt(e2);
-  return lateral < 0.42 + 0.15 * (t - 1);
+  return lateral < 0.42 + 0.15 * (t - 1) + (up > 0 ? 0.3 : 0);
 }
+
+/** How tall (m) each kind of look-alike stands (its top, for `underBoy`). */
+export const LOOK_UP: Readonly<Record<string, number>> = { bird: 0.62, butterfly: 0.36 };
 
 /** A spot in a cove's frame (world). */
 export function inCove(b: Bay, u: number, v: number): Spot { return atLocal(b.frame, u, v); }
@@ -895,10 +904,10 @@ export function decoySlots(b: Bay, nook: number, decoys: readonly { id: string; 
   };
   // (never a look-alike behind the boy in this play's picture: from his side)
   const side = b.nooks[nook].side;
-  const seen = (q: Spot): boolean => !underBoy(b, side, q);
+  const seen = (up: number) => (q: Spot): boolean => !underBoy(b, side, q, up);
   const pools: Record<string, Spot[]> = {
-    bush: shuffled([...b.slots.clods, ...b.nooks.filter((n) => n.nook !== nook).map((n) => ({ x: n.x, z: n.z }))].filter(seen)),
-    butterfly: shuffled(b.slots.butterflies.filter(seen)), bird: shuffled(b.slots.birds.filter(seen)),
+    bush: shuffled([...b.slots.clods, ...b.nooks.filter((n) => n.nook !== nook).map((n) => ({ x: n.x, z: n.z }))].filter(seen(0))),
+    butterfly: shuffled(b.slots.butterflies.filter(seen(LOOK_UP.butterfly))), bird: shuffled(b.slots.birds.filter(seen(LOOK_UP.bird))),
   };
   const out: { id: string; k: string; x: number; z: number }[] = [];
   for (const d of decoys) {

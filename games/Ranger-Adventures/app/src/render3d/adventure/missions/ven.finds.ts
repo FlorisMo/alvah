@@ -321,7 +321,7 @@ export class VenLife3d {
     if (!best) return false;
     best.ahead = ahead;
     this.dartTo(best, ahead(), 'visit');
-    best.hold = 3.2;
+    best.hold = 4;
     return true;
   }
 

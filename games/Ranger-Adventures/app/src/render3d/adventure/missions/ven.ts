@@ -43,7 +43,7 @@ import { listenerOf } from '../../world/Residents';
 import { isRunning } from '../actors-math';
 import { dist, headingTo } from '../places';
 import { ARRIVE_RADIUS, bearing, cue as cueAt } from '../../Wayfinding';
-import { WATER_LEVEL } from '../../Biomes';
+import { VEN_CENTER, WATER_LEVEL } from '../../Biomes';
 import { VenHome, venBody, type Frog } from './ven.home';
 import { ListenCore, StillFor, chorusCalls, listensOf, ringSize } from './ven.listen';
 import { BLUE_ID, LIFE_KEY, SEEN, blueOf, lastLifeOf, lifeTag, venLife } from './ven.life';
@@ -465,10 +465,14 @@ function watchLife(k: AdventureKit, home: VenHome, laid: VenLaid): void {
     if (!visited && life.hasDragonflies && /^walk:(kikkers|adder|cove)$/.test(k.beat) && k.now - t0 > 14) {
       const m = k.ranger();
       const ahead = (): THREE.Vector3 => {
-        // (in front of him, a little to the water's side, at his eye: the lens is behind him)
+        // (just ahead of his shoulder on the water's side, at his chest: in the follow
+        // camera's picture beside him, big enough to see it is a dragonfly; never between him
+        // and the lens)
         const r = k.ranger(), fx = Math.sin(r.heading), fz = Math.cos(r.heading);
-        const lead = 1.9 + Math.min(2, r.speed) * 0.5;
-        return new THREE.Vector3(r.x + fx * lead - fz * 0.35, k.ctx.groundY(r.x, r.z) + 1.15, r.z + fz * lead + fx * 0.35);
+        const lead = 1.1 + Math.min(2, r.speed) * 0.35;
+        // (the side of him toward the water: the one facing the ven's middle)
+        const sx = fz, sz = -fx, toWater = (VEN_CENTER.x - r.x) * sx + (VEN_CENTER.z - r.z) * sz >= 0 ? 0.7 : -0.7;
+        return new THREE.Vector3(r.x + fx * lead + sx * toWater, k.ctx.groundY(r.x, r.z) + 0.95, r.z + fz * lead + sz * toWater);
       };
       if (m.speed > 0.6 && life.visit(m, ahead, 12)) { visited = true; k.stats.libel_visit = Math.round(k.now - t0); }
     }

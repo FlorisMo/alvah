@@ -30,7 +30,7 @@ import { reeClearings } from './ree.places.ts';
 import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import {
-  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY, GO_CLEAR,
+  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, LOOK_UP, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY, GO_CLEAR,
   EDGE_H, HINT_RING,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
   above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet, underBoy,
@@ -252,9 +252,9 @@ test('the search: every nook partly visible at every level, off the middle, big 
         if (under) assert.ok(underBoy(b, side, q), `cove ${id}: a look-alike spot ${at(q)} lies under the boy from side ${side} (at ${p.x.toFixed(0)}, ${p.y.toFixed(0)}) and is not left out`);
       }
       // …and enough are left: five clods, a heath blue and a stonechat
-      const free = (qs: readonly Spot[]): number => qs.filter((q) => !underBoy(b, side, q)).length;
+      const free = (qs: readonly Spot[], up = 0): number => qs.filter((q) => !underBoy(b, side, q, up)).length;
       for (const n of b.nooks.filter((m) => m.side === side)) {
-        assert.ok(free([...b.slots.clods, ...b.nooks.filter((m) => m !== n)]) >= 5 && free(b.slots.butterflies) >= 1 && free(b.slots.birds) >= 1, `cove ${id} side ${side}: look-alikes enough beside the boy`);
+        assert.ok(free([...b.slots.clods, ...b.nooks.filter((m) => m !== n)]) >= 5 && free(b.slots.butterflies, LOOK_UP.butterfly) >= 1 && free(b.slots.birds, LOOK_UP.bird) >= 1, `cove ${id} side ${side}: look-alikes enough beside the boy`);
       }
     }
   }
@@ -293,6 +293,39 @@ test('the late hint rings the same at every nook: on open water straight out in 
   assert.ok(Math.max(...gaps) / Math.min(...gaps) < 1.5, `the ring's distance from him in the picture differs at most half again over the nooks (${Math.min(...gaps).toFixed(0)}-${Math.max(...gaps).toFixed(0)} px)`);
 });
 
+test('no look-alike perches on the boy in the search picture: a stonechat up its stalk, a heath blue on its head, a clod — each clear of his big hair, or never laid there', () => {
+  // (ven-life, band 4 seed 4001 at C4: the stonechat's stalk stood just beside him and the
+  // bird sat on the top of his hair, which the boy's box — a body 0.16 m round, 1.32 m tall —
+  // left out: his hair is wider and higher than that)
+  for (const id of BAY_IDS) {
+    const b = BAYS[id];
+    for (const side of SIDES) {
+      const cam = lensOf(b.views.search[side]);
+      const boy = boyBox(cam, b.stands[side]);
+      // (his big hair: wider and higher than his box, over its top half; his body below)
+      const hair = { x0: boy.x0 - 45, x1: boy.x1 + 45, y0: boy.y0 - 100, y1: boy.y0 + (boy.y1 - boy.y0) * 0.55 };
+      const body = { x0: boy.x0 + 10, x1: boy.x1 - 10, y0: boy.y0 + 10, y1: boy.y1 };  // (its box's corners are air)
+      const tops: [string, Spot, readonly number[]][] = [
+        ...b.slots.birds.map((p, i): [string, Spot, readonly number[]] => [`stonechat slot ${i}`, p, [0, 0.3, 0.62, 0.72]]),
+        ...b.slots.butterflies.map((p, i): [string, Spot, readonly number[]] => [`heath blue slot ${i}`, p, [0, 0.36]]),
+        ...[...b.slots.clods, ...b.nooks].map((p, i): [string, Spot, readonly number[]] => [`clod spot ${i}`, p, [0, CLOD_H]]),
+      ];
+      for (const [what, p, hs] of tops) {
+        if (underBoy(b, side, p, what.startsWith('stonechat') ? LOOK_UP.bird : what.startsWith('heath') ? LOOK_UP.butterfly : 0)) continue;
+        for (const h of hs) {
+          const q = screenAt(cam, p, h);
+          // (a low clod may lie close beside him; a bird up its stalk or a butterfly on its
+          // head never sits by his hair)
+          const low = h <= CLOD_H;
+          const near = low ? body : hair;
+          const on = [near, body].some((r) => q.x > r.x0 && q.x < r.x1 && q.y > r.y0 && q.y < r.y1);
+          assert.ok(!on, `cove ${id} side ${side}: the ${what} at ${at(p)} (${h} m up) is on the boy at (${q.x.toFixed(0)}, ${q.y.toFixed(0)}); his hair ${hair.x0.toFixed(0)}-${hair.x1.toFixed(0)}, ${hair.y0.toFixed(0)}-${hair.y1.toFixed(0)}`);
+        }
+      }
+    }
+  }
+});
+
 test('the late hint never rings round a look-alike: no slot (a clod, the heath blue on its head, the stonechat up its stalk) nor an empty nook within 60 px of a nook\'s rings in its picture', () => {
   // (review r3 of ven-world: at B4 the stonechat's stalk stood in the middle of his rings, so
   // the hint circled the bird instead of the water in front of the frog)
@@ -310,7 +343,7 @@ test('the late hint never rings round a look-alike: no slot (a clod, the heath b
         ...b.slots.birds.map((p, i): [string, Spot, readonly number[]] => [`stonechat slot ${i}`, p, [0, 0.15, 0.3, 0.45, 0.62, 0.72]]),
       ];
       for (const [what, p, hs] of spots) {
-        if (underBoy(b, f.side, p)) continue; // (never laid in that play)
+        if (underBoy(b, f.side, p, what.startsWith('stonechat') ? LOOK_UP.bird : what.startsWith('heath') ? LOOK_UP.butterfly : 0)) continue; // (never laid in that play)
         assert.ok(gap(p, hs) >= 60, `cove ${id} nook ${f.nook}: the ${what} at ${at(p)} stands ${gap(p, hs).toFixed(0)} px from his rings (want ≥ 60)`);
       }
     }
