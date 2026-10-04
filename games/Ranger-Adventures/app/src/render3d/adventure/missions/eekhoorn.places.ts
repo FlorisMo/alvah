@@ -923,16 +923,23 @@ export function foundRun(me: Spot, sqAng: number, tree: HomeTree): { at: Spot; f
     }
     return first;
   };
+  const roomy = (at: Spot, t: { face: number }): boolean => dist(lensBehind(at, t.face), sq) >= FOUND_RUN.roomy;
   const here = turnFrom(me);
-  if (here) return { at: me, ...here, ok: true };
+  if (here && roomy(me, here)) return { at: me, ...here, ok: true };
+  // (else a few calm steps first — the way back from the tree first — to where a turn does it,
+  // roomy; or, where none is roomy, the turn from where he stands, or else the first that does)
   const back = headingTo(tree, me);
   const ways = Array.from({ length: 16 }, (_, i) => back + ((i % 2 ? 1 : -1) * Math.ceil(i / 2) * Math.PI) / 8);
+  let stepped: { at: Spot; face: number; pop: Spot; side: number } | null = null;
   for (const r of FOUND_RUN.steps) for (const a of ways) {
     const at = { x: me.x + Math.sin(a) * r, z: me.z + Math.cos(a) * r };
     if (HOME_TREES.some((t) => dist(t, at) < trunkClear(t) || segDist(t, me, at) < trunkClear(t) - 0.15)) continue;
     const t = turnFrom(at);
-    if (t) return { at, ...t, ok: true };
+    if (t && roomy(at, t)) return { at, ...t, ok: true };
+    if (t) stepped ??= { at, ...t };
   }
+  if (here) return { at: me, ...here, ok: true };
+  if (stepped) return { ...stepped, ok: true };
   // (none: as before — toward the glade, it pops up ahead of him)
   const face = headingTo(me, wayTo(me, STAND));
   return { at: me, face, pop: { x: me.x + Math.sin(face + 0.6) * 1.9, z: me.z + Math.cos(face + 0.6) * 1.9 }, side: sqAng, ok: false };

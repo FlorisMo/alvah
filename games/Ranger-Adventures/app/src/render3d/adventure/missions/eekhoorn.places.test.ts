@@ -563,7 +563,7 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
 });
 
 test('after a find (ek-day, review r1): he turns toward its glade and its run from the bark to its stump plays in his picture — it starts in it and never comes at the lens', () => {
-  let n = 0, stepped = 0, feet = 0;
+  let n = 0, stepped = 0, feet = 0, roomy = 0;
   const turns = [0, 0, 0]; // (≤ 45° off his way to the glade, ≤ 90°, more)
   const popPx: number[] = [], hiddenShare: number[] = [];
   const check = (id: string, c: HomeTree, sqAng: number, at: { x: number; z: number }): void => {
@@ -589,6 +589,8 @@ test('after a find (ek-day, review r1): he turns toward its glade and its run fr
     // each dash bends round him and round the lens as it does in the game)
     const lens = { x: me.x - Math.sin(run.face) * LENS.back, z: me.z - Math.cos(run.face) * LENS.back };
     const tr = trunk(c);
+    const rb = barkRadius(tr, HIDE.h) + 0.08;
+    if (Math.hypot(c.x + Math.sin(face) * rb - lens.x, c.z + Math.cos(face) * rb - lens.z) >= FOUND_RUN.roomy) roomy += 1;
     const avoid = { x: me.x, z: me.z, r: 1.6 };
     const rnd = (): number => 0.5;
     const last = (p: readonly Segment[]): SqPose => p[p.length - 1].at(1);
@@ -663,10 +665,12 @@ test('after a find (ek-day, review r1): he turns toward its glade and its run fr
   }
   assert.ok(n >= 250, `${n} finds`);
   // (mostly he turns from where he stands; mostly toward the glade)
-  assert.ok(stepped <= n / 4, `${stepped} of ${n} stepped first`);
+  // (a few calm steps back first where its pine would stand by the lens: about one find in three)
+  assert.ok(stepped <= n / 3, `${stepped} of ${n} stepped first`);
+  assert.ok(roomy >= n * 0.95, `its pine ${FOUND_RUN.roomy} m from the lens or more in ${roomy} of ${n}`);
   assert.ok(turns[2] <= n / 6, `turns off his way to the glade: ${turns.join(' / ')} (≤45° / ≤90° / more)`);
   popPx.sort((a, b) => a - b);
-  console.log(`after a find: ${n} finds, ${stepped} stepped, ${feet} sit up at its pine's foot, turns ${turns.join('/')}, pop ${popPx[0].toFixed(0)}-${popPx[popPx.length - 1].toFixed(0)} px (median ${popPx[popPx.length >> 1].toFixed(0)})`);
+  console.log(`after a find: ${n} finds, ${stepped} stepped, ${roomy} roomy, ${feet} sit up at its pine's foot, turns ${turns.join('/')}, pop ${popPx[0].toFixed(0)}-${popPx[popPx.length - 1].toFixed(0)} px (median ${popPx[popPx.length >> 1].toFixed(0)})`);
   assert.ok(popPx[0] >= 30 && popPx[popPx.length >> 1] >= 37, `it pops up big enough to read (smallest ${popPx[0].toFixed(0)} px, median ${popPx[popPx.length >> 1].toFixed(0)})`);
   // (the places pick at most a fifth of its way; by time, its bursts easing in and out, a little more)
   assert.ok(Math.max(...hiddenShare) <= 0.3, `he sees it run to where it pops up (at most ${(Math.max(...hiddenShare) * 100).toFixed(0)}% of its dash's time behind his body or a trunk)`);
