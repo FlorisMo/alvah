@@ -99,7 +99,7 @@ const WILDCAMERA: Ontdekking[] = [
     hint: 'Wie snuffelt er in de nacht?', model: 'animal-das-badger', geholpen: true },
   // run 7 (wc-album): the camera's album. His own photo when he walks past the camera to
   // test it (every play; new the first time); the fox, the first time it walks in for a
-  // photo or calls at night (it comes in about three plays of four); a nose pressed to the
+  // photo or into the night (it comes in about three plays of four); a nose pressed to the
   // lens on a photo the camera took on its own in the night (some plays, surely within
   // three); and two rare ones (k.rare: a seeded chance and the pity rule): a fox with her
   // cubs crossing in the night, and a white roe stepping into the glade in the morning.
