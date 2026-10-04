@@ -1101,6 +1101,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   // picture or away from the lens, never at it
   const run = foundRun(k.ranger(), sqAng, cT);
   k.stats.run_ok = run.ok ? 1 : 0;
+  // (dev read: how far he turns from the found view — over 90°: he found it from its glade's side)
+  k.stats.run_turn = Math.round((Math.abs(wrap(run.face - k.ranger().heading)) * 180) / Math.PI);
   if (dist(run.at, k.ranger()) > 0.05) {
     k.stats.run_step = Math.round(dist(run.at, k.ranger()) * 10) / 10;
     await k.walkRanger(run.at.x, run.at.z, 0.05);

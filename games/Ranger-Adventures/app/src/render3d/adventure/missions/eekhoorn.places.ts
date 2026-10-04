@@ -749,7 +749,8 @@ export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
  * stump's side first), and on to its stump as its dash plans it (round him and round the
  * lens: squirrel-math `dashPath`) — never comes nearer the lens than it has been by more
  * than `toward` m, never through a trunk's foot nor within `feet` m of his, and its first `runIn` m on from the pop
- * stay in the picture (above `low` of it, where −1 is its bottom edge, as the pop), and at most `hid` of its dash from off the bark to the pop (and of
+ * stay in the picture (above `low` of it, where −1 is its bottom edge, as the pop and its
+ * whole way off the bark; its pine `lensD` m from the lens at least), and at most `hid` of its dash from off the bark to the pop (and of
  * that run on) is behind his body or a trunk (squirrel-math `lineClear`), never its last
  * `seeLast` m into the pop. The pop is in the picture too, off his body, off every trunk's foot.
  * Where no heading from where he stands does it, a few calm steps first (`steps` m, the way
@@ -757,7 +758,7 @@ export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
  */
 export const FOUND_RUN = {
   back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, face: (75 * Math.PI) / 180, toward: 0.25, front: 3.0, feet: 1.15,
-  step: (2.5 * Math.PI) / 180, runIn: 2, hid: 0.2, seeLast: 0.5, low: -0.75,
+  step: (2.5 * Math.PI) / 180, runIn: 2, hid: 0.2, seeLast: 0.5, low: -0.75, lensD: 3.0,
   pops: [[1.6, 0.7], [1.6, 0.9], [1.9, 0.6], [1.9, 0.8], [2.3, 0.5], [2.3, 0.7], [1.9, 1.0], [2.7, 0.45], [2.7, 0.65], [3.2, 0.4], [3.2, 0.6], [1.6, 1.2], [2.3, 1.1], [3.0, 0.9]] as readonly (readonly [number, number])[],
   sides: [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2, 1.5, -1.5],
   steps: [0.6, 1.0, 1.4, 1.8],
@@ -830,6 +831,8 @@ function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: 
   if ((STUMP.x - lens.x) * Math.sin(h) + (STUMP.z - lens.z) * Math.cos(h) < FOUND_RUN.front) return null;
   if (Math.abs(wrapA(headingTo(tree, lens) - sqAng)) > FOUND_RUN.face || off(sq) > FOUND_RUN.half) return null;
   if (off(sq) < FOUND_RUN.body && dist(lens, sq) > dist(lens, me) - 0.3) return null;
+  // (never big by the lens: its pine `lensD` m from it at least)
+  if (dist(lens, sq) < FOUND_RUN.lensD) return null;
   if (HOME_TREES.some((t) => t !== tree && segDist(t, lens, sq) < rOf(t))) return null;
   const toStump = Math.sign(wrapA(headingTo(me, STUMP) - h)) || 1;
   // (what hides it from the lens, heights over the ground: the trunks — but the ones the
@@ -875,6 +878,8 @@ function foundRunAt(me: Spot, tree: HomeTree, sqAng: number, h: number): { pop: 
       // (over the ground: never through a trunk's foot — its own pine's: never back in past
       // where it comes off the bark, round it, not through it — nor by his feet)
       const dash = along(way.pts.slice(way.foot));
+      // (off the bark it runs above the picture's bottom edge, to the pop and on)
+      if (along(way.pts.slice(way.foot, way.pop + 1)).some((q) => yOf(q) < FOUND_RUN.low)) continue;
       const off0 = Math.min(dist(tree, way.pts[way.foot]), footOf(tree)) - 0.02;
       if (dash.some((q) => dist(q, me) < FOUND_RUN.feet || HOME_TREES.some((t) => dist(t, q) < (t === tree ? off0 : footOf(t))))) continue;
       // (its first `runIn` m on from the pop in the picture: it runs off where he sees it)

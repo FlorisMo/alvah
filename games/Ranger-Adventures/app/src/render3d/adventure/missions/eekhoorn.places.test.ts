@@ -595,6 +595,7 @@ test('after a find (ek-day, review r1): he turns toward its glade and its run fr
     const plan: Segment[] = [...climbPlan(tr, { ang: face, h: HIDE.h }, { ang: run.side, h: 0.25 }, 0), ...dismountPlan(tr, { ang: run.side, h: 0.25 })];
     const atFoot = plan.length;
     plan.push(...dashPlan(last(plan), run.pop.x, run.pop.z, rnd, lens, avoid));
+    const atPop = plan.length;
     // (its dash to the pop, through the lens: how much of it is behind his body or a trunk)
     {
       // (heights over the ground, as `hiders` and `lensSees` measure them)
@@ -620,7 +621,12 @@ test('after a find (ek-day, review r1): he turns toward its glade and its run fr
       assert.ok(dq >= far - 0.3, `${id}: it never comes at the lens (${dq.toFixed(2)} m after ${far.toFixed(2)})`);
       far = Math.max(far, dq);
     }
-    // (over the ground, off the bark: never by his feet, never through a trunk)
+    // (over the ground, off the bark: never by his feet, never through a trunk; to the pop and
+    // its first steps on, above the picture's bottom edge)
+    for (const sgm of plan.slice(atFoot, atPop)) for (let u = 0; u <= 1; u += 0.25) {
+      const q = sgm.at(u), s1 = followPx(me, run.face, { x: q.x, y: groundY(q.x, q.z) + 0.1, z: q.z });
+      assert.ok(s1.inside && s1.y <= H - 90, `${id}: it runs off the bark in his picture, off its bottom edge (${s1.x.toFixed(0)}, ${s1.y.toFixed(0)})`);
+    }
     for (const sgm of plan.slice(atFoot)) for (let u = 0; u <= 1; u += 0.1) {
       const q = sgm.at(u);
       assert.ok(dist(q, me) >= 1.1, `${id}: never by his feet (${dist(q, me).toFixed(2)} m)`);
