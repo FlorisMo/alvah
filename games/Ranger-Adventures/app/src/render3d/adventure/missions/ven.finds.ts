@@ -36,7 +36,7 @@ import { dist, headingTo, stream } from '../places';
 import { WATER_LEVEL } from '../../Biomes';
 import { BAYS, FROG_H, type BayId, type FrogSpot } from './ven.places';
 import {
-  DRAGONFLY_RANGE, DRAGONFLY_Y, DUCK_LOOPS, DUCK_SPEED, DUCKLING_GAP, DUCKLING_LEAD, DUCKLING_STRAY, DUCKLINGS, FREE_DUCKS,
+  DRAGONFLY_RANGE, DRAGONFLY_Y, DUCK_LOOPS, DUCK_SPEED, DUCKLING_GAP, DUCKLING_LEAD, DUCKLING_STRAY, DUCKLINGS, FREE_DUCKS, seenStep,
   blueOf, butterflySpot, dragonflyHome, featherSpot, onLoop, plopSpot, type VenLife,
 } from './ven.life';
 import type { Frog, VenHome } from './ven.home';
@@ -650,21 +650,23 @@ function mergeAll(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 const BOX = new THREE.Box3();
 const V = new THREE.Vector3();
 
-/** How big (px: its box's larger side) a box is in the picture, and whether its middle is
- *  on screen in front of the lens. */
-export function boxInPicture(cam: THREE.Camera, box: THREE.Box3, w: number, h: number): { px: number; on: boolean; centre: THREE.Vector3 } {
+/** How big (px: its box's larger side) a box is in the picture, whether its middle is on
+ *  screen in front of the lens, and where (`sx`, `sy`, px). */
+export function boxInPicture(cam: THREE.Camera, box: THREE.Box3, w: number, h: number): { px: number; on: boolean; centre: THREE.Vector3; sx: number; sy: number } {
   const centre = box.getCenter(new THREE.Vector3());
-  if (box.isEmpty()) return { px: 0, on: false, centre };
+  if (box.isEmpty()) return { px: 0, on: false, centre, sx: 0, sy: 0 };
   V.copy(centre).project(cam);
   const on = V.z > -1 && V.z < 1 && Math.abs(V.x) <= 0.97 && Math.abs(V.y) <= 0.97;
-  if (!on) return { px: 0, on, centre };
+  const sx = ((V.x + 1) / 2) * w, sy = ((1 - V.y) / 2) * h;
+  if (!on) return { px: 0, on, centre, sx, sy };
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (let i = 0; i < 8; i++) {
     V.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(cam);
     x0 = Math.min(x0, V.x); x1 = Math.max(x1, V.x); y0 = Math.min(y0, V.y); y1 = Math.max(y1, V.y);
   }
-  return { px: Math.max(((x1 - x0) / 2) * w, ((y1 - y0) / 2) * h), on, centre };
+  return { px: Math.max(((x1 - x0) / 2) * w, ((y1 - y0) / 2) * h), on, centre, sx, sy };
 }
+
 
 /** An object's box (world). */
 export function boxOf(o: THREE.Object3D): THREE.Box3 {
@@ -684,16 +686,19 @@ export interface Watch {
   then?: () => void;
 }
 
+/** (the seeing rule, pure: ven.life `seenStep`; ven.home's free roam uses it too) */
+export { seenStep };
+
 /** Watches the ven's things each frame and calls `found(id)` once he really saw one. */
 export class Seen {
-  private readonly list: { w: Watch; run: number; done: boolean }[] = [];
+  private readonly list: { w: Watch; run: number; done: boolean; last: { x: number; y: number } | null }[] = [];
   private readonly view: () => { cam: THREE.Camera; w: number; h: number; me: Spot };
   private readonly found: (id: string) => void;
   constructor(view: () => { cam: THREE.Camera; w: number; h: number; me: Spot }, found: (id: string) => void) {
     this.view = view;
     this.found = found;
   }
-  watch(w: Watch): void { this.list.push({ w, run: 0, done: false }); }
+  watch(w: Watch): void { this.list.push({ w, run: 0, done: false, last: null }); }
   /** the biggest each still-watched thing showed (px), for the dev read */
   readonly most: Record<string, number> = {};
   tick(dt: number): void {
@@ -701,11 +706,10 @@ export class Seen {
     for (const s of this.list) {
       if (s.done) continue;
       const box = s.w.when && !s.w.when() ? null : s.w.box();
-      if (!box || box.isEmpty()) { s.run = 0; continue; }
+      if (!box || box.isEmpty()) { s.run = 0; s.last = null; continue; }
       const pic = boxInPicture(v.cam, box, v.w, v.h);
-      const ok = pic.on && pic.px >= s.w.px && Math.hypot(pic.centre.x - v.me.x, pic.centre.z - v.me.z) <= s.w.within;
       if (pic.on) this.most[s.w.id] = Math.max(this.most[s.w.id] ?? 0, Math.round(pic.px));
-      s.run = ok ? s.run + dt : 0;
+      ({ run: s.run, last: s.last } = seenStep(s.run, s.last, pic, v.me, s.w, dt));
       if (s.run >= s.w.secs) { s.done = true; this.found(s.w.id); s.w.then?.(); }
     }
   }

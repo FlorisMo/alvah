@@ -25,7 +25,7 @@ import {
 } from './ven.places.ts';
 import {
   BLUE_AWAY, BUTTERFLY_MOODS, BUTTERFLY_TH, DRAGONFLY_MOODS, DRAGONFLY_RANGE, DRAGONFLY_TH, DUCK_LOOPS, DUCKLINGS, FEATHER_TH, PLOP_NEAR, PLOP_PASS,
-  BLUE_ID, blueOf, butterflySpot, clearOfStations, dragonflyHome, dragonflyHomesFor, featherSpot, lastLifeOf, lifeTag, onEveryWay, onLoop, plopSpot, trailLength, venLife,
+  BLUE_ID, SEEN, SEEN_SWEEP, blueOf, butterflySpot, clearOfStations, seenStep, dragonflyHome, dragonflyHomesFor, featherSpot, lastLifeOf, lifeTag, onEveryWay, onLoop, plopSpot, trailLength, venLife,
 } from './ven.life.ts';
 import type { Spot } from '../types.ts';
 
@@ -226,4 +226,31 @@ test('the play\'s noted variant keeps the cove and the ducks in the history in e
   const longestMood = [...MOOD_IDS].sort((a, b) => b.length - a.length)[0];
   const va = compactVariant({ mood: longestMood, rare: rare.id.slice(rare.id.indexOf('.') + 1), rust: 'amp', ven: 'A5-amp-0.9/e7of2', l: 'e7olv2f2p2' })!;
   assert.match(va, /(^|,)ven:A5-amp-0\.9\/e7of2(,|$)/, `the ven's note survives: ${va}`);
+});
+
+test('seen means steady in his picture: a thing a gliding lens sweeps through is not seen, one he stands or walks by is', () => {
+  const me = { x: 0, z: 0 };
+  const run = (speed: number, secs: number, px = 60): number => {
+    let st: { run: number; last: { x: number; y: number } | null } = { run: 0, last: null };
+    let best = 0;
+    for (let t = 0; t < secs; t += 1 / 60) {
+      st = seenStep(st.run, st.last, { on: true, px, centre: { x: 8, z: 0 }, sx: 100 + speed * t, sy: 400 }, me, SEEN.eend, 1 / 60);
+      best = Math.max(best, st.run);
+    }
+    return best;
+  };
+  // (played: the look's glide along the bank swept the duck family through his picture at
+  // 500-1000 px/s for over a second, and its card came with no duck in view)
+  // (the first frame it shows has nothing to compare with: one frame, never a second)
+  assert.ok(run(530, 2) < 0.02, 'swept through by a gliding lens: never seen');
+  assert.ok(run(970, 1.3) < 0.02);
+  assert.ok(run(0, 1.2) >= SEEN.eend.secs, 'standing, it in view: seen');
+  assert.ok(run(160, 1.2) >= SEEN.eend.secs, 'walking past it (it crosses his picture slowly): seen');
+  assert.ok(SEEN_SWEEP >= 300 && SEEN_SWEEP <= 450);
+  assert.equal(run(0, 2, 10), 0, 'too small: never seen');
+  // out of the picture resets the count, and a reappearance starts afresh (no sweep from afar)
+  let st = seenStep(0.9, { x: 100, y: 100 }, { on: false, px: 0, centre: { x: 8, z: 0 }, sx: 0, sy: 0 }, me, SEEN.eend, 0.1);
+  assert.deepEqual(st, { run: 0, last: null });
+  st = seenStep(st.run, st.last, { on: true, px: 60, centre: { x: 8, z: 0 }, sx: 1200, sy: 700 }, me, SEEN.eend, 0.1);
+  assert.ok(st.run > 0);
 });

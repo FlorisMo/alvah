@@ -259,6 +259,25 @@ export const SEEN = {
   blauw: { px: 36, secs: 1, within: 20 },
 } as const;
 
+/** ...and steady there: its middle crossing his picture slower than this (px/s). A thing
+ *  swept through the picture by a gliding lens is not seen (played: the look's glide along
+ *  the bank swept the duck family through it at 500-1000 px/s for over a second, and the card
+ *  "de eend met haar kleintjes" came while no duck was in view); walking past it, or a dart
+ *  that stops to hover, stays well under it. */
+export const SEEN_SWEEP = 400;
+
+/** One frame of seeing something (`SEEN`, `SEEN_SWEEP`): how long (s) it has been in his
+ *  picture, big enough (`px`: its box's larger side), within `within` m of him and steady,
+ *  or 0. `pic` is where it is in the picture now (`sx`, `sy` px); `last` where it was. */
+export function seenStep(run: number, last: { x: number; y: number } | null,
+  pic: { on: boolean; px: number; centre: { x: number; z: number }; sx: number; sy: number },
+  me: Spot, need: { px: number; within: number }, dt: number): { run: number; last: { x: number; y: number } | null } {
+  if (!pic.on) return { run: 0, last: null };
+  const sweep = last && dt > 0 ? Math.hypot(pic.sx - last.x, pic.sy - last.y) / dt : 0;
+  const ok = pic.px >= need.px && Math.hypot(pic.centre.x - me.x, pic.centre.z - me.z) <= need.within && sweep <= SEEN_SWEEP;
+  return { run: ok ? run + dt : 0, last: { x: pic.sx, y: pic.sy } };
+}
+
 /** Is (x, z) on the stretch of shore path every way to a cove walks, clear of every
  *  station's moment (its carpet and its adder, a few metres either way)? */
 export function clearOfStations(p: Spot): boolean {

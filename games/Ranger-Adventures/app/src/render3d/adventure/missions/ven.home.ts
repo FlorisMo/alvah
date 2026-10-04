@@ -29,7 +29,7 @@ import { atLocal, dist, headingTo, stream } from '../places';
 import { heatherGeometry, plantMaterial } from '../../world/Plants';
 import { calmGate } from '../../ProceduralMotion';
 import { WATER_LEVEL } from '../../Biomes';
-import { VenLife3d, boxInPicture, type LifeLay } from './ven.finds';
+import { VenLife3d, boxInPicture, seenStep, type LifeLay } from './ven.finds';
 import { SEEN } from './ven.life';
 import {
   BAYS, BAY_IDS, CUSHION, FLOAT_SINK, FROG_H, FROG_LEN, PATH, PATH_HALF, HIDE, BENCH, MARKER,
@@ -386,6 +386,7 @@ export class VenHome implements HomeDressing {
   readonly life: VenLife3d;
   /** in free roam: how long (s) the duck family has been in his picture (seen: the veldgids) */
   private ducksSeen = 0;
+  private ducksAt: { x: number; y: number } | null = null;
 
   constructor(env: DressingEnv) {
     this.group.name = 'ven-home';
@@ -847,8 +848,7 @@ export class VenHome implements HomeDressing {
       const box = this.life.familyBox;
       const w = typeof window !== 'undefined' ? window.innerWidth : 1280, h = typeof window !== 'undefined' ? window.innerHeight : 800;
       const pic = box.isEmpty() ? null : boxInPicture(cam, box, w, h);
-      const ok = !!pic && pic.on && pic.px >= SEEN.eend.px && Math.hypot(pic.centre.x - me.x, pic.centre.z - me.z) <= SEEN.eend.within;
-      this.ducksSeen = ok ? this.ducksSeen + dt : 0;
+      ({ run: this.ducksSeen, last: this.ducksAt } = pic ? seenStep(this.ducksSeen, this.ducksAt, pic, me, SEEN.eend, dt) : { run: 0, last: null });
       if (this.ducksSeen >= SEEN.eend.secs) { this.ducksSeen = -1; this.env.discover('ven.eend'); }
     }
     // the rings spread and fade
