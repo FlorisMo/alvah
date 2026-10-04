@@ -3,14 +3,15 @@
  * ven.places.ts): the NORTH BANK as a wet-heath shore — a trodden shore path along its
  * top, heather on its land side, the bank's green between path and water, and three small
  * COVES where the world's cattails give way to sedge tussocks, white cotton-grass, cushions
- * of veenmos (bright green, ochre, a little red), frog-sized moss clods and a few cattails
- * at the water line. The heikikkers live there (the residents are Frogs: a throat that
- * swells when one calls, rings on the water where one calls from it, a leap and a plop).
+ * of veenmos (bright green, ochre, a little red) and frog-sized moss clods. The heikikkers
+ * live there (the residents are Frogs: a throat bubble that swells when one calls, rings
+ * on the water where one calls from it, a hop, a leap and a plop).
  *
  * It stands before the mission and after it (a place, not a prop that vanishes). A play
- * lays its own bank under the briefing card (`lay`): the frog in its cove and spot (the
- * window over his back fitted to the level's glimpse for the search's lens), the trial's
- * look-alikes on the cove's slots, the adder coiled on the path at her station, the soft
+ * lays its own bank under the briefing card (`lay`): the frog in its cove and nook (the
+ * window over his back fitted to the level's glimpse for that nook's search lens), the
+ * trial's look-alikes on the cove's slots and its empty nooks, the adder coiled on the
+ * path at her station, the soft
  * moss across the path at its station. `setState` (a stop, a win, a reload) takes the
  * play's things away again: no adder and no soft moss in free roam.
  */
@@ -26,10 +27,7 @@ import { fitWindow, refitWindow, type Built } from './ree.window';
 import { groundDecal, groundStrip } from '../decal';
 import { atLocal, dist, headingTo, stream } from '../places';
 import { heatherGeometry, plantMaterial } from '../../world/Plants';
-import { loadModel, prepModel } from '../../Models';
-import { lodGeometries, lodMaterial } from '../../Lod';
 import { WATER_LEVEL } from '../../Biomes';
-import { SIZE } from '../../AnimalScale';
 import {
   BAYS, BAY_IDS, CUSHION, FLOAT_SINK, FROG_H, FROG_LEN, PATH, PATH_HALF, HIDE, BENCH, MARKER,
   allStations, carpetAt, clodSpots, coveClumps, inCarpet, pathR, polar, type BayId, type Carpet, type FrogSpot, type VenLaid, type ViewSpec,
@@ -444,22 +442,8 @@ export class VenHome implements HomeDressing {
     cottonMesh.instanceMatrix.needsUpdate = true;
     cottonMesh.computeBoundingSphere();
 
-    /* -- a few cattails at each cove's water line, at its far ends (never in the lens's
-       way to a frog) -- */
-    const reedSpots: { x: number; z: number; s: number; rot: number }[] = [];
-    BAY_IDS.forEach((id) => {
-      for (const [u, v] of [[-2.45, 0.8], [-2.25, 1.05], [2.3, 0.95], [2.5, 0.7]]) reedSpots.push({ ...atLocal(BAYS[id].frame, u, v), s: 0.85 + rnd() * 0.3, rot: rnd() * 6.28 });
-    });
-    void loadModel('prop-reeds').then((m) => {
-      if (!m || this.disposed) return;
-      const [geo] = lodGeometries('prop-reeds@1', prepModel(m, 1), [650]);
-      if (!geo) return;
-      const reeds = keep(new THREE.InstancedMesh(geo, lodMaterial(), reedSpots.length));
-      reeds.name = 'ven-cattails';
-      reedSpots.forEach((r, i) => reeds.setMatrixAt(i, m4.compose(p3.set(r.x, g(r.x, r.z) - 0.03, r.z), q4.setFromAxisAngle(UP, r.rot), s3.set(r.s, r.s * SIZE.lisdodde.h, r.s))));
-      reeds.instanceMatrix.needsUpdate = true;
-      reeds.computeBoundingSphere();
-    });
+    // (no cattails of the home's own at the coves: the world's reed belt stands just beyond
+    // each cove's ground, and the song's low lens over the water sees past them)
 
     /* -- the coves' small things: every cove's moss clods (one instanced mesh, each clod
        spot an instance), the heath blue on a cotton-grass head and the stonechat on a dry
@@ -628,11 +612,16 @@ export class VenHome implements HomeDressing {
   }
 
   /** The song's picture (the lens looks back from over the water): the sedge between it and
-   *  the frog gives way calmly until most of him shows. */
-  openForSong(eye: V3, frog: Spot & { yaw: number }, share = 0.8): void {
-    const back = backPoints(frog.x, this.g(frog.x, frog.z), frog.z, frog.yaw, FROG_LEN, FROG_H);
+   *  the frog gives way calmly until all of him shows — his back, his face and the throat
+   *  under it (the bubble must be seen on every call). */
+  openForSong(eye: V3, frog: Spot & { yaw: number }, share = 0.95): void {
+    const g = this.g(frog.x, frog.z);
+    const back = backPoints(frog.x, g, frog.z, frog.yaw, FROG_LEN, FROG_H);
+    const fx = Math.sin(frog.yaw), fz = Math.cos(frog.yaw);
+    const face: V3[] = [];
+    for (const a of [0.3, 0.42, 0.52]) for (const h of [0.25, 0.55]) face.push({ x: frog.x + fx * a * FROG_LEN, y: g + FROG_H * h, z: frog.z + fz * a * FROG_LEN });
     const drawn = this.cover.stems.map((s) => s.h);
-    const changed = openWindow(this.cover.stems, eye, back, share);
+    const changed = openWindow(this.cover.stems, eye, [...back, ...face], share);
     if (changed.length) this.cover.settle(changed, 1.2, drawn);
   }
 

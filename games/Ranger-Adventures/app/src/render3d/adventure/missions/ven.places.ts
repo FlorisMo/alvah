@@ -337,8 +337,9 @@ export function edgeOf(b: Bay, frog: FrogSpot): FrogSpot {
  * bank, whole and to one side (one soft dip-cut: a turn that big is never a swing). The
  * heading is the bank's straight back from the water, turned the least that sets the boy
  * 16-28° off the frog (as the lens sees them), with the lens over the water. `yaw`: the way
- * the frog faces while he sings (his nose turned 0.6 rad from the lens, away from the boy:
- * he looks into the open picture).
+ * the frog faces while he sings (his nose turned 0.6 rad from the lens toward the boy's
+ * side of the picture: three-quarters to the lens, his face and throat in it, singing for
+ * the boy behind him).
  */
 export function singOf(b: Bay, sat: FrogSpot): { stand: Place; view: ViewSpec; yaw: number; at: FrogSpot } {
   const frog = edgeOf(b, sat);
@@ -357,11 +358,11 @@ export function singOf(b: Bay, sat: FrogSpot): { stand: Place; view: ViewSpec; y
     if (score > best) { best = score; heading = h; boySide = ang >= 0 ? 1 : -1; }
   }
   const view: ViewSpec = {
-    at: { x: frog.x, z: frog.z }, heading, halfW: 0.3, halfD: 0.2, tall: 0.15, pitchDeg: 8,
-    insetTop: 120, insetBottom: 40, seconds: 1.6, near: SING_NEAR, lensUp: 0.3,
+    at: { x: frog.x, z: frog.z }, heading, halfW: 0.2, halfD: 0.1, tall: 0.12, pitchDeg: 8,
+    insetTop: 110, insetBottom: 46, seconds: 1.6, near: SING_NEAR, lensUp: 0.3,
     include: [{ x: stand.x, z: stand.z, h: RANGER_STAND_HEIGHT, r: 0.16 }],
   };
-  // (toward the lens is heading + π; his nose turns away from the boy's side of the picture)
+  // (toward the lens is heading + π; his nose turns toward the boy's side of the picture)
   const yaw = heading + Math.PI + boySide * 0.6;
   return { stand, view, yaw, at: frog };
 }

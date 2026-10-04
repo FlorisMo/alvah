@@ -343,9 +343,8 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
     const [nearCove, farCove] = answerOrder(id);
     const near = A[CHORUS_KEYS[nearCove]];
     if (!near.group.visible || near.lift < -0.05) { near.group.visible = true; void near.dive(true, 0.7); }
-    await k.frame(answerView(bay, sat));
     k.say(c.terug);
-    await k.wait(0.3);
+    await k.frame(answerView(bay, sat));
     chorus(2, near, 60);
     await k.wait(1.3);
     chorus(2, A[CHORUS_KEYS[farCove]], 60);
