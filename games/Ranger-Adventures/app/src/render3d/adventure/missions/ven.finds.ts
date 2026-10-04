@@ -34,6 +34,7 @@ import { Sound } from '../../../core/sound';
 import { store } from '../../../core/state';
 import { dist, headingTo, stream } from '../places';
 import { WATER_LEVEL } from '../../Biomes';
+import { SIZE } from '../../AnimalScale';
 import { BAYS, FROG_H, type BayId, type FrogSpot } from './ven.places';
 import {
   DRAGONFLY_RANGE, DRAGONFLY_Y, DUCK_LOOPS, DUCK_SPEED, DUCKLING_GAP, DUCKLING_LEAD, DUCKLING_STRAY, DUCKLINGS, FREE_DUCKS, seenStep,
@@ -41,9 +42,9 @@ import {
 } from './ven.life';
 import type { Frog, VenHome } from './ven.home';
 
-/** How big (m) the ducks are drawn: a mallard at her size, a duckling of a few weeks. */
-const MOTHER_H = 0.36;
-const DUCKLING_H = 0.15;
+/** How big (m) the ducks are drawn: a mallard and her ducklings of a few weeks, ≈ 1.4× (AnimalScale). */
+const MOTHER_H = SIZE['eend-moeder'].h;
+const DUCKLING_H = SIZE.eendje.h;
 /** A floating duck sits this share of her height under the surface (her feet and belly). */
 const MOTHER_SINK = 0.36;
 const DUCKLING_SINK = 0.32;
@@ -443,11 +444,12 @@ export class VenLife3d {
     box.makeEmpty();
     if (m) {
       const p = onLoop(loop, this.s);
-      m.position.set(p.x, WATER_LEVEL - MOTHER_H * MOTHER_SINK + bob - tipping * 0.05, p.z);
-      // (up-ending: she tips forward over her head, her tail to the sky)
+      m.position.set(p.x, WATER_LEVEL - MOTHER_H * MOTHER_SINK + bob - tipping * 0.02, p.z);
+      // (up-ending: she tips forward, her head under, her tail to the sky — not so far that
+      // her whole body shows pale through the water: at 83° it read as a ghost under her)
       m.rotation.set(0, 0, 0);
       m.rotateY(p.yaw);
-      m.rotateX(tipping * 1.45);
+      m.rotateX(tipping * 1.0);
       box.expandByPoint(new THREE.Vector3(p.x, WATER_LEVEL + MOTHER_H * 0.7, p.z));
       box.expandByPoint(new THREE.Vector3(p.x, WATER_LEVEL, p.z));
     }

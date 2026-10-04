@@ -450,8 +450,11 @@ function watchLife(k: AdventureKit, home: VenHome, laid: VenLaid): void {
     for (const f of life.dragonflies()) { const d = Math.hypot(f.pos.x - me.x, f.pos.z - me.z); if (d < bd) { bd = d; best = f.pos; } }
     return best ? new THREE.Box3().setFromCenterAndSize(best, new THREE.Vector3(0.24, 0.06, 0.24)) : null;
   };
-  seen.watch({ id: 'ven.eend', box: () => (life.motherObject ? life.familyBox.clone() : null), ...SEEN.eend });
-  seen.watch({ id: 'ven.adder', box: () => (home.adderBody ? boxOf(home.adderBody) : null), when: () => /adder/.test(k.beat), ...SEEN.adder });
+  // (the mother herself must read as a duck: the family's spread, ducklings trailing metres
+  // behind her, made a far-off family of specks look big enough)
+  seen.watch({ id: 'ven.eend', box: () => (life.motherObject ? boxOf(life.motherObject) : null), ...SEEN.eend });
+  // (in her own moment, not on his walk up to her: its card came before he had met her)
+  seen.watch({ id: 'ven.adder', box: () => (home.adderBody ? boxOf(home.adderBody) : null), when: () => /^(adder|still:adder)/.test(k.beat), ...SEEN.adder });
   seen.watch({ id: 'ven.libel', box: fly, ...SEEN.libel });
   seen.watch({ id: 'ven.heideblauwtje', box: () => (life.butterflyObject ? boxOf(life.butterflyObject) : null), ...SEEN.vlinder });
   seen.watch({ id: 'ven.veer', box: () => (life.featherObject ? boxOf(life.featherObject) : null), ...SEEN.veer });

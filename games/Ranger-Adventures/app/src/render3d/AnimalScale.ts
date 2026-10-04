@@ -122,9 +122,11 @@ export const SIZE = {
   'wilde-eend': { group: 'birds', h: 0.36, real: [0.35, 0.45], model: 'bird-wilde-eend', len: 0.52,
     why: 'a mallard on the water\'s edge: 0.5-0.65 long' },
   // run 7 (ven-life): the ven's duck family (content ids with their own coats, Coat.ts)
-  'eend-moeder': { group: 'birds', h: 0.36, real: [0.35, 0.45], model: 'bird-wilde-eend', len: 0.52,
+  'eend-moeder': { group: 'birds', h: 0.5, real: [0.35, 0.45], model: 'bird-wilde-eend', len: 0.72,
+    readable: 'she paddles 12-16 m out from the path: at true size she was a 12 px speck from the bank, so she is shown ≈ 1.4×',
     why: 'a mallard duck (the mother): as big as the drake, 0.5-0.6 long' },
-  eendje: { group: 'birds', h: 0.15, real: [0.1, 0.18], model: 'bird-wilde-eend', len: 0.22,
+  eendje: { group: 'birds', h: 0.21, real: [0.1, 0.18], model: 'bird-wilde-eend', len: 0.31,
+    readable: 'shown ≈ 1.4× as their mother is, so the family keeps its proportions',
     why: 'a mallard duckling of a few weeks: a fist-sized fluffy ball, ≈ 0.15-0.2 long' },
   buizerd: { group: 'birds', h: 0.75, real: [0.65, 0.8], model: 'bird-buizerd', len: 1.26,
     why: 'a buzzard gliding, wings spread: wingspan 1.1-1.3 (the model is 1.7× as wide as high)' },

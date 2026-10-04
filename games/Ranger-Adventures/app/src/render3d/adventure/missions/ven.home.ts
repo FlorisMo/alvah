@@ -29,7 +29,7 @@ import { atLocal, dist, headingTo, stream } from '../places';
 import { heatherGeometry, plantMaterial } from '../../world/Plants';
 import { calmGate } from '../../ProceduralMotion';
 import { WATER_LEVEL } from '../../Biomes';
-import { VenLife3d, boxInPicture, seenStep, type LifeLay } from './ven.finds';
+import { VenLife3d, boxInPicture, boxOf, seenStep, type LifeLay } from './ven.finds';
 import { SEEN } from './ven.life';
 import {
   BAYS, BAY_IDS, CUSHION, FLOAT_SINK, FROG_H, FROG_LEN, PATH, PATH_HALF, HIDE, BENCH, MARKER,
@@ -845,7 +845,9 @@ export class VenHome implements HomeDressing {
     const cam = this.env.view?.() ?? null;
     this.life.update(dt, reduced, me, cam);
     if (!this.laid && cam && me && this.env.discover && this.ducksSeen >= 0) {
-      const box = this.life.familyBox;
+      // (the mother herself, as in a play: ven.ts)
+      const mother = this.life.motherObject;
+      const box = mother ? boxOf(mother) : new THREE.Box3();
       const w = typeof window !== 'undefined' ? window.innerWidth : 1280, h = typeof window !== 'undefined' ? window.innerHeight : 800;
       const pic = box.isEmpty() ? null : boxInPicture(cam, box, w, h);
       ({ run: this.ducksSeen, last: this.ducksAt } = pic ? seenStep(this.ducksSeen, this.ducksAt, pic, me, SEEN.eend, dt) : { run: 0, last: null });

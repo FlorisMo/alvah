@@ -44,18 +44,19 @@ export const DUCK_LOOPS: readonly DuckLoop[] = [
   { id: 'oost', c: polar(50, 5.6), r: 1.8 },
   { id: 'west', c: polar(114, 5.4), r: 1.8 },
 ];
-/** Her paddling speed (m/s) round the loop; ducklings keep `DUCKLING_GAP` m apart behind. */
+/** Her paddling speed (m/s) round the loop; ducklings keep `DUCKLING_GAP` m apart behind
+ *  (drawn ≈ 1.4×: a duckling is 0.31 m long). */
 export const DUCK_SPEED = 0.26;
-export const DUCKLING_GAP = 0.34;
+export const DUCKLING_GAP = 0.46;
 /** The first duckling swims this far (m) behind her. */
-export const DUCKLING_LEAD = 0.42;
+export const DUCKLING_LEAD = 0.58;
 /** How many ducklings a play may bring (a fork's pick), and in free roam before any play. */
 export const DUCKLINGS: readonly [number, number] = [3, 7];
 export const DUCKLINGS_FREE = 4;
 /** How far behind her (m along the loop) the last duckling may trail at most. */
 export function trailLength(count: number): number { return DUCKLING_LEAD + (count - 1) * DUCKLING_GAP + DUCKLING_STRAY; }
 /** A straying duckling falls this much further behind before it hurries back (m). */
-export const DUCKLING_STRAY = 0.7;
+export const DUCKLING_STRAY = 0.9;
 
 /** A point `s` m along a loop (counter-clockwise from its east), and the way it paddles there. */
 export function onLoop(l: DuckLoop, s: number): Spot & { yaw: number } {
