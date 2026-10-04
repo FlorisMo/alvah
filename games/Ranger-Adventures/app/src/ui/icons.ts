@@ -80,6 +80,12 @@ const PATHS = {
   cone:
     '<path d="M12 3.4v2.4"/><path d="M12 5.8c-3.3 0-5.4 3.5-5.4 7.4 0 3.9 2.4 7 5.4 7s5.4-3.1 5.4-7c0-3.9-2.1-7.4-5.4-7.4z"/>' +
     '<path d="M8.8 8.9 12 10.6l3.2-1.7M7 12.6l5 2.5 5-2.5M7.6 16.4l4.4 2.1 4.4-2.1"/>',
+  // run 7 (ven-life): a dragonfly from above — its long thin body, two pairs of wings
+  dragonfly:
+    '<circle cx="12" cy="5.2" r="1.7" fill="currentColor" fill-opacity=".16"/><path d="M12 7v13.5"/>' +
+    '<path d="M12 9.2C9.4 7.3 5.2 7 3 8.3c1.8 2 6.3 2.4 9 .9z" fill="currentColor" fill-opacity=".16"/>' +
+    '<path d="M12 9.2c2.6-1.9 6.8-2.2 9-.9-1.8 2-6.3 2.4-9 .9z" fill="currentColor" fill-opacity=".16"/>' +
+    '<path d="M12 11.8c-2.3-1.1-5.6-.9-7.4.5 1.7 1.4 5 1.3 7.4-.5zM12 11.8c2.3-1.1 5.6-.9 7.4.5-1.7 1.4-5 1.3-7.4-.5z"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

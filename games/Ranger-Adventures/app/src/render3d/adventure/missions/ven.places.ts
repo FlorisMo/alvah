@@ -425,8 +425,8 @@ export function singOf(b: Bay, sat: FrogSpot): { stand: Place; view: ViewSpec; y
     if (score > best) { best = score; heading = h; boySide = ang >= 0 ? 1 : -1; }
   }
   const view: ViewSpec = {
-    at: { x: frog.x, z: frog.z }, heading, halfW: 0.2, halfD: 0.1, tall: 0.12, pitchDeg: 8,
-    insetTop: 110, insetBottom: 46, seconds: 1.6, near: SING_NEAR, lensUp: 0.3,
+    at: { x: frog.x, z: frog.z }, heading, halfW: 0.2, halfD: 0.1, tall: 0.12, pitchDeg: 10,
+    insetTop: 110, insetBottom: 110, seconds: 1.6, near: SING_NEAR, lensUp: 0.3,
     include: [{ x: stand.x, z: stand.z, h: RANGER_STAND_HEIGHT, r: 0.16 }],
   };
   // (toward the lens is heading + π; his nose turns toward the boy's side of the picture)
@@ -445,11 +445,13 @@ export function answerOrder(id: BayId): BayId[] {
  * The answer: once he has sung, the lens draws calmly back over the water until the
  * nearest answering cove's water is in the picture with him — the singing frog at the
  * water's edge, the boy on the bank behind, the rings where the other frog answers. One
- * eased pull-back; the plop that follows is seen in it too.
+ * eased pull-back; the plop that follows is seen in it too. `answer` (run 7 ven-life): the
+ * frog that answers first sits there instead (the rare blue frog on the moss beside him):
+ * the picture draws back just far enough for it.
  */
-export function answerView(b: Bay, sat: FrogSpot): ViewSpec {
+export function answerView(b: Bay, sat: FrogSpot, answer?: Spot): ViewSpec {
   const frog = edgeOf(b, sat);
-  const other = BAYS[answerOrder(b.id)[0]].chorus;
+  const other = answer ?? BAYS[answerOrder(b.id)[0]].chorus;
   const stand = b.stands[frog.side];
   const mid = { x: (frog.x + other.x) / 2, z: (frog.z + other.z) / 2 };
   const half = dist(frog, other) / 2;

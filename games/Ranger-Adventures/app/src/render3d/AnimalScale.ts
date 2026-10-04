@@ -95,6 +95,10 @@ export const SIZE = {
   heikikker: { group: 'animals', h: 0.12, real: [0.03, 0.06], model: 'animal-heikikker-frog', len: 0.23,
     readable: 'a sitting moor frog is 3-5 cm high: at true size it is ~10 px from the lens, so a child could never find it',
     why: 'a moor frog, shown at twice its size so a child can see it' },
+  // run 7 (ven-life): the ven's rare sky-blue moor frog (its own coat, Coat.ts): the same frog
+  'heikikker-blauw': { group: 'animals', h: 0.12, real: [0.03, 0.06], model: 'animal-heikikker-frog', len: 0.23,
+    readable: 'shown at twice its size, as the brown moor frog',
+    why: 'a moor frog male in its blue spring days, shown at twice its size' },
   heideblauwtje: { group: 'animals', h: 0.028, real: [0.004, 0.006], model: 'animal-heideblauwtje-butterfly', len: 0.16,
     readable: 'a 2.5 cm butterfly would be a few pixels: shown ≈ 5× so it reads as a butterfly',
     why: 'a silver-studded blue, wings open (the model is ≈ 6× as wide as it is high)' },
@@ -117,6 +121,11 @@ export const SIZE = {
     why: 'a great tit: ≈ 0.14 long' },
   'wilde-eend': { group: 'birds', h: 0.36, real: [0.35, 0.45], model: 'bird-wilde-eend', len: 0.52,
     why: 'a mallard on the water\'s edge: 0.5-0.65 long' },
+  // run 7 (ven-life): the ven's duck family (content ids with their own coats, Coat.ts)
+  'eend-moeder': { group: 'birds', h: 0.36, real: [0.35, 0.45], model: 'bird-wilde-eend', len: 0.52,
+    why: 'a mallard duck (the mother): as big as the drake, 0.5-0.6 long' },
+  eendje: { group: 'birds', h: 0.15, real: [0.1, 0.18], model: 'bird-wilde-eend', len: 0.22,
+    why: 'a mallard duckling of a few weeks: a fist-sized fluffy ball, ≈ 0.15-0.2 long' },
   buizerd: { group: 'birds', h: 0.75, real: [0.65, 0.8], model: 'bird-buizerd', len: 1.26,
     why: 'a buzzard gliding, wings spread: wingspan 1.1-1.3 (the model is 1.7× as wide as high)' },
   houtduif: { group: 'birds', h: 0.38, real: [0.33, 0.4], model: 'bird-houtduif', len: 0.43,

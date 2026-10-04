@@ -375,6 +375,13 @@ test('the song: the frog big and three-quarters toward the lens (his throat to i
       assert.ok(Math.abs(above(at) - EDGE_H) < 0.01, `cove ${id} nook ${f.nook}: he sings at the very edge (${r2(above(at))} m over the water)`);
       const wet = hintRingOf(b, at, 0, -0.01);
       assert.ok(dist(wet, at) <= 0.35, `cove ${id} nook ${f.nook}: the water lies ${r2(dist(wet, at))} m in front of where he sings`);
+      // (review r3: at B4 the frog sat at the picture's foot, the water in front of him and
+      // so his rings out of it) he sits well up from the foot, the water half a metre in
+      // front of him in the picture: the rings that spread from under him are seen
+      assert.ok(box.y1 <= H - 120, `cove ${id} nook ${f.nook}: the singing frog sits up from the picture's foot (his feet at ${box.y1.toFixed(0)} px)`);
+      const front = hintRingOf(b, at, 0.45, -0.01);
+      const fq = screenAt(cam, front, WATER_LEVEL - groundY(front.x, front.z));
+      assert.ok(fq.y < H - 20 && fq.x > 40 && fq.x < W - 40, `cove ${id} nook ${f.nook}: the water half a metre in front of him is in the picture (${fq.x.toFixed(0)}, ${fq.y.toFixed(0)})`);
       // the answer: the singing frog, the boy and the nearest answering cove's frog all in
       // the pulled-back picture
       const ans = lensOf(answerView(b, f));
