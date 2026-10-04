@@ -649,12 +649,14 @@ export function nestOf(route: Route, i: number): NestSpot {
  * behind him, and the nest stands off the middle of his picture (a find, never dead
  * centre); seen on his way there, he stands where he saw it. From the spot and from wherever that step leaves him the nest stands at least
  * NEST_SEE.px + a margin tall in his picture, under the line card, no trunk and not his
- * head in front of it (eekhoorn.places.test, for every nest tree of every way). `under`:
- * nearer the nest than this he is under it (m).
+ * head in front of it — also `carry` m further on, where a walk's own run may carry him
+ * (seed 2: a step of 1 m carried him 0.75 m on, 1.3 m from the nest, and it stood over his
+ * head) — for every nest tree of every way (eekhoorn.places.test). `under`: nearer the
+ * nest than this he is under it (m).
  * Played 2026-10-04 (seeds 3, 45, a zuid play): the hint walked him on past the nest to its
  * foot, or away to the stub's watch spot while the line played, and the moment was lost.
  */
-export const NEST_WATCH = { d: [3.2, 2.9, 3.5, 3.8], turns: [0.25, 0, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, 1.25, -1.0], r: 0.5, aside: 1.0, step: 1.0, under: 1.8 } as const;
+export const NEST_WATCH = { d: [3.5, 3.2, 3.8, 2.9], turns: [0.25, 0, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, 1.25, -1.0], r: 0.5, aside: 1.0, step: 0.8, carry: 0.8, under: 1.8 } as const;
 /** He has SEEN the nest (its moment: it peeks out, "Kijk, zijn nest!", and into his
  *  veldgids): within `near` m of it, in a steady picture (the lens turning at most `turn`
  *  rad/s: played 2026-10-04, seed 2, seen as the follow lens swung round behind him on a
@@ -700,7 +702,9 @@ export function nestWatch(route: Route, i: number): Spot & { heading: number; ai
     const aim = nestAim(n, w);
     const stop = dist(w, aim) - NEST_WATCH.step;
     const stands: Spot[] = [w];
-    for (let k = 0; k < 12; k++) for (const rr of [NEST_WATCH.r * 0.5, NEST_WATCH.r]) stands.push(nestStep(aim, { x: w.x + Math.sin((k * Math.PI) / 6) * rr, z: w.z + Math.cos((k * Math.PI) / 6) * rr }, stop));
+    for (let k = 0; k < 12; k++) for (const rr of [NEST_WATCH.r * 0.5, NEST_WATCH.r]) for (const on of [0, NEST_WATCH.carry]) {
+      stands.push(nestStep(aim, { x: w.x + Math.sin((k * Math.PI) / 6) * rr, z: w.z + Math.cos((k * Math.PI) / 6) * rr }, stop - on));
+    }
     return stands.every((st) => dist(st, n) > NEST_WATCH.under + 0.2 && HOME_TREES.every((o) => {
       if (dist(o, st) <= trunkClear(o)) return false;
       if (o === n.tree) return true;

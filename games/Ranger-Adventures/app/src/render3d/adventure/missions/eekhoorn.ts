@@ -500,8 +500,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
         const w = nestWait.watch, d = dist(k.ranger(), w);
         // (it peeks out: he stands where he saw it, while it looks at him and its line plays)
         if (nestWait.leg === 'hold' && nestWait.at) return { x: nestWait.at.x, z: nestWait.at.z, r: 1.5, tag: 'nest-hold' };
-        if (nestWait.leg === 'go' && d <= NEST_WATCH.r) nestWait.leg = 'look';
-        else if (nestWait.leg === 'look' && d > NEST_WATCH.r + NEST_WATCH.step + 0.8) nestWait.leg = 'go';
+        if (nestWait.leg === 'go' && d <= NEST_WATCH.r) nestWait.leg = 'look'; // (and it stays: wandered off, the step brings him back facing it)
         if (nestWait.leg === 'look') return { x: w.aim.x, z: w.aim.z, r: w.stop, tag: 'nest-look' };
         const way = wayTo(k.ranger(), w);
         return way === w ? { x: w.x, z: w.z, r: NEST_WATCH.r * 0.7, tag: 'nest' } : { x: way.x, z: way.z, tag: 'nest' };

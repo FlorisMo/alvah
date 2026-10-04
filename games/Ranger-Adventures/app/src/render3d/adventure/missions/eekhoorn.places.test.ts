@@ -841,13 +841,14 @@ test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1
       assert.ok(Math.abs(dist(aim, nest) - NEST_WATCH.aside) < 1e-9 && wrapA(headingTo(w, aim) - headingTo(w, nest)) > 0.2, `${id}/${t.id}: he looks beside it, to its left`);
       assert.ok(Math.abs(wrapA(w.heading - headingTo(w, aim))) < 1e-9, `${id}/${t.id}: facing it`);
       const stands: { x: number; z: number; h: number; tag: string }[] = [{ ...w, h: w.heading, tag: 'at the spot' }];
-      for (let a = -Math.PI; a < Math.PI; a += Math.PI / 6) for (const rr of [NEST_WATCH.r * 0.5, NEST_WATCH.r]) {
+      for (let a = -Math.PI; a < Math.PI; a += Math.PI / 6) for (const rr of [NEST_WATCH.r * 0.5, NEST_WATCH.r]) for (const on of [0, NEST_WATCH.carry]) {
         const s0 = { x: w.x + Math.sin(a) * rr, z: w.z + Math.cos(a) * rr };
         const d0 = dist(s0, aim);
-        // (he always takes a step: it turns him to it)
-        assert.ok(d0 - w.stop >= NEST_WATCH.step - NEST_WATCH.r - 1e-9 && w.stop > 0, `${id}/${t.id}: from ${deg(a)}° ${rr} m he steps ${(d0 - w.stop).toFixed(2)} m`);
-        const pp = { x: aim.x + (s0.x - aim.x) * (w.stop / d0), z: aim.z + (s0.z - aim.z) * (w.stop / d0) };
-        stands.push({ ...pp, h: headingTo(s0, aim), tag: `stepped from ${deg(a)}° ${rr} m` });
+        // (he always takes a step: it turns him to it; and the walk may carry him a little on)
+        assert.ok(d0 - w.stop >= NEST_WATCH.step - NEST_WATCH.r - 1e-9 && w.stop - on > 0.5, `${id}/${t.id}: from ${deg(a)}° ${rr} m he steps ${(d0 - w.stop).toFixed(2)} m`);
+        const k0 = (w.stop - on) / d0;
+        const pp = { x: aim.x + (s0.x - aim.x) * k0, z: aim.z + (s0.z - aim.z) * k0 };
+        stands.push({ ...pp, h: headingTo(s0, aim), tag: `stepped from ${deg(a)}° ${rr} m${on ? ', carried on' : ''}` });
       }
       const box = new THREE.Box3(new THREE.Vector3(nest.x - NEST.r, g + nest.y - NEST.r, nest.z - NEST.r), new THREE.Vector3(nest.x + NEST.r, g + nest.y + NEST.r, nest.z + NEST.r));
       const pts = [[0, 0, 0], [0, 0.6, 0], [0.6, 0.1, 0], [-0.6, 0.1, 0], [0, 0.1, 0.6], [0, 0.1, -0.6], [0, -0.5, 0]]
@@ -861,7 +862,9 @@ test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1
         assert.ok(((q.cx + 1) / 2) * W >= NEST_SEE.hud.w + 40 || q.cy >= NEST_SEE.hud.h + 40, `${tag}: out of the chips' corner`);
         // (where the step leaves him: the nest off the middle of his picture)
         if (st.tag !== "at the spot") assert.ok(q.cx >= 0.1, `${tag}: right of the middle of his picture (x ${q.cx.toFixed(2)})`);
-        assert.ok(q.px >= NEST_SEE.px + 6, `${tag}: it stands ${q.px.toFixed(0)} px tall (the moment wants ${NEST_SEE.px})`);
+        // (where the step leaves him, with room; at the spot itself, on his way, at least the
+        // runtime's own threshold)
+        assert.ok(q.px >= NEST_SEE.px + (st.tag === 'at the spot' ? 2 : 6), `${tag}: it stands ${q.px.toFixed(0)} px tall (the moment wants ${NEST_SEE.px})`);
         const gs = groundY(st.x, st.z);
         const eye = { x: st.x - Math.sin(st.h) * LENS.back, y: gs + LENS.up, z: st.z - Math.cos(st.h) * LENS.back };
         // (every point clear of the other pines out to their outline, of its own trunk's bark it
