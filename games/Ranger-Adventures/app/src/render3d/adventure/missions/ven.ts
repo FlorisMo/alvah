@@ -568,7 +568,10 @@ async function adderMoment(k: AdventureKit, rust: ChoiceRun, home: VenHome, laid
         home.adderLift(0.3);
         feetFree();
       },
-      // held: she slides off the path into the heather
+      // held: his feet stop (a key still held never carries him on into her while he is
+      // praised for leaving her be: played, he came to 1.17 m during the good words), he
+      // watches her slide off the path into the heather, then walks on
+      held: () => { k.lockFollow(); k.world.stopRanger(); },
       right: async () => {
         home.adderLift(0);
         await k.guard(home.adderSlide(adderHeather(a)));

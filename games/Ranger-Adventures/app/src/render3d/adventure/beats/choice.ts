@@ -95,6 +95,10 @@ export interface StillOpts {
   wrong?: () => Promise<unknown> | void;
   /** held: what happens next (awaited before `still` resolves) */
   right?: () => Promise<unknown> | void;
+  /** run 7 (the ven, additive): called the moment the hold is held, before its good words
+   *  (with `room` his feet are free: the adder stops them here, so he never walks on into
+   *  her while he is praised for leaving her be). Default: nothing. */
+  held?: () => void;
 }
 
 /** A rustkracht moment answered by WALKING AWAY (`ChoiceRun.go`, run 7). */
@@ -334,6 +338,7 @@ export class ChoiceRun {
     }
     k.stats[`still_${id}`] = core.impulses;
     tempo.held(core.seconds, core.impulses === 0);
+    o.held?.();
     if (settings.geluid) Sound.correct();
     const good = enc.uitleg ?? 'Rustig zo.';
     k.say(good, { good: true });
