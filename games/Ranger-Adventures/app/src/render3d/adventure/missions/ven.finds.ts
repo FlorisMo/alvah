@@ -117,6 +117,7 @@ export class VenLife3d {
   private flies: THREE.InstancedMesh | null = null;
   private readonly fly: Dragonfly[] = [];
   private flyGroup: THREE.Object3D | null = null;
+  private readonly flyBox = new THREE.Box3();
 
   /* the heath blue, the feather */
   private butterfly: THREE.Object3D | null = null;
@@ -163,7 +164,9 @@ export class VenLife3d {
       const inst = new THREE.InstancedMesh(m.geometry, m.material, DUCKLINGS[1]);
       inst.name = 'ven-eendjes';
       inst.castShadow = false;
-      inst.frustumCulled = false; // (they paddle round a loop: its bounding sphere would lag)
+      // (culled by a sphere round the family that follows them each frame: behind the lens
+      // they cost no draw call)
+      inst.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0);
       this.duckGroup.add(inst);
       this.ducklings = inst;
     });
@@ -174,7 +177,8 @@ export class VenLife3d {
     const flies = new THREE.InstancedMesh(geo, mat, 3);
     flies.name = 'ven-libellen';
     flies.castShadow = false;
-    flies.frustumCulled = false;
+    // (culled by a sphere round the dragonflies that follows them each frame)
+    flies.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0);
     flies.count = 0;
     this.flies = flies;
     this.flyGroup = env.detail(BAYS.B.frame, { near: 30, far: 36, own: true });
@@ -478,6 +482,8 @@ export class VenLife3d {
         box.expandByPoint(pos);
       }
       d.instanceMatrix.needsUpdate = true;
+      // (its group stands at the world's origin: the family's box is its own frame)
+      if (!box.isEmpty()) box.getBoundingSphere(d.boundingSphere!).radius += DUCKLING_H;
     }
   }
 
@@ -501,6 +507,7 @@ export class VenLife3d {
     const inst = this.flies;
     if (!inst || !this.fly.length) return;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+    const around = this.flyBox.makeEmpty();
     this.fly.forEach((f, i) => {
       // (a visit keeps in front of him as he walks on: its goal moves with him)
       if (f.mode === 'visit' && f.ahead) {
@@ -533,8 +540,10 @@ export class VenLife3d {
       q.setFromEuler(new THREE.Euler(0, f.yaw, 0));
       m.compose(p, q, s);
       inst.setMatrixAt(i, m);
+      around.expandByPoint(p);
     });
     inst.instanceMatrix.needsUpdate = true;
+    around.getBoundingSphere(inst.boundingSphere!).radius += 0.12;
   }
 
   private updateButterfly(dt: number, reduced: boolean, me: { x: number; z: number } | null): void {
