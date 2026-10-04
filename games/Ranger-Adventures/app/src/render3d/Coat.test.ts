@@ -121,3 +121,18 @@ test('run 7: the raven is black (its GLB is a pale grey bird): a soft near-black
   assert.ok(Math.max(c.r, c.g, c.b) < 70, `near-black (${t.color})`);
   assert.ok(t.strength > 0.6 && t.strength < 1, 'its own shading stays (strength < 1)');
 });
+
+test('run 7: the eekhoorn\'s dark-brown visitor wears a coat ramp on the red squirrel\'s model: dark brown back, a lighter brown belly', () => {
+  const t = coatTintFor('eekhoorn-donker')!;
+  assert.ok(t && t.ramp, 'a ramp');
+  assert.equal(t.strength, 0, 'no tint on top of the ramp');
+  const lum = (hex: string): number => { const c = rgb(hex); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
+  for (const hex of [t.ramp!.dark, t.ramp!.light]) {
+    const c = rgb(hex);
+    assert.ok(c.r > c.g && c.g > c.b, `${hex} is a brown (r > g > b)`);
+  }
+  assert.ok(lum(t.ramp!.dark) < lum(t.ramp!.light) * 0.6, 'its back much darker than its belly');
+  assert.ok(lum(t.ramp!.dark) >= 40, 'never a black hole');
+  assert.ok(t.ramp!.split[0] < t.ramp!.split[1]);
+  assert.equal(coatTintFor('eekhoorn')?.ramp, undefined, 'the red squirrel itself keeps its own fur');
+});

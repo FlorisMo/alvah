@@ -908,11 +908,16 @@ const MISSIE_EEKHOORN = {
       opnieuw: 'Luister nog een keer.',
       goedBuren: 'Knap onthouden!',
       gaai: 'De gaai vliegt weg.',
+      // run 7: what he finds on the way (its nest), and its two rare visitors
+      nestKijk: 'Kijk, zijn nest!',
+      nogEen: 'Kijk, nog een eekhoorn!',
+      gevondenJong: 'Gevonden! En nog een kleintje!',
     },
     knap: {
       routeKijk: 'Kijk waar hij zijn voorraad verstopt.',
       stapel: 'Hij brengt ze naar zijn wintervoorraad.',
       isBonteSpecht: 'Dat is de grote bonte specht.',
+      nestKijk: 'Kijk, zijn kobel!',
     },
   },
   stappen: [

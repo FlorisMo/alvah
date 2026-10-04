@@ -76,6 +76,10 @@ const PATHS = {
   hand:
     '<path d="M8.2 12.2V6.6a1.5 1.5 0 0 1 3 0v4.6M11.2 10.4V5.1a1.5 1.5 0 0 1 3 0v5.8M14.2 10.9V7a1.5 1.5 0 0 1 3 0v7.1c0 3.7-2.4 6.1-6 6.1-2.4 0-3.9-1-5-2.8l-2.3-3.7a1.4 1.4 0 0 1 2.3-1.6l2 2.6"/>',
   swap: '<path d="M4.6 8.6h14l-3.6-3.6"/><path d="M19.4 15.4h-14l3.6 3.6"/>',
+  // run 7 (the veldgids): a pine cone, its stalk on top and its scales in rows
+  cone:
+    '<path d="M12 3.4v2.4"/><path d="M12 5.8c-3.3 0-5.4 3.5-5.4 7.4 0 3.9 2.4 7 5.4 7s5.4-3.1 5.4-7c0-3.9-2.1-7.4-5.4-7.4z"/>' +
+    '<path d="M8.8 8.9 12 10.6l3.2-1.7M7 12.6l5 2.5 5-2.5M7.6 16.4l4.4 2.1 4.4-2.1"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

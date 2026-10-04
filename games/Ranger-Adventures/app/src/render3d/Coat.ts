@@ -30,6 +30,11 @@ export interface CoatTint {
   /** only the model's materials with these names (its coat), when its other parts (antlers,
    *  a pale rump) are already true; unset: every material but the eyes */
   only?: readonly string[];
+  /** run 7 (additive): a coat of another colour on the same fur — each texel by its own
+   *  lightness onto a ramp from `dark` (its darkest fur) to `light` (its palest: a belly),
+   *  between `split` (linear lightness), keeping the fur's own shading. A multiply cannot
+   *  do it: an orange back made brown by a tint turns a cream belly grey. */
+  ramp?: { dark: string; light: string; split: readonly [number, number] };
   /** run 7 (wc-album, additive): a PALE coat — the model's own texture bleached to its light
    *  and dark (its coat goes `color`, the eyes, the nose and the hooves stay dark), on the
    *  spawn's own copy. For a rare animal staged on a model's own species (a CONTENT id: the
@@ -76,6 +81,15 @@ const COAT_TINT: Record<string, CoatTint> = {
   // dossier: "geheel zwart, met een blauwige glans" — a soft near-black, not a hole: the
   // world's animal fill still lights its shaded side
   'animal-raaf-raven': { color: '#2e2d34', strength: 0.82 },
+  // run 7 (the eekhoorn's rare visitor): a CONTENT id on the squirrel's model — the dark
+  // form of the red squirrel (dark brown to nearly black, its belly stays light; not rare
+  // on the Veluwe, a rare sight in this game). Its fur (orange, tan, cream patches) is laid
+  // on a ramp: the orange back a dark chocolate brown, the tan a brown, the cream belly (the
+  // side a child mostly sees of a squirrel on a trunk) a warm mid brown, lighter than its
+  // back; it still reads brown (never a black hole) in the world's light with the animal
+  // fill (measured at the den in all four of the squirrel's lights: p10 ≥ 22, median ≥ 40).
+  // (`color` names its coat; the ramp draws it, no tint on top.)
+  'eekhoorn-donker': { color: '#4a2c1c', strength: 0, ramp: { dark: '#4e2d1c', light: '#94704f', split: [0.08, 0.7] } },
 };
 
 /**
@@ -163,7 +177,8 @@ export function coatTintFor(id: string | null | undefined): CoatTint | null {
   if (!id) return null;
   const t = COAT_TINT[id];
   if (!t) return null;
-  return { color: t.color, strength: clamp(t.strength, 0, 1), ...(t.only ? { only: [...t.only] } : {}), ...(t.pale ? { pale: true } : {}) };
+  return { color: t.color, strength: clamp(t.strength, 0, 1), ...(t.only ? { only: [...t.only] } : {}), ...(t.pale ? { pale: true } : {}),
+    ...(t.ramp ? { ramp: { dark: t.ramp.dark, light: t.ramp.light, split: [t.ramp.split[0], t.ramp.split[1]] as const } } : {}) };
 }
 
 /**

@@ -83,6 +83,9 @@ export const SIZE = {
     why: 'a badger: low and wide, shoulder ≈ 0.3, ≈ 0.8 m long' },
   eekhoorn: { group: 'animals', h: 0.25, real: [0.2, 0.3], model: 'animal-eekhoorn-squirrel', len: 0.27,
     why: 'a red squirrel sitting up, its tail raised: body ≈ 0.2 plus ears and tail' },
+  // run 7 (the eekhoorn's rare visitor): the dark-brown form of the same species
+  'eekhoorn-donker': { group: 'animals', h: 0.25, real: [0.2, 0.3], model: 'animal-eekhoorn-squirrel', len: 0.27,
+    why: 'a dark-brown red squirrel (the dark form of the same species): the same size' },
   raaf: { group: 'birds', h: 0.42, real: [0.35, 0.45], model: 'animal-raaf-raven', len: 0.45,
     why: 'a raven standing: ≈ 0.4 tall, 0.55-0.7 long; the model is compact, so the upper end' },
   wolf: { group: 'animals', h: 0.95, real: [0.85, 1.05], model: 'animal-wolf', len: 1.85,

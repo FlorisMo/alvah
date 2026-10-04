@@ -147,6 +147,20 @@
 }
 .rm .vg-grid.vg-turn { animation: none; }
 
+/* a page with more than eight finds (the squirrel's wood has ten): five or six to a row, so
+   its two rows — the rare ones' row too — stand in view under the title at 1280×800 (two
+   rows of four put a third under the foot). Each tile still a big target (~150 px). A
+   narrow screen keeps the rows as they are (it has the height to scroll). */
+@media (min-width: 900px) {
+  .vg-grid.vg-many { gap: 14px 10px; }
+  .vg-grid.vg-many > .vg-entry {
+    flex: 0 0 calc((100% - (var(--vg-cols, 5) - 1) * 10px) / var(--vg-cols, 5));
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  .vg-grid.vg-many .vg-hear { right: 6px; top: 6px; }
+}
+
 /* Pauze has five tiles since the veldgids joined: the last one stands centred on its row */
 .hub-tiles > .hub-tile:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: calc(50% - 6px); }
 

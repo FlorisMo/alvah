@@ -50,6 +50,14 @@ export interface DressingEnv {
   /** where the lens will stand for a framed view (a Stage fit with an anchor, on a
    *  1280×800 screen): a stand opens its glimpse window for the search's eye */
   lensFor(view: FrameView): { cam: { x: number; y: number; z: number }; look: { x: number; y: number; z: number } };
+  /** run 7 (optional): he SAW something of this home in free roam (design §4.4: on screen,
+   *  big enough, long enough): recorded in his veldgids, a new one gets its calm reveal at
+   *  a quiet moment, the same way a mission's `k.discover` does. Returns whether it was
+   *  new. Unwired (a test world), it records nothing. */
+  discover?(id: string): boolean;
+  /** run 7 (optional): the live camera (his picture), to tell what he sees; null before
+   *  the first frame */
+  view?(): THREE.Camera | null;
 }
 
 /** A framed view of a world spot (play/stage `anchor`), as a home's places table writes it. */
@@ -169,8 +177,18 @@ export class Residents {
   /** where the ranger is now (the free-roam reactions look at him) */
   private readonly rangerAt = { x: 0, z: 0 };
 
+  /** run 7: how a home's free-roam discovery reaches his veldgids (WorldSession wires it) */
+  private finder: ((id: string) => boolean) | null = null;
+  /** run 7: the live camera of the last frame (a home tells what he sees with it) */
+  private lens: THREE.Camera | null = null;
+
   constructor(env: ResidentsEnv) {
     this.env = env;
+  }
+
+  /** Run 7: where a home's free-roam discoveries go (the save and the reveal); null: nowhere. */
+  setDiscover(fn: ((id: string) => boolean) | null): void {
+    this.finder = fn;
   }
 
   /** Build a home: its dressing and its animals, in the before state. `body` gives a
@@ -190,6 +208,7 @@ export class Residents {
     const dressing = build ? build({
       parent: group, groundY: this.env.groundY, spawnModel: this.env.spawnModel, spawnPlant: this.env.spawnPlant,
       obstacles: this.env.obstacles, lensFor: this.env.lensFor, detail,
+      discover: (id) => this.finder?.(id) ?? false, view: () => this.lens,
     }) : null;
     const actors = new Map<string, Actor>();
     const home: Home = {
@@ -385,6 +404,7 @@ export class Residents {
    */
   update(t: number, dt: number, camera: THREE.Camera, ranger: { x: number; z: number }): void {
     this.clock += dt;
+    this.lens = camera;
     const rangerMoving = dt > 0 && Math.hypot(ranger.x - this.rangerAt.x, ranger.z - this.rangerAt.z) / dt > 0.3;
     this.rangerAt.x = ranger.x; this.rangerAt.z = ranger.z;
     const reduced = this.env.reduced();

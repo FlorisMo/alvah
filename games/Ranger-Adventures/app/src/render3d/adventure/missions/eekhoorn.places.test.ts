@@ -21,6 +21,7 @@ import {
   seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
+  NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
 } from './eekhoorn.places.ts';
 import { STUB_TILT } from '../../world/Forest.ts';
@@ -28,7 +29,7 @@ import { biomeAt, heightAt as groundY, VEN_CENTER, VEN_SHORE_R } from '../../Bio
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
 import { dist, headingTo, toLocal, segDist, offCentre } from '../places.ts';
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
-import { SQ, barkRadius, lineClear, trunkFadeUpright, trunkUpright, type Trunk, type Upright } from '../squirrel-math.ts';
+import { SQ, barkRadius, lineClear, trunkFadeUpright, trunkOutline, trunkUpright, type Trunk, type Upright } from '../squirrel-math.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import { newPlay } from '../../../core/play.ts';
 
@@ -466,7 +467,9 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
     for (const t of HOME_TREES) assert.ok(segDist(t, at, me) > trunkClear(t) - 0.35 || dist(at, me) < 0.01, `${rid}: his steps nearer clear ${t.id}`);
     const face = foundFace(c, sqAng, me);
     assert.ok(Math.abs(wrapA(face - sqAng)) < 1.6, `${rid}: it comes out a short way round from where it was`);
-    const f = foundView(c, face, me);
+    // (a play with the rare young one frames the view that holds it too: the same rules)
+    for (const young of [false, true]) {
+    const f = foundView(c, face, me, young);
     const cam = fitLens(f);
     const rr = barkRadius(trunk(c), HIDE.h) + 0.08;
     const sq = { x: c.x + Math.sin(face) * rr, z: c.z + Math.cos(face) * rr };
@@ -479,7 +482,7 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
     assert.ok(off >= (15 * Math.PI) / 180, `${rid}: the lens ${deg(off)}° off his line to it`);
     // big: its 0.33 m (with its tail) at least 60 px tall, in the picture, off the middle
     const top = px(cam, sq, HIDE.h + 0.33), bot = px(cam, sq, HIDE.h);
-    assert.ok(!top.behind && Math.abs(bot.y - top.y) >= 60, `${rid}: it is ${Math.abs(bot.y - top.y).toFixed(0)} px tall (him ${dist(me, sq).toFixed(1)} m from it)`);
+    assert.ok(!top.behind && Math.abs(bot.y - top.y) >= 60, `${rid}${young ? ' (young)' : ''}: it is ${Math.abs(bot.y - top.y).toFixed(1)} px tall (him ${dist(me, sq).toFixed(1)} m from it; turn ${deg(Math.abs(wrapA(f.heading - headingTo(me, sq))))}°, lens ${camD.toFixed(2)} m)`);
     assert.ok(top.x > 40 && top.x < W - 40 && top.y > 110 && bot.y < H - 80, `${rid}: it is in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)})`);
     assert.ok(Math.abs(top.x - W / 2) >= 0.2 * (W / 2), `${rid}: well off the middle (${top.x.toFixed(0)} px; turn ${deg(Math.abs(wrapA(f.heading - headingTo(me, sq))))}°, him ${dist(me, sq).toFixed(1)} m, sqAng ${sqAng.toFixed(2)})`);
     // him: whole in the picture, no pine of the home between the lens and him or it
@@ -492,6 +495,7 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
       if (t !== c) assert.ok(lineClear(cam.position, { ...sq, y: groundY(sq.x, sq.z) + HIDE.h + 0.12 }, bark), `${rid}: ${t.id} is not in front of the squirrel`);
     }
     assert.ok(lineClear(cam.position, { ...sq, y: groundY(sq.x, sq.z) + HIDE.h + 0.12 }, [{ ...trunkUpright(trunk(c), groundY(c.x, c.z)), r: (y: number) => barkRadius(trunk(c), Math.max(0, y - groundY(c.x, c.z))) }]), `${rid}: its own trunk is not in front of it`);
+    }
   };
   for (const rid of ROUTE_IDS) {
     const c = ROUTES[rid].hide;
@@ -664,6 +668,23 @@ test('each home tree\'s branch stub is part of its tree: rooted in the bark, out
   assert.equal(n, HOME_TREES.length, 'every home tree has a branch');
 });
 
+test('the walk hint never strands him: from right beside any pine of the home, the way to a watch spot is the spot itself or a step beyond the hint\'s radius', () => {
+  const goals = [...new Set(ROUTE_IDS.flatMap((id) => ROUTES[id].waits))].map((t) => watchSpot(t));
+  let n = 0;
+  // (as near as he can stand: the trunk's collider and his own 0.3 m, and a little further)
+  for (const t of HOME_TREES) for (const r of [(0.6 * t.h) / 12.5 + 0.32, trunkClear(t) - 0.2, trunkClear(t) + 0.05]) for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+    const me = { x: t.x + Math.sin(a) * r, z: t.z + Math.cos(a) * r };
+    if (HOME_TREES.some((o) => o !== t && dist(o, me) < (0.6 * o.h) / 12.5 + 0.32)) continue;
+    for (const g of goals) {
+      if (dist(me, g) < 2) continue;
+      const w = wayTo(me, g);
+      n += 1;
+      assert.ok(w === g || dist(me, w) > WATCH_R, `beside ${t.id} at ${deg(a)}°, ${r.toFixed(2)} m: a step of ${dist(me, w).toFixed(2)} m toward (${g.x.toFixed(1)}, ${g.z.toFixed(1)})`);
+    }
+  }
+  assert.ok(n > 500, `${n} ways`);
+});
+
 /* ---------------------------------------------------------- the draw ---- */
 
 test('a play\'s draw: from its own forks, replayed by its seed, never the last play\'s way or pattern, a new neighbour at least', () => {
@@ -686,6 +707,11 @@ test('a play\'s draw: from its own forks, replayed by its seed, never the last p
       assert.notEqual(trioCode(p.buren), trioCode(q.buren), `play ${s}: another trio than ${i + 1} play(s) ago`);
     }
     if (recent[0]) assert.ok(SLOTS.filter((k) => p.buren[k] !== recent[0].buren[k]).length >= 2, `play ${s}: two other neighbours`);
+    // its finds somewhere new: never the last play's nest tree nor its dining spot
+    if (recent[0]) {
+      assert.notEqual(nestTrees(ROUTES[p.route])[p.nest].id, nestTrees(ROUTES[recent[0].route])[recent[0].nest].id, `play ${s}: its nest on another tree`);
+      assert.notEqual(p.kegels, recent[0].kegels, `play ${s}: its cones somewhere new`);
+    }
     routes.add(p.route); syms.add(p.veld); trios.add(trioCode(p.buren));
     seen.push(p);
   }
@@ -706,8 +732,381 @@ test('a play\'s draw: from its own forks, replayed by its seed, never the last p
     { m: 'eekhoorn', sd: 8, va: `mood:bewolkt,${VARIANT_KEY}:z-o-kgk` }, { m: 'eekhoorn', sd: 8, va: `mood:bewolkt,${VARIANT_KEY}:z-o-kgk` },
   ];
   assert.deepEqual(lastVariants(two).map((v) => v.route), ['zuid', 'noord']);
+  // the last play's nest tree, read back (the draw keeps the next nest off it)
+  const withNest = [{ m: 'eekhoorn', sd: 9, va: `mood:ochtendnevel,rare:donkere-eekhoorn,${VARIANT_KEY}:m-v-rnr,nest:z1` }];
+  assert.equal(lastVariants(withNest)[0].nest, nestTrees(ROUTES.midden).findIndex((t) => t.id === 'z1'));
+  assert.ok(withNest[0].va.length <= 60, 'the nest note survives the history\'s 60 characters');
+  for (let s = 1; s <= 60; s++) {
+    const p = drawEekhoornPlay(newPlay('eekhoorn', 5000 + s, 1), [{ ...lastVariants(withNest)[0], route: 'midden' }]);
+    if (p.route === 'zuid') assert.notEqual(nestTrees(ROUTES.zuid)[p.nest].id, 'z1', `seed ${5000 + s}: not on z1 again`);
+  }
   assert.equal(lastVariant([{ m: 'eekhoorn', va: 'mood:zonnig' }]), null, 'an old play without a variant: a free draw');
   // the history keeps it whole after the mood and a rare (≤ 60 characters)
   const va = `mood:ochtendnevel,rare:donkere-eekhoorn,${VARIANT_KEY}:${variantOf({ route: 'midden', veld: 'spiegel-v', buren: { tak: 'roodborst', stam: 'grote-bonte-specht', top: 'koekoek' } })}`;
   assert.ok(va.length <= 60, `the longest variant line is ${va.length} characters`);
+});
+
+/* ------------------------------------------------ what he can find (run 7) ---- */
+
+/** The follow lens as the world places it (world/CameraRig): 2.4 m up, 4.6 m behind him,
+ *  looking at 0.65 of his height: a point's place in the picture (px from the top) and
+ *  whether it is inside it at all. */
+const FOLLOW_LOOK_H = 0.65 * RANGER_STAND_HEIGHT;
+function followPx(me: { x: number; z: number }, heading: number, p: { x: number; y: number; z: number }): { x: number; y: number; d: number; inside: boolean } {
+  const g = groundY(me.x, me.z);
+  const eye = new THREE.Vector3(me.x - Math.sin(heading) * LENS.back, g + LENS.up, me.z - Math.cos(heading) * LENS.back);
+  const cam = new THREE.PerspectiveCamera(FOV, W / H, 0.1, 400);
+  cam.position.copy(eye); cam.lookAt(me.x, g + FOLLOW_LOOK_H, me.z); cam.updateMatrixWorld(true);
+  const v = new THREE.Vector3(p.x, p.y, p.z);
+  const behind = v.clone().applyMatrix4(cam.matrixWorldInverse).z > 0;
+  v.project(cam);
+  const x = (v.x + 1) * 0.5 * W, y = (1 - v.y) * 0.5 * H;
+  return { x, y, d: eye.distanceTo(new THREE.Vector3(p.x, p.y, p.z)), inside: !behind && x > 0 && x < W && y > 0 && y < H };
+}
+/** A box through the follow lens behind him (as eekhoorn.home `pictureOf` measures a find):
+ *  how tall it stands (px), its middle across the picture (−1…1), its top (px from the top),
+ *  and whether its middle is inside the picture at all. */
+function followBox(me: { x: number; z: number }, heading: number, box: THREE.Box3): { px: number; cx: number; cy: number; top: number; inside: boolean } {
+  const g = groundY(me.x, me.z);
+  const cam = new THREE.PerspectiveCamera(FOV, W / H, 0.1, 400);
+  cam.position.set(me.x - Math.sin(heading) * LENS.back, g + LENS.up, me.z - Math.cos(heading) * LENS.back);
+  cam.lookAt(me.x, g + FOLLOW_LOOK_H, me.z); cam.updateMatrixWorld(true);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < 8; i++) {
+    const v = new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+    if (v.clone().applyMatrix4(cam.matrixWorldInverse).z > -0.2) return { px: 0, cx: 9, cy: -1, top: 0, inside: false };
+    v.project(cam);
+    minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x); minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y);
+  }
+  const cx = (minX + maxX) / 2, cy = (1 - (minY + maxY) / 2) * 0.5 * H;
+  return { px: (maxY - minY) * 0.5 * H, cx, cy, top: (1 - maxY) * 0.5 * H, inside: Math.abs(cx) <= 0.92 && cy >= 96 && cy <= H - 8 };
+}
+/** How tall (px) something `size` m across reads at `d` m through a 55° lens on 800 px. */
+const pxAt = (size: number, d: number): number => (size / (2 * d * Math.tan((FOV / 2) * Math.PI / 180))) * H;
+
+/** The walk a perfect player makes along a way (golden's hints): straight to each wait's
+ *  watch spot (round a trunk in the way), standing there a moment facing the squirrel,
+ *  then to the hide tree and on into the glade — at 2 m/s, a sample every 0.05 s. */
+function walkOf(r: Route): { x: number; z: number; h: number; leg: string }[] {
+  const out: { x: number; z: number; h: number; leg: string }[] = [];
+  let me = { x: MARKER.x, z: MARKER.z };
+  const go = (to: { x: number; z: number }, stop: number, leg: string): void => {
+    for (let n = 0; n < 6 && dist(me, to) > stop; n++) {
+      const via = wayTo(me, to), h = headingTo(me, via), a = { ...me }, steps = Math.ceil(dist(a, via) / 0.1);
+      for (let i = 1; i <= steps && dist(me, to) > stop; i++) { me = { x: a.x + (via.x - a.x) * (i / steps), z: a.z + (via.z - a.z) * (i / steps) }; out.push({ ...me, h, leg }); }
+    }
+  };
+  r.waits.forEach((t, i) => {
+    if (i < r.waits.length - 1) {
+      go(watchSpot(t), WATCH_R, t.id);
+      const h = headingTo(me, seatOf(t));
+      for (let k = 0; k < 40; k++) out.push({ ...me, h, leg: `${t.id}:wacht` }); // (≥ SIT: it sits a moment first)
+    } else go(t, 3.2, 'hide');
+  });
+  go(P.stand, 1.6, 'glade');
+  return out;
+}
+
+test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1-2.5 m up on his side, apart from the stub, big in his picture from the spot to see it from (the threshold the runtime reads, with room)', () => {
+  let n = 0;
+  for (const id of ROUTE_IDS) {
+    const r = ROUTES[id];
+    assert.ok(nestTrees(r).length >= 2, `${id}: ${nestTrees(r).length} trees may carry its nest`);
+    assert.ok(!nestTrees(r).includes(r.hide), `${id}: never on its hide tree`);
+    nestTrees(r).forEach((t, i) => {
+      n += 1;
+      const nest = nestOf(r, i);
+      const g = groundY(nest.x, nest.z);
+      assert.ok(nest.y >= 2.1 && nest.y <= 2.5, `${id}/${t.id}: ${nest.y} m up`);
+      assert.equal(r.hops.find((h) => h.tree === t)?.how, 'dash', `${id}/${t.id}: it dashes to it (its nest moment comes at the end of a dash)`);
+      assert.ok(Math.abs(wrapA(nest.ang - headingTo(t, comesFrom(r, i)))) <= 0.5, `${id}/${t.id}: on the side he comes from`);
+      assert.ok(Math.abs(wrapA(nest.ang - t.branch!.ang)) >= 0.9, `${id}/${t.id}: well round the trunk from its stub (${deg(Math.abs(wrapA(nest.ang - t.branch!.ang)))}°)`);
+      // hugging its bark: not floating off it, not inside it
+      const bark = barkRadius(trunk(t), nest.y);
+      assert.ok(dist(nest, t) > bark && dist(nest, t) < bark + NEST.r, `${id}/${t.id}: against the bark (${(dist(nest, t) - bark).toFixed(2)} m out)`);
+      // where he stands to see it while it waits in its nest (the walk hint's end), facing it
+      // — and wherever the hint's last step may leave him: from anywhere within NEST_WATCH.r
+      // of the spot he walks at the nest and stops NEST_WATCH.stop short of it. From each:
+      // the nest at least the runtime's NEST_SEE.px + a margin tall in his picture (its box,
+      // as the runtime measures it), its top under the line card, inside the picture, every
+      // point of it clear of the trunks and his head; not under it; he stands clear of every
+      // trunk
+      const w = nestWatch(r, i);
+      assert.ok(dist(w, nest) >= NEST_WATCH.under + 0.4 && dist(w, nest) <= NEST_SEE.near - 1, `${id}/${t.id}: the spot to see it from stands ${dist(w, nest).toFixed(2)} m off it`);
+      assert.equal(biomeAt(w.x, w.z), 'bos', `${id}/${t.id}: the spot to see it from is in the wood`);
+      // (he looks at a point beside the nest, left of it as he sees it: the nest right of the
+      // middle of his picture, off the middle and away from the chips' corner)
+      const aim = nestAim(nest, w);
+      assert.ok(dist(w.aim, aim) < 1e-9, `${id}/${t.id}: the spot's aim`);
+      assert.ok(Math.abs(dist(aim, nest) - NEST_WATCH.aside) < 1e-9 && wrapA(headingTo(w, aim) - headingTo(w, nest)) > 0.2, `${id}/${t.id}: he looks beside it, to its left`);
+      assert.ok(Math.abs(wrapA(w.heading - headingTo(w, aim))) < 1e-9, `${id}/${t.id}: facing it`);
+      const stands: { x: number; z: number; h: number; tag: string }[] = [{ ...w, h: w.heading, tag: 'at the spot' }];
+      for (let a = -Math.PI; a < Math.PI; a += Math.PI / 6) for (const rr of [NEST_WATCH.r * 0.5, NEST_WATCH.r]) for (const on of [0, NEST_WATCH.carry]) {
+        const s0 = { x: w.x + Math.sin(a) * rr, z: w.z + Math.cos(a) * rr };
+        const d0 = dist(s0, aim);
+        // (he always takes a step: it turns him to it; and the walk may carry him a little on)
+        assert.ok(d0 - w.stop >= NEST_WATCH.step - NEST_WATCH.r - 1e-9 && w.stop - on > 0.5, `${id}/${t.id}: from ${deg(a)}° ${rr} m he steps ${(d0 - w.stop).toFixed(2)} m`);
+        const k0 = (w.stop - on) / d0;
+        const pp = { x: aim.x + (s0.x - aim.x) * k0, z: aim.z + (s0.z - aim.z) * k0 };
+        stands.push({ ...pp, h: headingTo(s0, aim), tag: `stepped from ${deg(a)}° ${rr} m${on ? ', carried on' : ''}` });
+      }
+      const box = new THREE.Box3(new THREE.Vector3(nest.x - NEST.r, g + nest.y - NEST.r, nest.z - NEST.r), new THREE.Vector3(nest.x + NEST.r, g + nest.y + NEST.r, nest.z + NEST.r));
+      const pts = [[0, 0, 0], [0, 0.6, 0], [0.6, 0.1, 0], [-0.6, 0.1, 0], [0, 0.1, 0.6], [0, 0.1, -0.6], [0, -0.5, 0]]
+        .map(([x, y, z]) => ({ x: nest.x + x * NEST.r, y: g + nest.y + y * NEST.r, z: nest.z + z * NEST.r }));
+      for (const st of stands) {
+        const tag = `${id}/${t.id} ${st.tag}`;
+        for (const o of HOME_TREES) assert.ok(dist(o, st) > trunkClear(o) - 0.35, `${tag}: clear of ${o.id}`);
+        assert.ok(dist(st, nest) > NEST_WATCH.under, `${tag}: not under it`);
+        const q = followBox(st, st.h, box);
+        assert.ok(q.inside && Math.abs(q.cx) <= NEST_SEE.x - 0.1 && q.top >= 104, `${tag}: well in his picture, under the line card (x ${q.cx.toFixed(2)}, top ${q.top.toFixed(0)} px)`);
+        assert.ok(((q.cx + 1) / 2) * W >= NEST_SEE.hud.w + 40 || q.cy >= NEST_SEE.hud.h + 40, `${tag}: out of the chips' corner`);
+        // (where the step leaves him: the nest off the middle of his picture)
+        if (st.tag !== "at the spot") assert.ok(q.cx >= 0.1, `${tag}: right of the middle of his picture (x ${q.cx.toFixed(2)})`);
+        // (where the step leaves him, with room; at the spot itself, on his way, at least the
+        // runtime's own threshold)
+        assert.ok(q.px >= NEST_SEE.px + (st.tag === 'at the spot' ? 2 : 6), `${tag}: it stands ${q.px.toFixed(0)} px tall (the moment wants ${NEST_SEE.px})`);
+        const gs = groundY(st.x, st.z);
+        const eye = { x: st.x - Math.sin(st.h) * LENS.back, y: gs + LENS.up, z: st.z - Math.cos(st.h) * LENS.back };
+        // (every point clear of the other pines out to their outline, of its own trunk's bark it
+        // hugs, and of his head; and as the runtime counts it — every trunk out to its outline
+        // — most of it clear)
+        const head: Upright = { x: st.x, z: st.z, y0: gs, y1: gs + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 };
+        // (a trunk between the lens and his head or chest the follow camera fades: it hides
+        // nothing — world/CameraRig, the camera's own fade decision)
+        const shown = HOME_TREES.filter((o) => {
+          const f = trunkFadeUpright(trunk(o), groundY(o.x, o.z));
+          return lineClear(eye, { x: st.x, y: gs + RANGER_STAND_HEIGHT, z: st.z }, [f]) && lineClear(eye, { x: st.x, y: gs + 0.9, z: st.z }, [f]);
+        });
+        const ups = shown.map((o) => (o === t ? { ...trunkUpright(trunk(o), groundY(o.x, o.z)), r: (y: number) => barkRadius(trunk(o), Math.max(0, y - groundY(o.x, o.z))) } : trunkUpright(trunk(o), groundY(o.x, o.z))));
+        for (const pt of pts) assert.ok(lineClear(eye, pt, [...ups, head]), `${tag}: no trunk and not his head in front of the nest`);
+        const runtime = shown.map((o) => trunkUpright(trunk(o), groundY(o.x, o.z)));
+        assert.ok(pts.filter((pt) => lineClear(eye, pt, [...runtime, head])).length / pts.length >= 0.75, `${tag}: most of it clear as the runtime counts it`);
+        // the squirrel peeking out of it is in the picture too ("Kijk, zijn nest!"), its head
+        // under the line card, out of the ball on his side (not into the bark)
+        const pk = nestPeek(nest, st);
+        const qp = followPx(st, st.h, { x: pk.x, y: g + pk.y + 0.33, z: pk.z });
+        assert.ok(qp.inside && qp.y > 104, `${tag}: the squirrel peeking out of its nest is in the picture (${qp.x.toFixed(0)}, ${qp.y.toFixed(0)})`);
+        assert.ok(dist(pk, t) > barkRadius(trunk(t), nest.y) + 0.12, `${tag}: it peeks out of the ball, not out of the bark`);
+        assert.ok(dist(pk, st) < dist(nest, st), `${tag}: on his side of the nest`);
+        assert.equal(nestSolid({ x: eye.x, y: eye.y, z: eye.z }, { x: nest.x, y: g + nest.y, z: nest.z }, { x: st.x, y: gs, z: st.z }), 1, `${tag}: it stands solid there`);
+      }
+      const at = { x: nest.x, y: g + nest.y, z: nest.z };
+      // the follow lens trailing him on any way never runs into it or looks past it at him:
+      // there it fades (as a home tree's crown does), and the lens passes 0.6-0.8 m from some
+      // nests at its own height
+      for (const o of ROUTE_IDS) for (const s of walkOf(ROUTES[o])) {
+        const gs = groundY(s.x, s.z);
+        const lens = { x: s.x - Math.sin(s.h) * LENS.back, y: gs + LENS.up, z: s.z - Math.cos(s.h) * LENS.back };
+        const solid = nestSolid(lens, at, { x: s.x, y: gs, z: s.z });
+        const d = Math.hypot(lens.x - at.x, lens.y - at.y, lens.z - at.z);
+        if (solid) {
+          // (solid, it never looms: at most ~150 px of his picture — played 2026-10-03, the
+          // lens trailing him past the first pine had it 220 px wide at its right shoulder)
+          assert.ok(pxAt(NEST.r * 2, d) <= 150, `${id}/${t.id}: on the ${o} way the lens is ${d.toFixed(2)} m from it (${pxAt(NEST.r * 2, d).toFixed(0)} px), and it stands solid`);
+          assert.ok(lineClear(lens, { x: s.x, y: gs + 1.0, z: s.z }, [{ x: at.x, z: at.z, y0: at.y - NEST.r, y1: at.y + NEST.r, r: () => NEST.r }]), `${id}/${t.id}: on the ${o} way it stands solid between the lens and him`);
+        }
+      }
+    });
+  }
+  assert.ok(n >= 6, `${n} nests`);
+});
+
+test('the dining spots: in the wood, off every way, out of the hide-and-seek rings and the glade; each way passes two, and he sees each for a moment as he goes', () => {
+  const clear = eekhoornClearings(), treeClear = eekhoornTreeClear();
+  const walks = Object.fromEntries(ROUTE_IDS.map((id) => [id, walkOf(ROUTES[id])])) as Record<string, ReturnType<typeof walkOf>>;
+  const lines = ROUTE_IDS.flatMap((id) => walks[id].slice(1).map((s, i) => [walks[id][i], s] as const));
+  const waits = [...new Set(ROUTE_IDS.flatMap((id) => ROUTES[id].waits))];
+  for (const d of DINING) {
+    const reach = d.kind === 'stam' ? STAM.len / 2 : STRONK.r;
+    assert.equal(biomeAt(d.x, d.z), 'bos', `${d.id}: in the wood`);
+    assert.ok(distanceToNetwork(d.x, d.z) > LANE_HALF + 1, `${d.id}: off the paths`);
+    for (const [mid, m] of Object.entries(OTHER_MARKERS)) assert.ok(dist(d, m) >= 8, `${d.id}: 8 m from the ${mid} marker`);
+    assert.ok(dist(d, MARKER) > 2.8, `${d.id}: off the marker ring`);
+    for (const t of HOME_TREES) assert.ok(dist(d, t) > trunkClear(t) + reach * 0.5, `${d.id}: clear of ${t.id}`);
+    for (const t of HIDE_TREES) assert.ok(dist(d, t) > 3.9, `${d.id}: out of the ${t.id} hide-and-seek ring`);
+    for (const t of waits) assert.ok(dist(d, watchSpot(t)) > 1.5 && dist(d, seatOf(t)) > 1.5, `${d.id}: off ${t.id}'s watch spot and seat`);
+    assert.ok(dist(d, GLADE_RING) > GLADE_RING.r && dist(d, LENS_ROOM) > LENS_ROOM.r, `${d.id}: out of the glade and the lens room`);
+    for (const s of SCATTER) assert.ok(dist(d, s) > 1.6, `${d.id}: off the scattered pine at (${s.x}, ${s.z})`);
+    const lineMin = Math.min(...lines.map(([a, b]) => segDist(d, a, b)));
+    assert.ok(lineMin > reach + 0.55, `${d.id}: ${lineMin.toFixed(2)} m off every way he walks`);
+    assert.ok(clear.some((c) => dist(c, d) < c.r - reach * 0.6) && treeClear.some((c) => dist(c, d) < c.r - 0.5), `${d.id}: open ground round it (no fern, no stray pine)`);
+  }
+  // no way shares a dining spot with another: the way is never the last two plays', so the
+  // gnawed cones lie somewhere new every play
+  const used = ROUTE_IDS.flatMap((id) => [...ROUTE_DINING[id]]);
+  assert.equal(new Set(used).size, used.length, 'every way its own two dining spots');
+  for (const a of DINING) for (const b of DINING) if (a !== b) assert.ok(dist(a, b) >= 3, `${a.id} and ${b.id} stand apart`);
+  for (const id of ROUTE_IDS) {
+    const two = ROUTE_DINING[id];
+    assert.equal(new Set(two).size, 2, `${id}: two spots`);
+    for (const did of two) {
+      const d = diningById(did);
+      // walking (or waiting) along the way: within DINING_SEE.within m of him, in the follow
+      // lens, below the line card, no trunk in front of it, ≥ 30 px across, for 1.2 s at least
+      let run = 0, best = 0;
+      for (const s of walks[id]) {
+        const top = { x: d.x, y: groundY(d.x, d.z) + (d.kind === 'stam' ? STAM.r * 2 : STRONK.h), z: d.z };
+        const q = followPx(s, s.h, top);
+        const eye = { x: s.x - Math.sin(s.h) * LENS.back, y: groundY(s.x, s.z) + LENS.up, z: s.z - Math.cos(s.h) * LENS.back };
+        const across = pxAt(d.kind === 'stam' ? STAM.len * 0.6 : STRONK.r * 2, q.d) * 1.0;
+        const ok = dist(s, d) <= DINING_SEE.within && q.inside && Math.abs(q.x - W / 2) < W * 0.45 && q.y > 110
+          && lineClear(eye, top, hiders(eye, s), 0.05) && across >= DINING_SEE.across;
+        run = ok ? run + 0.05 : 0;
+        best = Math.max(best, run);
+      }
+      assert.ok(best >= 1.2, `${id}/${did}: in his picture for ${best.toFixed(2)} s in a row`);
+    }
+  }
+});
+
+test('the seen clock: it runs only while it is in his picture, and a moment out of it starts it again', () => {
+  const c = new SeenClock(1);
+  for (let i = 0; i < 9; i++) assert.equal(c.step(0.1, true), false);
+  assert.equal(c.step(0.1, false), false, 'out of the picture: back to the start');
+  for (let i = 0; i < 9; i++) c.step(0.1, true);
+  assert.equal(c.seen, false);
+  assert.equal(c.step(0.12, true), true, '1 s in a row: seen');
+  assert.equal(c.step(0.1, false), true, 'seen stays seen');
+});
+
+test('the dark visitor at the den: it comes down out of sight onto the bark above ours, in the den look, and runs up out of it', () => {
+  const den = HOME_TREES[0];
+  const g0 = groundY(den.x, den.z);
+  const bark = (t: HomeTree): Upright => ({ ...trunkUpright(trunk(t), groundY(t.x, t.z)), r: (y: number) => barkRadius(trunk(t), Math.max(0, y - groundY(t.x, t.z))) });
+  const onBark = (a: { ang: number; h: number }, out = 0.1): { x: number; y: number; z: number } => {
+    const r = barkRadius(trunk(den), a.h) + out;
+    return { x: den.x + Math.sin(a.ang) * r, y: g0 + a.h, z: den.z + Math.cos(a.ang) * r };
+  };
+  let n = 0;
+  for (const id of ROUTE_IDS) for (let i = 0; i < 6; i++) {
+    const me = { x: MARKER.x + Math.sin(i * 1.05) * 1.2, z: MARKER.z + Math.cos(i * 1.05) * 1.2 };
+    const toward = ROUTES[id].waits[0];
+    // (the den look of a play with this visitor frames a little higher: the two of them)
+    const cam = fitLens(introView(me, toward, DEN_VISITOR.tall));
+    const v = denVisitor({ x: cam.position.x, z: cam.position.z });
+    n += 1;
+    // ours on its stub is still big in it
+    const ot = px(cam, seatOf(den), den.branch!.h + 0.33), ob = px(cam, seatOf(den), den.branch!.h);
+    assert.ok(Math.abs(ob.y - ot.y) >= 60 && ot.y > 100 && ob.y < H - 60, `${id}/${i}: ours reads ${Math.abs(ob.y - ot.y).toFixed(0)} px in the taller den look`);
+    // it starts hidden (behind the trunk from the lens, or above the picture) and leaves so
+    for (const [what, a] of [['starts', v.start], ['ends', v.up]] as const) {
+      const q = px(cam, onBark(a), a.h);
+      assert.ok(!lineClear(cam.position, onBark(a, 0.06), [bark(den)]) || q.y < 0 || q.behind, `${id}/${i}: it ${what} out of sight`);
+    }
+    assert.ok(v.up.h - v.meet.h > 3, `${id}/${i}: it runs up, not down to the ground`);
+    // it meets ours above its stub: in the picture, big, not behind the bark, apart from ours
+    const m = onBark(v.meet);
+    const top = px(cam, m, v.meet.h + 0.3), bot = px(cam, m, v.meet.h);
+    assert.ok(!top.behind && top.x > 60 && top.x < W - 60 && top.y > 100 && bot.y < H - 60, `${id}/${i}: above ours in the den look (${top.x.toFixed(0)}, ${top.y.toFixed(0)})`);
+    assert.ok(Math.abs(bot.y - top.y) >= 60, `${id}/${i}: ${Math.abs(bot.y - top.y).toFixed(0)} px tall`);
+    assert.ok(lineClear(cam.position, m, [bark(den)]), `${id}/${i}: not behind the bark`);
+    assert.ok(Math.hypot(ot.x - top.x, ot.y - top.y) > 50, `${id}/${i}: apart from ours in the picture`);
+    // the spiral round the pine (both of them, about ours's height): its far half is
+    // behind the trunk, its near half in the picture — round, never toward the lens
+    const sp = onBark({ ang: headingTo(den, cam.position), h: DEN_VISITOR.spiralH });
+    const sq = px(cam, sp, DEN_VISITOR.spiralH + 0.2);
+    assert.ok(!sq.behind && sq.y > 100 && sq.y < H - 60, `${id}/${i}: the spiral passes through the picture`);
+  }
+  assert.ok(n >= 18);
+});
+
+test('the young one in the found view: it hides behind the trunk, peeks round its outline, sits up on open ground past the root spurs, away from him — whole in the picture, big enough, clear of the bark\'s outline and of him — and runs up out of the picture', () => {
+  let n = 0, sides = 0;
+  const check = (rid: string, c: HomeTree, sqAng: number, at: { x: number; z: number }, tag: string): void => {
+    const gc = groundY(c.x, c.z);
+    const tr = trunk(c);
+    const bark: Upright = { ...trunkUpright(tr, gc), r: (y: number) => barkRadius(tr, Math.max(0, y - gc)) };
+    // (what hides it on the ground: the trunk out to its ridged outline, root spurs and all —
+    // played 2026-10-04, seed 45: sat 1.0 m from the axis it sat INSIDE a root spur, ~25 px
+    // of fragments showing while 'Gevonden! En nog een kleintje!' was said)
+    const outline = trunkUpright(tr, gc);
+    const onBark = (a: { ang: number; h: number }, out = 0.1): { x: number; y: number; z: number } => {
+      const r = barkRadius(tr, a.h) + out;
+      return { x: c.x + Math.sin(a.ang) * r, y: gc + a.h, z: c.z + Math.cos(a.ang) * r };
+    };
+    const face0 = foundFace(c, sqAng, at);
+    const me = foundStand(c, face0, at);
+    const face = foundFace(c, sqAng, me);
+    const cam = fitLens(foundView(c, face, me, true));
+    const lens = { x: cam.position.x, z: cam.position.z };
+    const y = youngPeek(c, me, lens, face);
+    n += 1;
+    assert.ok(!lineClear(cam.position, onBark(y.start, 0.06), [bark]), `${tag}: it starts behind the trunk from the lens`);
+    // out past the root spurs by its own length: never in among them
+    const out = dist(y.sit, c), need = trunkOutline(tr, 0) + YOUNG.len;
+    assert.ok(out >= need - 1e-9, `${tag}: it sits ${out.toFixed(2)} m from the axis (the root spurs reach ${trunkOutline(tr, 0).toFixed(2)} m, + its length ${YOUNG.len}: want ${need.toFixed(2)})`);
+    // sitting up there: whole in the picture and big enough
+    const H0 = 0.33 * YOUNG.scale;
+    const top = px(cam, y.sit, H0), bot = px(cam, y.sit, 0);
+    assert.ok(!top.behind && top.x > 40 && top.x < W - 40 && top.y > 110 && bot.y < H - 30, `${tag}: it sits in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)}-${bot.y.toFixed(0)})`);
+    assert.ok(bot.y - top.y >= 40, `${tag}: ${(bot.y - top.y).toFixed(0)} px tall`);
+    // whole: its foot, middle and head, and either side of it, clear of the trunk's outline
+    // (root spurs and all), of the other pines and of him
+    const g = groundY(y.sit.x, y.sit.z);
+    const others: Upright[] = HOME_TREES.filter((o) => o !== c).map((o) => trunkUpright(trunk(o), groundY(o.x, o.z)));
+    const boy: Upright = { x: me.x, z: me.z, y0: groundY(me.x, me.z), y1: groundY(me.x, me.z) + RANGER_STAND_HEIGHT * 1.1, r: () => 0.25 };
+    const across = headingTo(lens, y.sit) + Math.PI / 2;
+    for (const k of [0.1, 0.45, 0.85]) for (const u of [-0.08, 0, 0.08]) {
+      const pt = { x: y.sit.x + Math.sin(across) * u, y: g + H0 * k, z: y.sit.z + Math.cos(across) * u };
+      assert.ok(lineClear(cam.position, pt, [outline, boy, ...others]), `${tag}: it is seen whole (${k}, ${u})`);
+    }
+    // on dry, clear ground at the foot: off his feet, off every other pine's outline
+    assert.ok(dist(y.sit, me) > 1.0, `${tag}: not at his feet (${dist(y.sit, me).toFixed(2)} m)`);
+    assert.ok(HOME_TREES.every((o) => o === c || dist(o, y.sit) > trunkOutline(trunk(o), 0) + YOUNG.len), `${tag}: off the other pines`);
+    assert.equal(biomeAt(y.sit.x, y.sit.z), 'bos', `${tag}: in the wood`);
+    assert.ok(Math.abs(g - gc) < 0.4, `${tag}: on the ground by its tree (${(g - gc).toFixed(2)} m)`);
+    // it runs out across the picture, not at the lens: from the trunk's edge to its sit it
+    // comes at most a step nearer the lens
+    const edgeAt = onBark(y.edge, 0.06);
+    assert.ok(dist(edgeAt, lens) - dist(y.sit, lens) <= YOUNG.toLens, `${tag}: it comes ${(dist(edgeAt, lens) - dist(y.sit, lens)).toFixed(2)} m nearer the lens`);
+    // away from him in the picture: him, ours on the bark, the little one on the ground — or,
+    // where a pine stands in front of all of that side, past him on his side (ours, him, it)
+    const tx = px(cam, c, 0.6).x, bx = px(cam, me, 0.9).x;
+    if (y.side === 1) assert.ok(Math.sign(top.x - tx) === -Math.sign(bx - tx), `${tag}: on the far side of the trunk from him (${top.x.toFixed(0)} | trunk ${tx.toFixed(0)} | him ${bx.toFixed(0)})`);
+    else {
+      sides += 1;
+      assert.ok(Math.abs(top.x - bx) > 60, `${tag}: on his side, apart from him (${top.x.toFixed(0)} | him ${bx.toFixed(0)} | trunk ${tx.toFixed(0)})`);
+    }
+    const ours = px(cam, onBark({ ang: face, h: HIDE.h }, 0.08), HIDE.h);
+    assert.ok(Math.hypot(ours.x - top.x, ours.y - top.y) > 60, `${tag}: apart from ours in the picture`);
+    // its way up ends out of the picture
+    const upTop = px(cam, onBark(y.up, 0.06), y.up.h);
+    assert.ok(upTop.y < 0 || upTop.behind || !lineClear(cam.position, onBark(y.up, 0.06), [bark]), `${tag}: it runs up out of the picture`);
+  };
+  for (const rid of ROUTE_IDS) {
+    const c = ROUTES[rid].hide;
+    // where a perfect player finds it (from his last wait's side)…
+    const from = headingTo(c, comesFrom(ROUTES[rid], ROUTES[rid].waits.length - 1));
+    for (let k = -6; k <= 6; k += 3) for (const d of [1.8, 2.6, 3.4]) {
+      const start = { x: c.x + Math.sin(from + k * 0.17) * d, z: c.z + Math.cos(from + k * 0.17) * d };
+      if (dist(start, seatOf(c)) > SEE_D || HOME_TREES.some((o) => dist(o, start) < trunkClear(o))) continue;
+      const res = playHide(c, start, `${rid} young`);
+      if (res.found) check(rid, c, res.sqAng, res.me, `${rid} played from ${deg(from + k * 0.17)}° ${d} m`);
+    }
+    // …and anywhere round the tree, either side of it, near or as far as he may find it from
+    for (let a = -Math.PI; a < Math.PI; a += Math.PI / 6) for (const d of [1.2, 1.4, 2.2, 2.4, 3.2, 3.4, FIND_R]) {
+      const at = { x: c.x + Math.sin(a + 0.5) * d, z: c.z + Math.cos(a + 0.5) * d };
+      if (HOME_TREES.some((o) => dist(o, at) < trunkClear(o))) continue;
+      check(rid, c, a, at, `${rid} ${deg(a)}° ${d} m`);
+    }
+  }
+  assert.ok(n >= 150, `${n} finds`);
+  // (his side is the exception, where a pine stands in front of the far one)
+  assert.ok(sides <= n * 0.1, `${sides} of ${n} on his side`);
+});
+
+test('a play\'s finds: the nest tree and the dining spot from forks of their own (the way, the pattern and the neighbours do not move), replayed by the seed, each comes', () => {
+  const nests = new Map<string, Set<number>>(), spots = new Map<string, Set<string>>();
+  for (let s = 1; s <= 120; s++) {
+    const p = drawEekhoornPlay(newPlay('eekhoorn', s, 1), null);
+    assert.deepEqual(drawEekhoornPlay(newPlay('eekhoorn', s, 1), null), p, `seed ${s} replays`);
+    assert.ok(p.nest >= 0 && p.nest < nestTrees(ROUTES[p.route]).length, `seed ${s}: a nest tree of its way`);
+    assert.ok(ROUTE_DINING[p.route].includes(p.kegels), `seed ${s}: a dining spot of its way`);
+    (nests.get(p.route) ?? nests.set(p.route, new Set()).get(p.route)!).add(p.nest);
+    (spots.get(p.route) ?? spots.set(p.route, new Set()).get(p.route)!).add(p.kegels);
+  }
+  for (const id of ROUTE_IDS) {
+    assert.equal(nests.get(id)?.size, nestTrees(ROUTES[id]).length, `${id}: every nest tree comes`);
+    assert.equal(spots.get(id)?.size, 2, `${id}: both dining spots come`);
+  }
 });

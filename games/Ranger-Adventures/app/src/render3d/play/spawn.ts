@@ -28,6 +28,8 @@ const ANIMAL_MODEL: Record<string, string> = {
   big: 'animal-frisling-piglet',
   das: 'animal-das-badger',
   eekhoorn: 'animal-eekhoorn-squirrel',
+  // run 7 (the eekhoorn's rare visitor): the dark-brown form of the red squirrel, its own coat (Coat.ts)
+  'eekhoorn-donker': 'animal-eekhoorn-squirrel',
   raaf: 'animal-raaf-raven',
   nachtzwaluw: 'animal-nachtzwaluw-nightjar',
   adder: 'animal-adder-snake',
