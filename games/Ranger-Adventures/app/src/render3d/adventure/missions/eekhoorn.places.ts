@@ -298,6 +298,19 @@ export const JAY_CACHE: Readonly<Record<RouteId, Spot>> = {
 /** It acts only while its flight up to the glade oak goes off across his picture or away
  *  from him, never back at him: the flight's heading within `fly` rad of his way to it. */
 export const JAY_FLY = (100 * Math.PI) / 180;
+/**
+ * When the jay buries its acorn (review r1: it acted 12-25 px tall, with the squirrel
+ * running through the same picture or sitting by its fern, so 'De gaai verstopt ook
+ * nootjes!' named something he could not find): only while it stands at least `px` tall in
+ * his picture (its `h` m: about 8 m from the lens, 3-3.5 m ahead of him) and inside the
+ * picture's middle `mid` (−mid…mid across, and the middle share of its height), off his own
+ * body (`body` across), mostly clear of the trunks, he still `close` m from it or more and
+ * its flight up away from him (jayFliesAway); and only while the squirrel is on its stump or
+ * clearly elsewhere (not in the lower half of his picture, `apart` m from the jay at least).
+ * Not in the first `after` s of his walk. If that never comes on his walk, it flies up
+ * without a word, as when he comes on it from the side (within `close` m).
+ */
+export const JAY_SEE = { h: 0.3, px: 28, mid: 0.7, body: 0.1, close: 2.5, apart: 3.0, after: 1.2 } as const;
 export function jayFliesAway(me: Spot, at: Spot = JAY_CACHE.midden): boolean {
   return Math.abs(wrapA(headingTo(at, JAY_WAIT) - headingTo(me, at))) < JAY_FLY;
 }
@@ -725,7 +738,7 @@ export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
  * back from the tree first). `ok`: one did.
  */
 export const FOUND_RUN = {
-  back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, face: (75 * Math.PI) / 180, toward: 0.25, front: 3.0, feet: 0.75,
+  back: 4.6, half: (28 * Math.PI) / 180, body: (9 * Math.PI) / 180, face: (75 * Math.PI) / 180, toward: 0.25, front: 3.0, feet: 1.25,
   step: (2.5 * Math.PI) / 180, runIn: 2,
   pops: [[1.6, 0.7], [1.6, 0.9], [1.9, 0.6], [1.9, 0.8], [2.3, 0.5], [2.3, 0.7], [1.9, 1.0], [2.7, 0.45], [2.7, 0.65]] as readonly (readonly [number, number])[],
   sides: [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9],

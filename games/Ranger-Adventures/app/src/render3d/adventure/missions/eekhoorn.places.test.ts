@@ -22,7 +22,7 @@ import {
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
   drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, HIDE2_TURN, HIDE2_STEP, hide2Stand, denSpot, DEN_DAY, BURY_AT, JAY_CACHE, jayFliesAway, coneDrop, CONE_DROP, type Drawn,
-  FOUND_RUN, foundRun,
+  FOUND_RUN, foundRun, foundRunPath, lensBehind, JAY_SEE,
   NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
 } from './eekhoorn.places.ts';
@@ -610,7 +610,7 @@ test('after a find (ek-day, review r1): he turns toward its glade and its run fr
       assert.ok(dq >= far - 0.3, `${id}: it never comes at the lens (${dq.toFixed(2)} m after ${far.toFixed(2)})`);
       far = Math.max(far, dq);
       // (never over his feet)
-      if (q.alt < 0.3) assert.ok(dist(q, me) >= 0.65, `${id}: never over his feet (${dist(q, me).toFixed(2)} m)`);
+      if (q.alt < 0.3) assert.ok(dist(q, me) >= 1.15, `${id}: never by his feet (${dist(q, me).toFixed(2)} m)`);
     }
     // where it sits up facing him: in his picture, off his body, big enough to read
     const pp = followPx(me, run.face, { x: run.pop.x, y: groundY(run.pop.x, run.pop.z) + 0.15, z: run.pop.z });
@@ -729,15 +729,57 @@ test('the surprises (ek-day): the jay\'s cache lies ahead of him and beside his 
         if (HOME_TREES.some((o) => dist(o, st) < trunkClear(o))) continue;
         n += 1;
         const dd = dist(st, J), off = Math.abs(wrapA(headingTo(st, J) - headingTo(st, P.stand)));
-        // (ahead of him as he sets off, beside his way and near enough that it acts — the
-        // runtime's JAY_SEE: within 6 m, within 45° of his way; its flight up to the glade oak
-        // across his picture or away from him, never back at him: jayFliesAway)
+        // (ahead of him as he sets off, beside his way, so that he walks up past it — where it
+        // acts in his picture is the next test's; its flight up to the glade oak across his
+        // picture or away from him, never back at him: jayFliesAway)
         const pass = segDist(J, st, P.stand);
         if (dd >= 3.5 && dd <= 8.5 && off <= (45 * Math.PI) / 180 && pass >= 1.1 && pass <= 3.0 && jayFliesAway(st, J)) ok += 1;
       }
       assert.ok(ok / n >= 0.7, `${rid}: ahead of him and beside his way from ${ok} of ${n} places round ${t.id}`);
     }
   }
+});
+
+test('the surprises (ek-day, review r1): the jay buries its acorn where he sees it — big, in the middle of his picture, the squirrel\'s run to its stump well away from it — from wherever he found the squirrel', () => {
+  const edge = (1 - JAY_SEE.mid) / 2;
+  let n = 0, opened = 0, apart = 0;
+  const pxs: number[] = [];
+  for (const rid of ROUTE_IDS) {
+    const J = JAY_CACHE[rid];
+    for (const t of rid === 'zuid' ? [ROUTES[rid].hide] : [ROUTES[rid].hide, SECOND_HIDE[rid]]) {
+      for (let a = -Math.PI; a < Math.PI; a += Math.PI / 12) for (const d of [1.2, 2.2, 3.2, FIND_R]) {
+        const at = { x: t.x + Math.sin(a + 0.5) * d, z: t.z + Math.cos(a + 0.5) * d };
+        if (HOME_TREES.some((o) => dist(o, at) < trunkClear(o))) continue;
+        n += 1;
+        // where he stands as it runs off (foundRun), and its real way to its stump
+        const me0 = foundStand(t, foundFace(t, a, at), at);
+        const face = foundFace(t, a, me0);
+        const run = foundRun(me0, face, t);
+        const way = foundRunPath(run.at, t, face, run.side, run.pop, lensBehind(run.at, run.face)).pts;
+        if (Math.min(...way.map((q) => dist(q, J))) >= JAY_SEE.apart) apart += 1;
+        // his walk to the glade (a perfect player: straight along the hint's way, 0.1 m a
+        // step, the follow lens behind him): its window opens before he is `close` m from it
+        let me = { ...run.at };
+        for (let s = 0; s < 150 && dist(me, P.stand) > 1.6; s++) {
+          const h = headingTo(me, wayTo(me, P.stand));
+          me = { x: me.x + Math.sin(h) * 0.1, z: me.z + Math.cos(h) * 0.1 };
+          if (dist(me, J) < JAY_SEE.close) break;
+          const g = groundY(J.x, J.z);
+          const b = followBox(me, h, new THREE.Box3(new THREE.Vector3(J.x - 0.05, g, J.z - 0.05), new THREE.Vector3(J.x + 0.05, g + JAY_SEE.h, J.z + 0.05)));
+          if (b.px >= JAY_SEE.px && Math.abs(b.cx) <= JAY_SEE.mid && Math.abs(b.cx) >= JAY_SEE.body && b.cy >= H * edge && b.cy <= H * (1 - edge) && jayFliesAway(me, J)) {
+            opened += 1; pxs.push(b.px);
+            break;
+          }
+        }
+      }
+    }
+  }
+  console.log(`the jay's window: opens on ${opened} of ${n} walks in, the squirrel's run ≥ ${JAY_SEE.apart} m off it on ${apart}`);
+  assert.ok(opened / n >= 0.95, `its window opens on his walk in (${opened} of ${n})`);
+  assert.ok(apart / n >= 0.75, `the squirrel's run to its stump keeps away from it (${apart} of ${n})`);
+  assert.ok(Math.min(...pxs) >= JAY_SEE.px, 'big enough');
+  // (≈ 8 m from the lens at most: 3-3.5 m ahead of him)
+  assert.ok(pxAt(JAY_SEE.h, 8.3) < JAY_SEE.px && pxAt(JAY_SEE.h, 8.0) >= JAY_SEE.px, `${JAY_SEE.px} px is a ${JAY_SEE.h} m jay about 8 m from the lens`);
 });
 
 test('the surprises (ek-day): a pine cone drops from the pine he walks up to, in front of its trunk beside his way, never on him, never on a trunk', () => {

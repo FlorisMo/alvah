@@ -50,7 +50,7 @@ import {
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
   DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, nestWatch, youngPeek,
-  ANTICS, DEN_KINDS, DEN_DAY, denSpot, EINDES, BURY_AT, SECOND_HIDE, coneDrop, jayFliesAway, hide2Stand, foundRun,
+  ANTICS, DEN_KINDS, DEN_DAY, denSpot, EINDES, BURY_AT, SECOND_HIDE, coneDrop, jayFliesAway, hide2Stand, foundRun, JAY_SEE,
 } from './eekhoorn.places';
 import { ontdekking } from '../../../content/ontdekkingen';
 
@@ -92,13 +92,9 @@ const SWEEP_DIG = 0.25;
 /** Each neighbour's call in the echo game is held to this snippet (s): a blackbird's long
  *  song and a great tit's short pump give the same listening tempo, whoever came today. */
 const CALL_CAP: readonly [number, number] = [0.6, 1.2];
-/** The jay's own cache (run 7, ek-day): it acts once he is within `near` m of it (and not
- *  nearer than `close`), it ahead of him (`ahead` rad off his way at most) and well inside
- *  his picture (not below `low`): he walks up to it as it buries its acorn (played
- *  2026-10-04: from 7.5 m it was a speck some 20 px tall; acting by distance alone it
- *  played at the picture's bottom edge as he passed it). The drum roll comes once he is within
- *  DRUM_NEAR m of the bird on the store pine's bark (it is awake and in sight from there). */
-const JAY_SEE = { near: 6.0, close: 2.5, ahead: (45 * Math.PI) / 180, low: -0.55, after: 1.2 } as const;
+/** The jay's own cache (run 7, ek-day): it acts in its window (eekhoorn.places JAY_SEE).
+ *  The drum roll comes once he is within DRUM_NEAR m of the bird on the store pine's bark
+ *  (it is awake and in sight from there). */
 const DRUM_NEAR = 11;
 /** The second hide (run 7, ek-day): a short one — it slips round at most `most` times, and
  *  stays once he has walked `round` rad round its pine. */
@@ -1079,6 +1075,31 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   void toStump.then((ok) => { if (ok) { onStump = true; sq.glow(true); chatter(); } }, () => {});
   const gladeFrom = k.now;
   let walkingIn = true;
+  /** the jay in his picture now: how tall (px), where across (−1…1), and whether that is in
+   *  its window (eekhoorn.places JAY_SEE: big enough, in the picture's middle, off his body,
+   *  mostly clear of the trunks and of him) */
+  const jayPicture = (): { px: number; cx: number; ok: boolean } | null => {
+    const t = home.jaySight(JAY_SEE.h);
+    if (!t) return null;
+    const cam = k.world.camera, me = k.ranger();
+    const H = k.ctx.canvas.clientHeight || 800, W = k.ctx.canvas.clientWidth || 1280;
+    const g = k.ctx.groundY(me.x, me.z);
+    const pic = pictureOf(cam, H, W, t.box, t.pts, [...home.trunks(cam.position, me), { x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 }]);
+    const edge = (1 - JAY_SEE.mid) / 2;
+    const ok = pic.px >= JAY_SEE.px && Math.abs(pic.cx) <= JAY_SEE.mid && Math.abs(pic.cx) >= JAY_SEE.body
+      && pic.cy >= H * edge && pic.cy <= H * (1 - edge) && pic.clear >= 0.5;
+    return { px: pic.px, cx: pic.cx, ok };
+  };
+  /** the squirrel in the lower half of his picture now (out of it: not) */
+  const squirrelLow = (): boolean => {
+    if (!sq.body || !sq.group.visible) return false;
+    const cam = k.world.camera;
+    cam.updateMatrixWorld();
+    const c = BOX.setFromObject(sq.body).getCenter(V2);
+    if (V1.copy(c).applyMatrix4(cam.matrixWorldInverse).z > -0.3) return false;
+    const s = V1.copy(c).project(cam);
+    return Math.abs(s.x) <= 1 && s.y < 0 && s.y >= -1;
+  };
   /** the jay's own cache: it pushes its acorn into the needles, looks at him, flies up */
   // (it plays while he comes up to it — he walks on meanwhile: short, the line at once)
   const jayMoment = async (): Promise<void> => {
@@ -1106,14 +1127,24 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       if (verr === 'gaai') {
         const j = home.jayAt(), d = dist(m, j);
         k.stats.gaai_d = Math.round(Math.min(k.stats.gaai_d ?? 99, d) * 10) / 10; // (dev read: how near he came)
-        // (ahead of him, well up in his picture: he walks up to it as it buries its acorn)
-        // (not at the walk's first moment, while the squirrel pops up in front of him)
-        if (k.now - gladeFrom < JAY_SEE.after) { /* wait */ } else if (d <= JAY_SEE.near && d >= JAY_SEE.close && Math.abs(wrap(headingTo(m, j) - m.heading)) <= JAY_SEE.ahead) {
-          if (!jayFliesAway(m, j)) k.stats.gaai_back = 1;
-          else if (!inPicture(j, 0.15, 0.75, JAY_SEE.low)) k.stats.gaai_out = 1;
-          else { verrDone = true; void jayMoment().catch(() => {}); }
-        } else if (d < JAY_SEE.close) {
-          // (he came on it from the side or straight at it: it simply flies up to its oak)
+        // (in its window — big and well inside his picture, the squirrel on its stump or
+        // clearly elsewhere: eekhoorn.places JAY_SEE — he walks up to it as it buries its
+        // acorn; not at the walk's first moment)
+        if (k.now - gladeFrom < JAY_SEE.after || d < JAY_SEE.close) { /* wait; or it flies up below */ } else {
+          const pic = jayPicture();
+          const away = jayFliesAway(m, j);
+          const sqElse = onStump || (dist(sq, j) >= JAY_SEE.apart && !squirrelLow());
+          if (pic) { k.stats.gaai_px = Math.round(pic.px); k.stats.gaai_x = Math.round(pic.cx * 100) / 100; }
+          if (pic && pic.ok && away && sqElse) {
+            k.stats.gaai_sq = Math.round(dist(sq, j) * 10) / 10;
+            k.stats.gaai_stump = onStump ? 1 : 0;
+            verrDone = true;
+            void jayMoment().catch(() => {});
+          } else if (pic?.ok && !sqElse) k.stats.gaai_wait_sq = 1;
+        }
+        if (!verrDone && d < JAY_SEE.close) {
+          // (he came on it from the side or straight at it, or its window never came: it simply
+          // flies up to its oak, without a word)
           verrDone = true;
           k.stats.gaai_up = 1;
           home.jayUp(1.8);

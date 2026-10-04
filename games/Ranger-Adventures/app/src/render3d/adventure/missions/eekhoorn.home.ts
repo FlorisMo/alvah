@@ -603,6 +603,17 @@ export class EekhoornHome implements HomeDressing {
     b.o.rotation.set(0, b.baseYaw, 0);
     this.perchOf(b);
   }
+  /** What he sees of the jay now (eekhoorn.places JAY_SEE): a slim box `h` m tall where it
+   *  stands (its height, not its length: a box as long as the bird reads taller from above)
+   *  and a few points on its body; null while it is not there. */
+  jaySight(h: number): { box: THREE.Box3; pts: THREE.Vector3[] } | null {
+    const b = this.birds.find((q) => q.kind === 'gaai');
+    if (!b || !b.o.visible || b.fly >= 0) return null;
+    const p = b.o.position, r = 0.05, y = b.o.rotation.y;
+    const box = new THREE.Box3(new THREE.Vector3(p.x - r, p.y, p.z - r), new THREE.Vector3(p.x + r, p.y + h, p.z + r));
+    const pts = [[0, 0.35], [0, 0.7], [0.4, 0.45], [-0.4, 0.45]].map(([u, k]) => new THREE.Vector3(p.x + Math.sin(y) * u * h, p.y + k * h, p.z + Math.cos(y) * u * h));
+    return { box, pts };
+  }
   /** The jay pushes its acorn into the needles in front of its beak (three pecks). */
   jayBury(): void {
     const b = this.birds.find((q) => q.kind === 'gaai');
