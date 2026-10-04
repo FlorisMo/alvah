@@ -274,6 +274,49 @@ export const JAY_GROUND: Spot = g(-0.2, 1.45);
  *  never half behind the trunk. */
 export const WOODPECKER = { tree: TREE.storePine, h: 1.2, ang: headingTo(TREE.storePine, g(-1.0, -1.9)) + 1.5 } as const;
 
+/** Run 7 (ek-day, the ending `begraaf`): where it buries one last acorn by its stump and
+ *  pats it down — beside the stump on the side away from its store and the jay's way, in
+ *  the callers' picture, a little further from the lens than the stump (it runs there
+ *  across the picture, never toward the lens), off every caching spot (the places test). */
+export const BURY_AT: Spot = g(-2.0, 0.75);
+
+/**
+ * Run 7 (ek-day, the surprise `gaai`): where the jay buries an acorn of its own on a play
+ * with that surprise — on the needles at the glade's edge, ahead of him and beside his
+ * way as he walks from the pine he found the squirrel round to the glade (3.5-8.5 m on,
+ * off his straight line: he walks past it), off the caching spots, the store and the
+ * trunks (the places test, from wherever he may have found it). It waits there from the
+ * briefing (a jay foraging on the ground), and when he comes it pushes its acorn into the
+ * needles, looks at him and flies up to the glade oak — where it waits for the store.
+ */
+export const JAY_CACHE: Readonly<Record<RouteId, Spot>> = {
+  midden: { x: 15.0, z: -56.5 }, noord: { x: 15.0, z: -56.5 }, zuid: { x: 17.25, z: -60.75 },
+};
+/** It acts only while its flight up to the glade oak goes off across his picture or away
+ *  from him, never back at him: the flight's heading within `fly` rad of his way to it. */
+export const JAY_FLY = (100 * Math.PI) / 180;
+export function jayFliesAway(me: Spot, at: Spot = JAY_CACHE.midden): boolean {
+  return Math.abs(wrapA(headingTo(at, JAY_WAIT) - headingTo(me, at))) < JAY_FLY;
+}
+
+/**
+ * Run 7 (ek-day, the surprise `denappel`): where a pine cone drops beside his path as he
+ * walks under a pine of the squirrel's wood: `ahead` m in front of him, `side` m to one
+ * side (never on him), under a home pine's crown (`under`: within that of its trunk, but
+ * out past its root spurs `clear`) — the first that fits, or null. `heading`: his way.
+ */
+export const CONE_DROP = { ahead: [2.6, 3.3, 4.0], side: [1.4, 1.8], under: 2.8, clear: 1.25, from: 6.5 } as const;
+export function coneDrop(me: Spot, heading: number): (Spot & { tree: HomeTree }) | null {
+  for (const a of CONE_DROP.ahead) for (const sd of CONE_DROP.side) for (const s of [1, -1]) {
+    const p = { x: me.x + Math.sin(heading) * a + Math.cos(heading) * sd * s, z: me.z + Math.cos(heading) * a - Math.sin(heading) * sd * s };
+    const tree = HOME_TREES.find((t) => t.species === 'prop-pine-scots' && dist(t, p) <= CONE_DROP.under && dist(t, p) >= CONE_DROP.clear);
+    if (!tree || HOME_TREES.some((t) => dist(t, p) < CONE_DROP.clear)) continue;
+    if (DINING.some((d) => dist(d, p) < 1.0)) continue;
+    return { ...p, tree };
+  }
+  return null;
+}
+
 /** Where a forgotten acorn grows into an oak seedling (after, on a later visit): in the
  *  glade between the caching spots and the big oak, off every spot (the acorns the child
  *  helped find are all back in the store: this one was forgotten long before). */

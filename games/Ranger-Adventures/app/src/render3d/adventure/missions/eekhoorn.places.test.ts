@@ -21,7 +21,7 @@ import {
   seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
-  drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, denSpot, DEN_DAY, type Drawn,
+  drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, denSpot, DEN_DAY, BURY_AT, JAY_CACHE, jayFliesAway, coneDrop, CONE_DROP, type Drawn,
   NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
 } from './eekhoorn.places.ts';
@@ -310,7 +310,7 @@ function lensSeesHalf(me: { x: number; z: number }, camH: number, pts: { x: numb
 }
 
 /** A perfect player's hide-and-seek round `c` from his last wait's side: where he finds it. */
-function playHide(c: HomeTree, start: { x: number; z: number }, id: string): { found: boolean; slips: number; round: number; me: { x: number; z: number }; sqAng: number } {
+function playHide(c: HomeTree, start: { x: number; z: number }, id: string, o: { most: number; round: number } = HIDE): { found: boolean; slips: number; round: number; me: { x: number; z: number }; sqAng: number } {
   const cR = barkRadius(trunk(c), HIDE.h);
   let me = { ...start };
   let heading = headingTo(me, c);
@@ -343,7 +343,7 @@ function playHide(c: HomeTree, start: { x: number; z: number }, id: string): { f
     camH += Math.max(-1.6 * dt, Math.min(1.6 * dt, wrapA(heading - camH)));
     if (slipping > 0) { slipping -= dt; continue; }
     const pts = clingPoints(c, sqAng, HIDE.h);
-    if (hiding && (round >= HIDE.round || slips >= HIDE.most)) hiding = false;
+    if (hiding && (round >= o.round || slips >= o.most)) hiding = false;
     if (hiding) {
       const next = hideShift(c, sqAng, [headingTo(c, me), headingTo(c, eyeAt())], lensSeesOf(me, camH, pts) > 0);
       if (next !== null) {
@@ -385,6 +385,36 @@ test('hide-and-seek round every hide tree: it keeps the trunk between them, slip
     }
     assert.ok(starts >= 8, `${rid}: ${starts} ways up to it tried`);
   }
+});
+
+test('the second hide (ek-day): from where he found it the first time, a short hide-and-seek round the close pine — it slips once at most, he walks a little round, then it is in view', () => {
+  const short = { most: 1, round: HIDE.round * 0.6 };
+  let n = 0;
+  for (const rid of ROUTE_IDS) {
+    const r = ROUTES[rid], c = r.hide, t2 = SECOND_HIDE[rid];
+    const from = headingTo(c, comesFrom(r, r.waits.length - 1));
+    for (let k = -6; k <= 6; k += 2) for (const d of [1.8, 2.6, 3.4]) {
+      const start = { x: c.x + Math.sin(from + k * 0.17) * d, z: c.z + Math.cos(from + k * 0.17) * d };
+      if (dist(start, seatOf(c)) > SEE_D || HOME_TREES.some((o) => dist(o, start) < trunkClear(o))) continue;
+      const first = playHide(c, start, `${rid} first`);
+      if (!first.found) continue;
+      // he stands where the found view left him, and takes a step toward the next pine
+      const face = foundFace(c, first.sqAng, first.me);
+      const at0 = foundStand(c, face, first.me);
+      const toward = headingTo(at0, t2);
+      const me = { x: at0.x + Math.sin(toward) * 0.35, z: at0.z + Math.cos(toward) * 0.35 };
+      for (const o of HOME_TREES) assert.ok(dist(o, me) > trunkClear(o) - 0.35, `${rid}: his step clears ${o.id}`);
+      // its dash there runs ahead of him (never at his feet: the trunks it leaves and lands on
+      // are both in front of him)
+      const res = playHide(t2, me, `${rid}/${t2.id} second from ${k}/${d}`, short);
+      n += 1;
+      assert.ok(res.found, `${rid}: found round ${t2.id} too (from ${k}/${d})`);
+      assert.ok(res.slips <= 1, `${rid}: a short one (${res.slips} slips)`);
+      assert.ok(res.round < 3.6, `${rid}: not round and round (${deg(res.round)}°)`);
+      assert.equal(biomeAt(res.me.x, res.me.z), 'bos');
+    }
+  }
+  assert.ok(n >= 12, `${n} second hides played`);
 });
 
 test('hide-and-seek: right up at the bark on its side (where a child steering at its chatter ends up) he is by it; round the side he is not', () => {
@@ -509,11 +539,12 @@ test('the found view: on his side of the tree, him whole at one side, the squirr
       const res = playHide(c, start, `${rid} found view`);
       if (res.found) check(rid, c, res.sqAng, res.me);
     }
-    // …and anywhere on its side, near or as far as he may find it from
-    for (let a = -Math.PI; a < Math.PI; a += Math.PI / 6) for (const d of [1.2, 2.2, 3.2, FIND_R]) {
-      const me = { x: c.x + Math.sin(a + 0.5) * d, z: c.z + Math.cos(a + 0.5) * d };
+    // …and anywhere on its side, near or as far as he may find it from (run 7, ek-day: round
+    // its second hide pine too)
+    for (const t of [c, SECOND_HIDE[rid]]) for (let a = -Math.PI; a < Math.PI; a += Math.PI / 6) for (const d of [1.2, 2.2, 3.2, FIND_R]) {
+      const me = { x: t.x + Math.sin(a + 0.5) * d, z: t.z + Math.cos(a + 0.5) * d };
       if (HOME_TREES.some((o) => dist(o, me) < trunkClear(o))) continue;
-      check(rid, c, a, me);
+      check(`${rid}/${t.id}`, t, a, me);
     }
   }
   assert.ok(n >= 60, `${n} finds framed`);
@@ -560,6 +591,68 @@ test('the den (ek-day): every opening stands in the den look, big and whole — 
   }
   void g0;
   console.log(report.filter((_, i) => i % 5 === 0).join('\n'));
+});
+
+test('the ending (ek-day): it buries its last acorn beside its stump, in the callers\' picture, never toward the lens, off the store, the jay and the caching spots', () => {
+  const cam = fitLens(CALLERS_VIEW);
+  const lens = { x: cam.position.x, z: cam.position.z };
+  const ds = dist(BURY_AT, STUMP);
+  assert.ok(ds >= 0.55 && ds <= 1.1, `beside the stump (${ds.toFixed(2)} m)`);
+  for (const h of HEAP_SPOTS) assert.ok(dist(h, BURY_AT) >= 0.55, 'off its store');
+  for (const j of [...JAY_RETREAT, JAY_GROUND]) assert.ok(dist(j, BURY_AT) >= 0.6, 'off the jay\'s way');
+  assert.ok(dist(TREE.storePine, BURY_AT) >= 0.95, 'off the store pine');
+  for (const sym of FIELD_SYMS) for (const s of gladeSpots(sym)) assert.ok(dist(s, BURY_AT) >= 0.55, `off the caching spot ${sym}/${s.id}`);
+  // from its stump top across the picture and a little away from the lens, never toward it
+  assert.ok(dist(BURY_AT, lens) >= dist(STUMP, lens) - 0.05, 'never toward the lens');
+  const top = px(cam, BURY_AT, 0.33), bot = px(cam, BURY_AT, 0);
+  assert.ok(!top.behind && top.x > 100 && top.x < W - 100 && top.y > 140 && bot.y < H - 100, `in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)}–${bot.y.toFixed(0)})`);
+  assert.ok(Math.abs(bot.y - top.y) >= 50, `big enough (${Math.abs(bot.y - top.y).toFixed(0)} px)`);
+  // the stump is not in front of it (seen past its side)
+  const g0 = groundY(STUMP.x, STUMP.z);
+  assert.ok(lineClear(cam.position, { ...BURY_AT, y: groundY(BURY_AT.x, BURY_AT.z) + 0.15 }, [{ x: STUMP.x, z: STUMP.z, y0: g0, y1: g0 + STUMP.h, r: () => STUMP.r }]), 'not behind the stump');
+  assert.equal(biomeAt(BURY_AT.x, BURY_AT.z), 'bos');
+});
+
+test('the surprises (ek-day): the jay\'s cache lies ahead of him and beside his way into the glade, wherever he found the squirrel; it flies off away from him', () => {
+  const spots = FIELD_SYMS.flatMap((sym) => gladeSpots(sym));
+  for (const rid of ROUTE_IDS) {
+    const J = JAY_CACHE[rid];
+    assert.equal(biomeAt(J.x, J.z), 'bos');
+    for (const t of HOME_TREES) assert.ok(dist(t, J) > trunkClear(t) + 0.5, `${rid}: off ${t.id}`);
+    for (const q of spots) assert.ok(dist(q, J) >= 1.0, `${rid}: off the caching spots`);
+    for (const q of [STUMP, SNAG, ...HEAP_SPOTS, ...JAY_RETREAT]) assert.ok(dist(q, J) >= 1.0, `${rid}: off the store, the snag and the jay's own way back`);
+    for (const d of DINING) assert.ok(dist(d, J) >= 1.5, `${rid}: off the dining spot ${d.id}`);
+    assert.ok(dist(J, P.stand) >= 2.4, `${rid}: before the glade's stand`);
+    // (from where he may have found the squirrel: round its hide pine — twice the weight —
+    // or round the second one)
+    let ok = 0, n = 0;
+    for (const [t, w] of [[ROUTES[rid].hide, 2], [SECOND_HIDE[rid], 1]] as const) for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) for (const d of [1.6, 2.1, 2.6]) {
+      const st = { x: t.x + Math.sin(a) * d, z: t.z + Math.cos(a) * d };
+      if (HOME_TREES.some((o) => dist(o, st) < trunkClear(o))) continue;
+      n += w;
+      const dd = dist(st, J), off = Math.abs(wrapA(headingTo(st, J) - headingTo(st, P.stand)));
+      // (where it acts its flight up to the glade oak goes off across his picture or away
+      // from him, never back at him: the runtime asks the same, jayFliesAway)
+      if (dd >= 3.5 && dd <= 8.5 && off <= (55 * Math.PI) / 180 && segDist(J, st, P.stand) >= 1.1 && jayFliesAway(st, J)) ok += w;
+    }
+    assert.ok(ok / n >= 0.65, `${rid}: ahead of him and beside his way from ${ok} of ${n} places he may have found it`);
+  }
+});
+
+test('the surprises (ek-day): a pine cone drops beside his path under a pine, never on him, never on a trunk', () => {
+  let n = 0;
+  for (let x = 10; x <= 27; x += 0.5) for (let z = -62; z <= -42; z += 0.5) for (let h = 0; h < Math.PI * 2; h += Math.PI / 4) {
+    const me = { x, z };
+    const c = coneDrop(me, h);
+    if (!c) continue;
+    n += 1;
+    const ahead = (c.x - me.x) * Math.sin(h) + (c.z - me.z) * Math.cos(h);
+    const side = Math.abs((c.x - me.x) * Math.cos(h) - (c.z - me.z) * Math.sin(h));
+    assert.ok(ahead >= 2.5 && ahead <= 4.1 && side >= 1.35, `beside his way (${ahead.toFixed(2)} ahead, ${side.toFixed(2)} aside)`);
+    assert.ok(dist(c, c.tree) <= CONE_DROP.under, 'under a pine');
+    for (const t of HOME_TREES) assert.ok(dist(t, c) >= CONE_DROP.clear, `not on ${t.id}`);
+  }
+  assert.ok(n > 200, `${n} drops`);
 });
 
 test('the den look turns to the side the squirrel will lead him', () => {
