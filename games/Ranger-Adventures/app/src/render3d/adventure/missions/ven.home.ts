@@ -460,7 +460,8 @@ export class VenHome implements HomeDressing {
        spot an instance), the heath blue on a cotton-grass head and the stonechat on a dry
        stalk a play lays in its cove (the look-alikes) -- */
     const clodGeo = clodGeometry();
-    const clodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+    // (the frog's own warm brown, lit a little in the sedge's shade as he is: a look-alike)
+    const clodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, emissive: '#2a1b12' });
     this.made.push({ geometry: clodGeo, material: clodMat });
     const detail = coves;
     const spots = BAY_IDS.flatMap((id) => clodSpots(BAYS[id]));
@@ -475,7 +476,7 @@ export class VenHome implements HomeDressing {
     const anchors: THREE.Object3D[] = [];
     spots.forEach((p, i) => {
       const sc = 0.9 + ((i * 7) % 5) * 0.06;
-      clodAt.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, g(p.x, p.z) - 0.015, p.z), new THREE.Quaternion().setFromAxisAngle(UP, i * 1.9 + 0.4), new THREE.Vector3(sc, sc, sc)));
+      clodAt.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, g(p.x, p.z) - 0.008, p.z), new THREE.Quaternion().setFromAxisAngle(UP, i * 1.9 + 0.4), new THREE.Vector3(sc, sc, sc)));
       const a = new THREE.Object3D();
       a.name = `ven-clod-${i}`;
       a.position.set(p.x, g(p.x, p.z) + 0.08, p.z);
@@ -915,19 +916,19 @@ function cottonGeometry(): THREE.BufferGeometry {
   return out;
 }
 
-/** A frog-sized moss clod (~0.22 × 0.12 m, as high as the frog sits): a lumpy mound of peat
+/** A frog-sized moss clod (~0.24 × 0.12 m, as high as the frog sits): a lumpy mound of peat
  *  and moss, dark below, red-brown and mossy on top with darker flecks — the frog's own
  *  colours, a look-alike between the sedge. Vertex colours. */
 function clodGeometry(): THREE.BufferGeometry {
   const geo = new THREE.IcosahedronGeometry(1, 2);
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const col = new Float32Array(pos.count * 3);
-  const low = new THREE.Color('#3f2f22'), mid = new THREE.Color('#8b5e3e'), top = new THREE.Color('#6d7438'), fleck = new THREE.Color('#4a3424');
+  const low = new THREE.Color('#4a3626'), mid = new THREE.Color('#94684a'), top = new THREE.Color('#7d6f44'), fleck = new THREE.Color('#4a3424');
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
     const lump = 1 + 0.14 * Math.sin(x * 5.1 + z * 3.3) * Math.cos(y * 4.2 - x * 2.1);
-    pos.setXYZ(i, x * 0.11 * lump, (Math.max(-0.25, y) + 0.25) * 0.1 * lump, z * 0.085 * lump);
+    pos.setXYZ(i, x * 0.12 * lump, (Math.max(-0.25, y) + 0.25) * 0.1 * lump, z * 0.095 * lump);
     const k = (y + 1) / 2;
     c.copy(low).lerp(mid, Math.min(1, k * 1.5));
     if (k > 0.75) c.lerp(top, ((k - 0.75) / 0.25) * (0.35 + 0.35 * Math.sin(x * 9 + z * 7)));

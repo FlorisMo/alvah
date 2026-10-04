@@ -235,7 +235,7 @@ export const COVES: Readonly<Record<BayId, CoveSpec>> = {
       { u: -1.45, v: -0.45, side: 1, turn: 0.9, px: [284, 405] }, { u: -0.7, v: -0.25, side: -1, turn: -0.9, px: [506, 498] },
       { u: 1.25, v: 0.55, side: -1, turn: -0.9, px: [832, 292] }, { u: 0.5, v: 0.55, side: -1, turn: -0.9, px: [703, 321] },
     ],
-    clods: [{ u: -1.2, v: 0.3 }, { u: 0.6, v: 0.1 }, { u: -0.4, v: 0.1 }, { u: 0.1, v: 0.7 }, { u: -0.3, v: 0.7 }],
+    clods: [{ u: -1.25, v: 0.6 }, { u: 0.6, v: 0.1 }, { u: -0.4, v: 0.1 }, { u: 0.1, v: 0.7 }, { u: -0.3, v: 0.7 }],
     butterflies: [{ u: 1.0, v: -0.3 }, { u: 0.1, v: -0.1 }],
     birds: [{ u: -0.1, v: 0.4 }, { u: -0.3, v: -0.5 }],
   },
@@ -286,7 +286,7 @@ function bay(id: BayId): Bay {
   const frame: Frame = { ...mid, heading: headingTo(mid, C) };
   // (the frog sits turned `turn` off the search lens's line of sight to him: the same
   // three-quarter back view at every nook, whichever side the lens looks from)
-  const lensNear = (side: Side): Spot => atLocal({ ...atLocal(frame, 0, 0.06), heading: frame.heading + side * COVE_LENS.turn }, 0, -1.9);
+  const lensNear = (side: Side): Spot => searchLensNear(frame, side);
   const nooks = spec.nooks.map((n, i): FrogSpot => {
     const p = atLocal(frame, n.u, n.v);
     return { ...p, yaw: headingTo(lensNear(n.side), p) + n.turn, side: n.side, nook: i };
@@ -314,7 +314,25 @@ function bay(id: BayId): Bay {
   };
 }
 
+/** About where the search's lens stands over a cove searched from `side` (its ground spot:
+ *  ~1.9 m back from the view's middle along its heading; the fit puts it within a few cm). */
+function searchLensNear(frame: Frame, side: Side): Spot {
+  return atLocal({ ...atLocal(frame, 0, 0.06), heading: frame.heading + side * COVE_LENS.turn }, 0, -1.9);
+}
+
 export const BAYS: Readonly<Record<BayId, Bay>> = { A: bay('A'), B: bay('B'), C: bay('C') };
+
+/** Is `q` hidden behind the boy in the search's picture from `side` (seen from above his big
+ *  hair shades the ground beyond him, away from the lens)? A look-alike is never laid there. */
+export function underBoy(b: Bay, side: Side, q: Spot): boolean {
+  const L = searchLensNear(b.frame, side), B = b.stands[side];
+  const ex = B.x - L.x, ez = B.z - L.z, e2 = ex * ex + ez * ez || 1;
+  const dx = q.x - L.x, dz = q.z - L.z;
+  const t = (dx * ex + dz * ez) / e2;
+  if (t < 0.8 || t > 2.3) return false;
+  const lateral = Math.abs(dx * ez - dz * ex) / Math.sqrt(e2);
+  return lateral < 0.42 + 0.15 * (t - 1);
+}
 
 /** A spot in a cove's frame (world). */
 export function inCove(b: Bay, u: number, v: number): Spot { return atLocal(b.frame, u, v); }
@@ -785,7 +803,7 @@ export function frogOf(l: Pick<VenLaid, 'bay' | 'nook'>): FrogSpot {
  * The look-alikes of this play's trial laid in its cove (seeded): the moss clods ('bush'
  * decoys) on the cove's clod slots and in its nooks the frog does not use this play (an
  * empty nook's sedge ring with a clod in it is the frog's double), the butterfly and the
- * bird on theirs.
+ * bird on theirs — never one the boy would stand in front of in this play's picture.
  */
 export function decoySlots(b: Bay, nook: number, decoys: readonly { id: string; k: string }[], rng: () => number): { id: string; k: string; x: number; z: number }[] {
   const shuffled = <T>(xs: readonly T[]): T[] => {
@@ -793,9 +811,12 @@ export function decoySlots(b: Bay, nook: number, decoys: readonly { id: string; 
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     return a;
   };
+  // (never a look-alike behind the boy in this play's picture: from his side)
+  const side = b.nooks[nook].side;
+  const seen = (q: Spot): boolean => !underBoy(b, side, q);
   const pools: Record<string, Spot[]> = {
-    bush: shuffled([...b.slots.clods, ...b.nooks.filter((n) => n.nook !== nook).map((n) => ({ x: n.x, z: n.z }))]),
-    butterfly: shuffled(b.slots.butterflies), bird: shuffled(b.slots.birds),
+    bush: shuffled([...b.slots.clods, ...b.nooks.filter((n) => n.nook !== nook).map((n) => ({ x: n.x, z: n.z }))].filter(seen)),
+    butterfly: shuffled(b.slots.butterflies.filter(seen)), bird: shuffled(b.slots.birds.filter(seen)),
   };
   const out: { id: string; k: string; x: number; z: number }[] = [];
   for (const d of decoys) {
@@ -807,8 +828,8 @@ export function decoySlots(b: Bay, nook: number, decoys: readonly { id: string; 
 }
 
 /** A moss clod's size (m): as long and as high as it lies (ven.home clodGeometry). */
-export const CLOD_LEN = 0.2;
-export const CLOD_H = 0.11;
+export const CLOD_LEN = 0.22;
+export const CLOD_H = 0.12;
 
 /** The play's moss clods (its trial's 'bush' look-alikes), wherever they lie. */
 export function clodsOf(decoys: readonly { k: string; x: number; z: number }[]): Spot[] {
@@ -832,7 +853,7 @@ export function fitCove(stems: Stem[], built: readonly Built[], eye: V3, frog: S
   fitWindow(stems, built, eye, mine, glimpse, at);
   // (a clod's window the frog's fit closed again opens once more, only opening; if that
   // showed more of the frog, his own ring closes it again, never a stem a clod needs)
-  pts.forEach((q) => { if (visibleShare(q, eye, stems) < glimpse * 0.6) openWindow(stems, eye, q, glimpse); });
+  pts.forEach((q) => { if (visibleShare(q, eye, stems) < glimpse) openWindow(stems, eye, q, glimpse); });
   if (visibleShare(mine, eye, stems) > glimpse + FIT_BAND + 1e-9) {
     const keep = new Set<number>();
     stems.forEach((s, i) => { if (s.h < built[i].h - 1e-6) keep.add(i); });

@@ -32,7 +32,7 @@ import { eekhoornClearings } from './eekhoorn.places.ts';
 import {
   ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
-  above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet,
+  above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet, underBoy,
   lastVenVariants, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
   type BayId, type FrogSpot, type Side, type ViewSpec,
 } from './ven.places.ts';
@@ -238,9 +238,22 @@ test('the search: every nook partly visible at every level, off the middle, big 
       for (const n of spec.nooks) assert.ok(Math.hypot(q.u - n.u, q.v - n.v) >= 0.35, `cove ${id}: slot ${k} keeps 0.35 m off nook (${n.u}, ${n.v})`);
       for (const q2 of slots.slice(k + 1)) assert.ok(Math.hypot(q.u - q2.u, q.v - q2.v) >= 0.3, `cove ${id}: slots ${k} apart`);
     }
-    for (const side of SIDES) for (const q of [...b.slots.clods, ...b.slots.butterflies, ...b.slots.birds]) {
-      const p = screenAt(cams[side], q, 0.06);
-      assert.ok(p.x > 60 && p.x < W - 60 && p.y > b.views.search[side].insetTop + 20 && p.y < H - 40, `cove ${id}: a look-alike slot ${at(q)} is in the picture from side ${side}`);
+    // every look-alike spot (a slot, or a nook a clod may fill) is in the picture from either
+    // side, and never under the boy (his hair is big seen from above)
+    for (const side of SIDES) {
+      const boy = boyBox(cams[side], b.stands[side]);
+      for (const q of [...b.slots.clods, ...b.slots.butterflies, ...b.slots.birds, ...b.nooks]) {
+        const p = screenAt(cams[side], q, 0.06);
+        assert.ok(p.x > 60 && p.x < W - 60 && p.y > b.views.search[side].insetTop + 20 && p.y < H - 40, `cove ${id}: a look-alike spot ${at(q)} is in the picture from side ${side}`);
+        // (the box is a little wider than his drawn hair: no margin on top of it)
+        const under = !(p.x < boy.x0 || p.x > boy.x1 || p.y < boy.y0 || p.y > boy.y1);
+        if (under) assert.ok(underBoy(b, side, q), `cove ${id}: a look-alike spot ${at(q)} lies under the boy from side ${side} (at ${p.x.toFixed(0)}, ${p.y.toFixed(0)}) and is not left out`);
+      }
+      // …and enough are left: five clods, a heath blue and a stonechat
+      const free = (qs: readonly Spot[]): number => qs.filter((q) => !underBoy(b, side, q)).length;
+      for (const n of b.nooks.filter((m) => m.side === side)) {
+        assert.ok(free([...b.slots.clods, ...b.nooks.filter((m) => m !== n)]) >= 5 && free(b.slots.butterflies) >= 1 && free(b.slots.birds) >= 1, `cove ${id} side ${side}: look-alikes enough beside the boy`);
+      }
     }
   }
   // the eighteen nooks fall at many places over the picture: any two of a cove ≥ 60 px apart
