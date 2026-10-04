@@ -26,6 +26,7 @@
 
 import * as THREE from 'three';
 import type { DressingEnv } from '../../world/Residents';
+import { listenerOf } from '../../world/Residents';
 import type { Spawned } from '../../play/types';
 import type { ActorEnv } from '../actors';
 import type { Spot } from '../types';
@@ -56,6 +57,9 @@ const HOVER_S: readonly [number, number] = [0.8, 2.4];
 const FEATHER_LEN = 0.3;
 /** The heath blue sits on a heather tip this high (m); it flutters up when he is this near. */
 const BLUE_PERCH = 0.24;
+/** The heath blue on the path is drawn half again the look-alike's size (wings ~0.24 m
+ *  open, ~8× life): it flutters a few metres in front of him, 7 m from the lens. */
+const BUTTERFLY_H = 0.042;
 const BUTTERFLY_NEAR = 2.6;
 
 /** What a play's life is laid with (ven.ts `prepare`). */
@@ -105,6 +109,7 @@ export class VenLife3d {
   private upend = { t: -1, next: 9 };
   private stray = { i: -1, t: 0, lag: 0, next: 7 };
   private readonly duckRnd = stream(911);
+  private quackIn = 4;
   /** the family's box now (for seeing it) */
   readonly familyBox = new THREE.Box3();
 
@@ -175,7 +180,7 @@ export class VenLife3d {
     this.flyGroup = env.detail(BAYS.B.frame, { near: 30, far: 36, own: true });
     this.flyGroup.add(flies);
     // the heath blue and the feather (laid for a play)
-    void env.spawnModel('heideblauwtje', { idle: false }).then((sp) => {
+    void env.spawnModel('heideblauwtje', { height: BUTTERFLY_H, idle: false }).then((sp) => {
       if (!sp || this.disposed) { sp?.dispose(); return; }
       this.spawned.push(sp);
       const r = sp.root as THREE.Object3D;
@@ -382,12 +387,23 @@ export class VenLife3d {
   update(dt: number, reduced: boolean, me: { x: number; z: number } | null, cam: THREE.Camera | null): void {
     this.clock += dt;
     this.updateDucks(dt, reduced);
+    // in free roam she chats to her ducklings now and then: a soft "kwak kwak", heard within
+    // ~20 m (in a play the frogs' chorus is the sound he follows: she keeps quiet then)
+    this.quackIn -= dt;
+    if (this.quackIn <= 0) {
+      this.quackIn = 7 + this.duckRnd() * 9;
+      const m = this.mother;
+      if (!this.laid && m && cam && store.get().settings.geluid && !(typeof window !== 'undefined' && window.speechSynthesis?.speaking)) {
+        Sound.callAt('eend', m.position.x, m.position.z, listenerOf(cam), 22);
+      }
+    }
     this.updateFlies(dt, reduced);
     this.updateButterfly(dt, reduced, me);
     // the plopping frogs: he comes near on a walk and one plops in
+    // (a frog leaping or diving goes on moving after it was set off: every shown one is updated)
+    for (const f of this.frogPool) if (f.group.visible) f.update(dt, this.clock);
     for (const q of this.plops) {
       if (q.done) continue;
-      q.frog.update(dt, this.clock);
       if (!me || !this.surprisesOn || dist(me, q.at) > q.near) continue;
       q.done = true;
       const b = BAYS[this.laid!.bay];

@@ -178,7 +178,7 @@ export const FREE_DUCKS: VenLife['ducks'] = { loop: 0, count: DUCKLINGS_FREE, st
  * butterfly in the sunny moods (about half); the feather (two in five); one frog plopping at
  * his own cove, and now and then one at a cove he walks past. Never a knob.
  */
-export function venLife(play: Pick<Play, 'fork'>, mood: MoodId, laid: { bay: BayId; side: Side }, last: { loop: number; count: number } | null = null): VenLife {
+export function venLife(play: Pick<Play, 'fork'>, mood: MoodId, laid: { bay: BayId; side: Side }, last: LastLife | null = null): VenLife {
   const e = play.fork('ven-eend');
   const loops = DUCK_LOOPS.map((_, i) => i).filter((i) => i !== last?.loop);
   const loop = e.pick(loops);
@@ -193,7 +193,8 @@ export function venLife(play: Pick<Play, 'fork'>, mood: MoodId, laid: { bay: Bay
   const v = play.fork('ven-vlinder');
   const vlinder = v.chance(0.5) && BUTTERFLY_MOODS.includes(mood) ? v.int(0, BUTTERFLY_TH.length - 1) : null;
   const f = play.fork('ven-veer');
-  const veer = f.chance(0.4) ? f.int(0, FEATHER_TH.length - 1) : null;
+  // (never where it lay last play: another place on the bank)
+  const veer = f.chance(0.4) ? f.pick(FEATHER_TH.map((_, i) => i).filter((i) => i !== last?.veer)) : null;
   const p = play.fork('ven-plons');
   // (his own cove's frog sits on the side he comes down to: it plops as he arrives; a frog
   // left sitting there would be a frog in the search's picture)
@@ -209,16 +210,22 @@ export function venLife(play: Pick<Play, 'fork'>, mood: MoodId, laid: { bay: Bay
  *  it while the variant has room). */
 export const LIFE_KEY = 'l';
 
-/** The duck family as the play's own variant carries it (`ven:B1-amp+0.2/e5n`: five
- *  ducklings on the north loop), so the next play reads it back whatever else was noted. */
-export function duckTag(d: VenLife['ducks']): string { return `e${d.count}${DUCK_LOOPS[d.loop].id.charAt(0)}`; }
+/** What the next play keeps away from: the last play's duck loop, its count, its feather. */
+export interface LastLife { loop: number; count: number; veer?: number | null }
 
-/** The duck family of a play from its ven variant (`…/e5n`), or null. */
-export function ducksOf(venVariant: string | undefined): { loop: number; count: number } | null {
-  const m = venVariant ? /\/e(\d)([a-z])/.exec(venVariant) : null;
+/** The duck family (and the feather's spot) as the play's own variant carries them
+ *  (`ven:B1-amp+0.2/e5nf2`: five ducklings on the north loop, the feather at spot 2), so
+ *  the next play reads them back whatever else was noted. */
+export function lifeTag(l: Pick<VenLife, 'ducks' | 'veer'>): string {
+  return `e${l.ducks.count}${DUCK_LOOPS[l.ducks.loop].id.charAt(0)}${l.veer !== null ? `f${l.veer}` : ''}`;
+}
+
+/** The last play's life from its ven variant (`…/e5nf2`), or null. */
+export function lastLifeOf(venVariant: string | undefined): LastLife | null {
+  const m = venVariant ? /\/e(\d)([a-z])(?:f(\d))?/.exec(venVariant) : null;
   if (!m) return null;
   const loop = DUCK_LOOPS.findIndex((d) => d.id.charAt(0) === m[2]);
-  return loop >= 0 ? { loop, count: Number(m[1]) } : null;
+  return loop >= 0 ? { loop, count: Number(m[1]), veer: m[3] !== undefined ? Number(m[3]) : null } : null;
 }
 
 /* --------------------------------------------------------- what is seen ---- */

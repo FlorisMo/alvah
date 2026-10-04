@@ -46,7 +46,7 @@ import { ARRIVE_RADIUS, bearing, cue as cueAt } from '../../Wayfinding';
 import { WATER_LEVEL } from '../../Biomes';
 import { VenHome, venBody, type Frog } from './ven.home';
 import { ListenCore, StillFor, chorusCalls, listensOf, ringSize } from './ven.listen';
-import { LIFE_KEY, SEEN, blueOf, duckTag, ducksOf, venLife } from './ven.life';
+import { LIFE_KEY, SEEN, blueOf, lastLifeOf, lifeTag, venLife } from './ven.life';
 import { Seen, boxOf } from './ven.finds';
 import type { MoodId } from '../../Moods';
 import {
@@ -98,9 +98,9 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Ven
   const carpet = laid.order.includes('modder-ven') ? carpetAt(sts[laid.stations['modder-ven']]) : null;
   // what lives on the bank this play (the ducks' loop never the last play's): its own forks
   const mood = (typeof play.variant?.mood === 'string' ? play.variant.mood : 'gouden-uur') as MoodId;
-  const life = venLife(play, mood, laid, ducksOf(last[last.length - 1]));
-  // (the duck family rides on the cove's variant: the next play reads it back)
-  play.note(VARIANT_KEY, `${laid.variant}/${duckTag(life.ducks)}`);
+  const life = venLife(play, mood, laid, lastLifeOf(last[last.length - 1]));
+  // (the duck family and the feather ride on the cove's variant: the next play reads them back)
+  play.note(VARIANT_KEY, `${laid.variant}/${lifeTag(life)}`);
   play.note(LIFE_KEY, life.variant);
   home.lay({ laid, frog, decoys: slots, glimpse: trial.glimpse, adder, carpet, life: { life, bay: laid.bay, sat: frog, blue: false } });
   // the frog sits hidden in its cove (put there at once: nobody sees it under the sedge)

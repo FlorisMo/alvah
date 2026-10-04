@@ -158,6 +158,16 @@ export class Frog extends Actor {
 
   /** It sinks under the water (hidden there), or comes up again (`up`). */
   dive(up = false, secs = 0.8): Promise<void> {
+    // (a frog already under the water — hidden — is down at once: it is never updated while
+    // hidden, so a dive left pending there would surface later and take a laid-out frog
+    // under in the middle of the next play: run 7 ven-life, a second play's search waited
+    // on the cove's own calling frog for ever)
+    if (!up && !this.group.visible) {
+      this.diving?.done();
+      this.diving = null;
+      this.lift = -0.16;
+      return Promise.resolve();
+    }
     return new Promise((done) => {
       this.diving?.done();
       if (up) { this.group.visible = true; this.lift = -0.14; }
@@ -214,9 +224,15 @@ export class Frog extends Actor {
     }
   }
 
-  /** Laid at a spot (its home laid out again): it sits there, on the ground or afloat. */
+  /** Laid at a spot (its home laid out again): it sits there, on the ground or afloat — and
+   *  a dive it was in is over (it is laid here, not on its way under). */
   override place(x: number, z: number, yaw = this.yaw): void {
-    if (!this.leaping) this.lift = 0;
+    if (!this.leaping) {
+      this.lift = 0;
+      const d = this.diving;
+      this.diving = null;
+      d?.done();
+    }
     super.place(x, z, yaw);
   }
 

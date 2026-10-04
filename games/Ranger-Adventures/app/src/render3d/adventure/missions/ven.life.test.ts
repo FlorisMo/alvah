@@ -24,7 +24,7 @@ import {
 } from './ven.places.ts';
 import {
   BLUE_AWAY, BUTTERFLY_MOODS, BUTTERFLY_TH, DRAGONFLY_MOODS, DRAGONFLY_RANGE, DRAGONFLY_TH, DUCK_LOOPS, DUCKLINGS, FEATHER_TH, PLOP_NEAR, PLOP_PASS,
-  blueOf, butterflySpot, clearOfStations, dragonflyHome, dragonflyHomesFor, duckTag, ducksOf, featherSpot, onEveryWay, onLoop, plopSpot, trailLength, venLife,
+  blueOf, butterflySpot, clearOfStations, dragonflyHome, dragonflyHomesFor, featherSpot, lastLifeOf, lifeTag, onEveryWay, onLoop, plopSpot, trailLength, venLife,
 } from './ven.life.ts';
 import type { Spot } from '../types.ts';
 
@@ -172,9 +172,10 @@ test('a play\'s life: drawn from its own forks, deterministic, never the last pl
     const a = venLife(newPlay('ven', seed, 1), 'zonnig', laid), b = venLife(newPlay('ven', seed, 1), 'zonnig', laid);
     assert.deepEqual(a, b, 'the same seed, the same life');
     assert.ok(a.ducks.count >= DUCKLINGS[0] && a.ducks.count <= DUCKLINGS[1]);
-    const c = venLife(newPlay('ven', seed, 1), 'zonnig', laid, a.ducks);
+    const c = venLife(newPlay('ven', seed, 1), 'zonnig', laid, lastLifeOf(`B1-apm+0.2/${lifeTag(a)}`));
     assert.notEqual(c.ducks.loop, a.ducks.loop, 'never the last play\'s loop');
     assert.notEqual(c.ducks.count, a.ducks.count, 'never as many ducklings as last play');
+    if (a.veer !== null && c.veer !== null) assert.notEqual(c.veer, a.veer, 'the feather never where it lay last play');
     for (const h of a.libellen) assert.ok(dragonflyHomesFor('B').includes(h), 'dragonflies away from the cove');
     assert.ok(a.plops[0].bay === 'B' && a.plops[0].i === 1, 'one frog plops at his own cove, on his side');
     for (const p of a.plops.slice(1)) assert.ok(BAYS[p.bay].th > BAYS.B.th, 'another at a cove he walks past');
@@ -197,14 +198,15 @@ test('a play\'s life: drawn from its own forks, deterministic, never the last pl
   }
   // three plays in a row bring different life (the ducks' loop at least)
   for (const base of [11, 31, 71]) {
-    let last: { loop: number; count: number } | null = null;
-    const rows = [base, base + 1, base + 2].map((s) => { const l = venLife(newPlay('ven', s, 1), 'gouden-uur', laid, last); last = ducksOf(`B1-apm+0.2/${duckTag(l.ducks)}`); return l; });
+    let last: ReturnType<typeof lastLifeOf> = null;
+    const rows = [base, base + 1, base + 2].map((s) => { const l = venLife(newPlay('ven', s, 1), 'gouden-uur', laid, last); last = lastLifeOf(`B1-apm+0.2/${lifeTag(l)}`); return l; });
     assert.equal(new Set(rows.map((r) => r.variant)).size, 3, `seeds ${base}…: ${rows.map((r) => r.variant).join(' | ')}`);
     for (let i = 1; i < 3; i++) assert.ok(rows[i].ducks.count !== rows[i - 1].ducks.count && rows[i].ducks.loop !== rows[i - 1].ducks.loop, 'another duck family each play');
   }
   // the cove's variant carries the family back to the next play
   const l = venLife(newPlay('ven', 5, 1), 'zonnig', laid);
-  assert.deepEqual(ducksOf(`B1-apm+0.2/${duckTag(l.ducks)}`), { loop: l.ducks.loop, count: l.ducks.count });
-  assert.equal(ducksOf('B1-apm+0.2'), null);
+  assert.deepEqual(lastLifeOf(`B1-apm+0.2/${lifeTag(l)}`), { loop: l.ducks.loop, count: l.ducks.count, veer: l.veer });
+  assert.deepEqual(lastLifeOf('B1-apm+0.2/e5nf2'), { loop: 0, count: 5, veer: 2 });
+  assert.equal(lastLifeOf('B1-apm+0.2'), null);
   void pointAt;
 });
