@@ -2,6 +2,7 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { AREA_VELUWE } from '../src/content/veluwe';
+import { followLook } from '../src/render3d/adventure/missions/frisling.grow';
 import {
   R, playSeed, replayTail, save, sleep, snap, uncovered, visibleButtons, walkTo, worldChange, worldSamples,
   MAX_DRAW_CALLS, SEAT_TOLERANCE, type Hint, type P2, type Seat,
@@ -482,6 +483,57 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
   };
 }
 
+/**
+ * Run 7 (frisling growth, design state/frisling §3, §5.8): the frisling plays the level's
+ * knobs — the same knobs its 2D floor reads — and invents none of its own: as many
+ * look-alikes in the stand, as much of the piglet showing, the first hint as late, the
+ * prints as far apart and as faint, the route's rounds and start, the free path's wait.
+ * Read while it plays (the stats are gone once it ends); the knobs are read at its start.
+ */
+type Knobs = {
+  zoeken: { lookAlikes: number; glimpse: number; hintAfterS: number; trailLegs: number; trailClarity: number };
+  corsi: { start: number; rounds: number; max: number };
+  dagnacht: { holdS: number; tempts: number; goWaitS: number };
+};
+function frislingWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv: { beat: string; stats?: Record<string, number> } | null) => Promise<void>; report: () => Promise<void> } {
+  const page = log.page;
+  let knobs: Knobs | null = null;
+  let stats: Record<string, number> = {};
+  return {
+    async observe(adv) {
+      if (!knobs) {
+        const sk = await R<Record<string, { knobs: unknown }> | null>(page, 'r.skills()');
+        if (sk) knobs = { zoeken: sk.zoeken.knobs, corsi: sk.corsi.knobs, dagnacht: sk.dagnacht.knobs } as Knobs;
+      }
+      if (adv?.stats) stats = adv.stats;
+    },
+    async report() {
+      if (!knobs) { log.soft(false, 'frisling: the knobs were never read'); return; }
+      const z = knobs.zoeken, d = knobs.dagnacht;
+      const look = followLook(z);
+      log.note(`frisling knobs: ${JSON.stringify(knobs)}`);
+      log.note(`frisling played: ${stats.look_alikes} look-alikes, glimpse ${stats.glimpse}, hint after ${stats.search_hint_after} s, prints ${stats.print_gap} m apart at ${stats.print_opacity}, a squeak every ${stats.squeak_every} s, route ${stats.route_rounds} round(s) to ${stats.route_span}, hold ${stats.hold_s} s (pulls ${stats.pull_aaien ?? '-'}/${stats.pull_voeren ?? '-'}/${stats.pull_zeug ?? '-'}/${stats.pull_dragen ?? '-'}), tired walk ${stats.pace_len} m, the path's wait ${stats.pad_wait_s} s`);
+      log.soft(stats.look_alikes === z.lookAlikes, `frisling: ${stats.look_alikes} look-alikes in the stand, the level's ${z.lookAlikes}`);
+      log.soft(stats.glimpse >= z.glimpse * 0.6 && stats.glimpse <= z.glimpse * 1.6, `frisling: the piglet's glimpse ${stats.glimpse} is the level's (${z.glimpse})`);
+      log.soft(stats.search_hint_after === z.hintAfterS, `frisling: the first hint after ${stats.search_hint_after} s, the level's ${z.hintAfterS}`);
+      log.soft(stats.print_gap === look.gap && stats.print_opacity === look.opacity && stats.squeak_every === look.squeakEvery[0],
+        `frisling: the follow's prints ${stats.print_gap} m apart at ${stats.print_opacity}, a squeak every ${stats.squeak_every} s (the level's ${look.gap} / ${look.opacity} / ${look.squeakEvery[0]})`);
+      log.soft(stats.route_rounds === knobs.corsi.rounds, `frisling: the route plays ${stats.route_rounds} round(s), the level's ${knobs.corsi.rounds}`);
+      log.soft(stats.pad_wait_s === d.goWaitS, `frisling: the free path waits ${stats.pad_wait_s} s, the level's ${d.goWaitS}`);
+      // (each hold's temptations pull harder one after another: as many kinds as the level's)
+      log.soft(stats.pull_zeug === Math.min(2, d.tempts - 1), `frisling: the sow's stare tempts up to pull ${stats.pull_zeug} (the level's ${d.tempts} temptation(s))`);
+      if (opts.practised) {
+        // (less of him shows than a first play's knob, 0.38: how much exactly is the nook's,
+        // within the level's [0.6, 1.6]× checked above)
+        log.soft(z.lookAlikes >= 6 && z.glimpse <= 0.25 && stats.glimpse < 0.38 && stats.print_gap >= 1.3, `frisling (practised): a harder search than a first play's (${stats.look_alikes} look-alikes, glimpse ${stats.glimpse} of the level's ${z.glimpse}, prints ${stats.print_gap} m apart)`);
+        log.soft(stats.route_rounds >= 3 && d.goWaitS <= 6 && d.holdS >= 4.5, `frisling (practised): ${stats.route_rounds} routes, holds of ${d.holdS} s, the path waits ${d.goWaitS} s`);
+      } else {
+        log.soft(stats.look_alikes === 4 && stats.print_gap === 0.95 && stats.pad_wait_s === 9, `frisling (a first play): 4 look-alikes, prints 0.95 m apart, the path waits 9 s (${stats.look_alikes}, ${stats.print_gap}, ${stats.pad_wait_s})`);
+      }
+    },
+  };
+}
+
 function outDir(info: TestInfo, id: string): string {
   return path.join(info.project.outputDir, 'missions', id);
 }
@@ -502,11 +554,13 @@ for (const mission of missions) {
       const fam = await homeOf(page, mission.id);
       if (fam) log.soft(fam.state === 'before' && fam.actors.some((a) => a.visible), `the story's animals are in the world before the mission (${fam.state})`);
       await start(log, mission);
-      const watch = mission.id === 'ree-niet-aanraken' ? reeWatch(log) : null;
+      // (a mission's own soft checks: the ree's also reads its finds' cards once it is over)
+      const watch: { observe: (adv: { beat: string; stats?: Record<string, number> } | null) => Promise<void>; report: () => unknown; cards?: () => Promise<void> } | null =
+        mission.id === 'ree-niet-aanraken' ? reeWatch(log) : mission.id === 'frisling' ? frislingWatch(log) : null;
       await playSteps(log, mission, undefined, watch?.observe);
-      watch?.report();
+      await watch?.report();
       await finish(log, mission);
-      await watch?.cards();
+      await watch?.cards?.();
       await worldReacted(log, mission, marker, before);
       log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
     } finally {
@@ -555,6 +609,50 @@ test('Het reekalf in het gras on a practised save: the same game, harder, with r
     const text = log.write();
     await info.attach('notes', { body: text, contentType: 'text/plain' });
     if (!process.env.MISSIONS_QUIET) console.log(`\n── ree-practised ──\n${text}`);
+  }
+});
+
+/** Run 7 (frisling growth): De verdwaalde frisling on a PRACTISED save (zoeken, corsi and
+ *  dagnacht at ~4.5, seeded in the save before the page loads; the frisling not yet played,
+ *  so a seed draws the same way, nook and light as on a fresh save): the same exercises
+ *  visibly harder — less of the piglet among more look-alikes, a later hint, prints further
+ *  apart and fainter, more routes, longer holds that tempt harder, a shorter wait at the
+ *  free path — and the same summaries, each beat logged with its level, seed and variant. */
+test('De verdwaalde frisling on a practised save: the same game, harder, with real input @missions', async ({ page, context }, info) => {
+  test.setTimeout(9 * 60_000);
+  const mission = missions.find((m) => m.id === 'frisling')!;
+  const rec = (level: number) => ({ level, best: level, reversals: [], recent: [true, true, true], trials: 40, beats: 20 });
+  await context.addInitScript((seed) => {
+    if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: seed }));
+  }, { skill: { zoeken: rec(4.5), corsi: rec(4.5), dagnacht: rec(4.5) }, avatarGemaakt: true, settings: { wereldHintGezien: true, tikHintGezien: true } });
+  const log = new Log(page, outDir(info, 'frisling-practised'));
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
+  try {
+    await boot(log);
+    const marker = await goToMarker(log, mission);
+    await sleep(page, 800);
+    const before = await worldSamples(page, marker, SEAT_RADIUS, 3);
+    await start(log, mission);
+    const watch = frislingWatch(log, { practised: true });
+    await playSteps(log, mission, undefined, watch.observe);
+    await watch.report();
+    // the same summaries as on a fresh save (zoeken one find, dagnacht five moments), each
+    // at the practised level, with the play's seed and its way, family and nook
+    const hist = await R<{ e: string; m: string; n: number; lv: number; st?: number; sd: number; va?: string }[]>(page, 'r.history()');
+    const fr = (hist ?? []).filter((b) => b.m === mission.id);
+    log.note(`history: ${JSON.stringify(fr.map((b) => [b.e, b.n, b.lv, b.st ?? null, b.sd, b.va]))}`);
+    log.soft(fr.some((b) => b.e === 'zoeken' && b.n === 1 && b.lv >= 4) && fr.some((b) => b.e === 'corsi' && (b.st ?? 0) >= 4) && fr.some((b) => b.e === 'dagnacht' && b.n === 5 && b.lv >= 4),
+      `the beats logged at the practised level, the same trials (${JSON.stringify(fr.map((b) => [b.e, b.n, b.lv]))})`);
+    log.soft(fr.length >= 3 && fr.every((b) => b.sd === log.seed && /(^|,)way:[a-z]+\/[a-z]+\/\d+/.test(b.va ?? '')),
+      `every frisling beat carries the play's seed and its way, family and nook (${JSON.stringify(fr.map((b) => [b.sd, b.va]))})`);
+    await finish(log, mission);
+    await worldReacted(log, mission, marker, before);
+    log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
+  } finally {
+    const text = log.write();
+    await info.attach('notes', { body: text, contentType: 'text/plain' });
+    if (!process.env.MISSIONS_QUIET) console.log(`\n── frisling-practised ──\n${text}`);
   }
 });
 

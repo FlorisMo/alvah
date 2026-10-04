@@ -168,7 +168,7 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Non
   const birch = finds.boompje !== null ? l.birches[finds.boompje] : null;
   home.layPlay({ layout: l, calf, pool: p.pool, decoys: trial.decoys.map((d) => d.id), glimpse: trial.glimpse, birch });
   // the rare twins: a second calf lies hidden apart from its sibling (laid in the grass
-  // behind where they will meet once he has left the calf: ree.ts `twinHides`), and lives
+  // behind where they will meet once the watch is over: ree.ts `twinHides`), and lives
   // with them at home after; any other play has none
   const twins = twinsIn(play);
   world.residents.repose(MISSION, 'twin', 'before', null);
@@ -480,11 +480,6 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
     await moments[id]();
   }
 
-  // ree-discover, the rare twins: its twin lies hidden apart from it, in the grass behind
-  // where mother and calves will meet — laid there now he has left the calf, the moment that
-  // spot is out of his picture (never in the search's, never a pop)
-  const twinHid = twins && twin ? twinHides(k, l, twin) : null;
-
   // 8-10 · he turns away from the calf and takes his first quiet steps out of the grass,
   // the lens swinging round behind him (then the way ahead is in view); then he sneaks on
   // himself, quietly, round the grass to the hide; the pool may lie across his way
@@ -733,6 +728,13 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   }
   k.stats.watch_s = Math.round(k.now - t0);
 
+  // ree-discover, the rare twins: its twin lies hidden apart from it, in the grass behind
+  // where mother and calves meet — laid there once the watch is over, the first moment that
+  // spot is out of his picture as he walks away (never in the search's or the watch's
+  // picture: laid before the watch, in the thicket morning it lay in plain sight on the
+  // open heath through the whole watch, a second calf before its surprise; never a pop)
+  const twinHid = twins && twin ? twinHides(k, l, twin) : null;
+
   // 12 · the path is free (the flip: now GO), played with his FEET (run 7): the glasses
   // come down and he walks away quietly himself. Staying put the level's while ("Blijf
   // staan", the old rule) or walking up to them: she lifts her head to him and steps back
@@ -808,9 +810,10 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
 
 /**
  * ree-discover, the rare twins: a second calf lies hidden apart from its sibling (a roe doe
- * hides her twins apart), in the tall grass behind where they meet: laid there once he has
- * left the calf, the first moment that spot is out of his picture (never in the search's).
- * `now` lays it at once if that moment never came (the reunion's lens is on its way).
+ * hides her twins apart), in the tall grass behind where they meet: laid there once the
+ * watch is over, the first moment that spot is out of his picture as he walks away (never in
+ * the search's or the watch's). `now` lays it at once if that moment never came (the
+ * reunion's lens is on its way).
  */
 function twinHides(k: AdventureKit, l: ReeLayout, twin: Actor): { now(): void } {
   let laid = false;
