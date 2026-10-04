@@ -1136,6 +1136,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     const core = new WalkOnCore(knobs.goWaitS, (g) => rust.answer(id, g), Math.min(WALK_ON_M, d0 - 0.7));
     k.stats.pad_wait_s = knobs.goWaitS;
     k.stats.pad_late = 0;
+    k.stats.pad_again = 0;
     const family = [A.sow, A.p1, A.p2, A.p3, A.yearling];
     let read = false, reacting = false, praised = false, shuffles = 0;
     const readLine = (): void => { read = false; void readOut(c.padVrij).then(() => { read = true; }, () => {}); };
@@ -1151,6 +1152,9 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
       k.say(c.teLang);
       await readOut(c.teLang, 1.6);
       core.again();
+      // (the moment is back: counted, so a reader need not catch its words in the second
+      // before a child who walks on at once hears the good ones)
+      k.stats.pad_again = core.impulses;
       k.say(c.padVrij);
       readLine();
       reacting = false;
