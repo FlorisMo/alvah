@@ -18,11 +18,15 @@ import test from 'node:test';
 import { newPlay } from '../../../core/play.ts';
 import {
   CALF_MOMENTS, CALF_SPOTS, REE_LAYOUT_IDS, PRINT_GAP_M, WATCH_LINES, drawReePlay, lastReeVariants, parseReeVariant, printRuns, reeGrowth, reeOrder,
-  reeVariant, watchScript, WATCH_OUT_S, WATCH_WALK_S, type ReePlay, type WatchEvent,
+  reeVariant, reeSurprises, watchScript, REE_SMALL, WATCH_OUT_S, WATCH_WALK_S, type ReePlay, type ReeSmall, type WatchEvent,
 } from './ree.variety.ts';
+import { rollRare, nextRareCount } from '../../../core/discover.ts';
+import { ONTDEKKINGEN, ontdekkingenVan } from '../../../content/ontdekkingen.ts';
+import { compactVariant } from '../../../core/play.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
-import { REE_LAYOUTS, poolSides } from './ree.places.ts';
+import { countWords, MAX_WORDS_PER_SENTENCE } from '../../../core/readlevel.ts';
+import { LAYOUTS, REE_LAYOUTS, birchWalk, poolSides } from './ree.places.ts';
 
 const MISSION = 'ree-niet-aanraken';
 const play = (seed: number) => newPlay(MISSION, seed, 1);
@@ -236,4 +240,221 @@ test('the watch: the seed draws the order, the lines and the timing; the level o
   assert.ok(lengths.size >= 3, 'the timing varies');
   // the pools: every key is a line of the content
   for (const pool of Object.values(WATCH_LINES)) for (const key of pool) assert.ok(COPY[key], `${key} is in the copy`);
+});
+
+/* ------------------------------------------------- ree-discover: something to notice ---- */
+
+const none = (): boolean => false;
+
+/** The small things' options for a morning, as ree.ts draws them (its layout, its pool's side). */
+const optsOf = (p: Pick<ReePlay, 'layout' | 'pool'>) => {
+  const l = REE_LAYOUTS[p.layout];
+  return { birches: l.birches.length, larkOn: l.larkOn[p.pool], birchOn: l.birches.map((_, i) => birchWalk(l, i)), hideFree: p.pool === 'in' };
+};
+/** Every morning kind: each layout with each side its pool may lie on. */
+const MORNINGS = LAYOUTS.flatMap((l) => poolSides(l).map((pool) => ({ layout: l.id, pool })));
+
+test('ree-discover: each play holds one or two of the four small things, drawn from its seed', () => {
+  const seen = new Map<string, number>();
+  let two = 0, n = 0;
+  for (const m of MORNINGS) {
+    const o = optsOf(m);
+    for (let seed = 1; seed <= 400; seed++) {
+      const a = reeSurprises(play(seed), none, o);
+      const b = reeSurprises(play(seed), none, o);
+      assert.deepEqual(a, b, `seed ${seed}: the same seed, the same things`);
+      assert.ok(a.small.length === 1 || a.small.length === 2, `seed ${seed}: ${a.small.length} small things`);
+      assert.equal(new Set(a.small).size, a.small.length);
+      for (const s2 of a.small) { assert.ok(REE_SMALL.includes(s2)); seen.set(s2, (seen.get(s2) ?? 0) + 1); }
+      if (a.small.length === 2) two += 1;
+      n += 1;
+      // where each happens: the woodlark on a walk with room for it this morning (none: no
+      // woodlark), the rubbed birch among the layout's
+      assert.equal(a.leeuwerik !== null, a.small.includes('leeuwerik'));
+      if (a.leeuwerik) assert.ok(o.larkOn.includes(a.leeuwerik), `${m.layout}-${m.pool} seed ${seed}: the woodlark on ${a.leeuwerik}`);
+      if (!o.larkOn.length) assert.ok(!a.small.includes('leeuwerik'), `${m.layout}-${m.pool}: no woodlark where no walk has room`);
+      assert.equal(a.boompje !== null, a.small.includes('veegsporen'));
+      if (a.boompje !== null) assert.ok(a.boompje >= 0 && a.boompje < o.birches);
+      assert.ok(a.extra === null || a.extra === 'tapuit' || a.extra === 'vlinder');
+      // its note is short and never read as the morning's (`ree:`)
+      assert.ok(a.code.length <= 6 && !a.code.startsWith('ree'), a.code);
+    }
+  }
+  for (const s2 of REE_SMALL) assert.ok((seen.get(s2) ?? 0) > n / 8, `${s2} comes (${seen.get(s2)} of ${n})`);
+  assert.ok(two > n * 0.3 && two < n * 0.7, `two small things in ${two} of ${n} plays`);
+});
+
+test('ree-discover: the ones he has not found come first; once he found them all, any of them', () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    for (const got of [['leeuwerik'], ['leeuwerik', 'buizerd'], ['leeuwerik', 'buizerd', 'koekoek']] as ReeSmall[][]) {
+      const s2 = reeSurprises(play(seed), (id) => got.includes(id), { birches: 2 });
+      const fresh = REE_SMALL.filter((x) => !got.includes(x));
+      assert.ok(fresh.includes(s2.small[0]), `seed ${seed}: one he has not found first (${s2.small})`);
+      if (s2.small.length === 2 && fresh.length >= 2) assert.ok(fresh.includes(s2.small[1]), `seed ${seed}: both new while two are left`);
+    }
+    const all = reeSurprises(play(seed), () => true, { birches: 2 });
+    assert.ok(all.small.length >= 1);
+  }
+  // a fresh save meets every one of the four within its first four plays when it finds what it meets
+  for (let base = 1; base <= 200; base++) {
+    const found = new Set<ReeSmall>();
+    for (let n = 0; n < 4; n++) for (const s2 of reeSurprises(play(base + n), (id) => found.has(id), { birches: 2 }).small) found.add(s2);
+    assert.equal(found.size, 4, `seed ${base}: four plays meet all four (${[...found]})`);
+  }
+});
+
+test('ree-discover: one thing at a time on the walks — the woodlark never on one walk with the buzzard or the rubbed birch, the buzzard never with a birch by the walk to the hide, no buzzard or extra beside the pool, no extra beside two things or a woodlark', () => {
+  let meadowLark = 0, hideLark = 0, extras = 0, n = 0, bothHide = 0, buzzBirch = 0;
+  for (const m of MORNINGS) {
+    const o = optsOf(m);
+    for (let seed = 1; seed <= 400; seed++) {
+      for (const got of [[], ['koekoek'], ['leeuwerik'], ['koekoek', 'veegsporen']] as ReeSmall[][]) {
+        const s2 = reeSurprises(play(seed), (id) => got.includes(id), o);
+        const birch = s2.boompje !== null ? o.birchOn[s2.boompje] : null;
+        const tag = `${m.layout}-${m.pool} seed ${seed} (${s2.code})`;
+        n += 1;
+        // the buzzard is always on his way to the hide: a woodlark with it is on the walk to the grass
+        if (s2.small.includes('buizerd') && s2.leeuwerik) assert.equal(s2.leeuwerik, 'meadow', `${tag}: the woodlark and the buzzard on one walk`);
+        // the rubbed birch beside one walk: the woodlark on the other
+        if (birch && s2.leeuwerik) assert.notEqual(s2.leeuwerik, birch, `${tag}: the woodlark and the birch on one walk`);
+        // …and never beside the walk to the hide with the buzzard (review r2, seed 22's third
+        // play: the buzzard's card, behind the birch's, came only at the reunion)
+        if (birch === 'hide') assert.ok(!s2.small.includes('buizerd'), `${tag}: the buzzard and the birch on the walk to the hide`);
+        if (birch === 'hide' && s2.small.includes('buizerd')) bothHide += 1;
+        // the walk to the hide never holds three things; beside two, or a woodlark, no little extra
+        const hide = (s2.small.includes('buizerd') ? 1 : 0) + (s2.leeuwerik === 'hide' ? 1 : 0) + (birch === 'hide' ? 1 : 0);
+        assert.ok(hide + (s2.extra ? 1 : 0) <= 2, `${tag}: ${hide} thing(s) and ${s2.extra ?? 'no'} extra on the walk to the hide`);
+        if (s2.leeuwerik === 'hide') assert.equal(s2.extra, null, `${tag}: an extra beside the woodlark`);
+        // the pool on his way to the hide is that walk's moment: no buzzard, no extra there
+        if (m.pool === 'out') assert.ok(!s2.small.includes('buizerd') && !s2.extra, `${tag}: the buzzard or an extra beside the pool`);
+        if (s2.small.includes('buizerd') && birch === 'meadow') buzzBirch += 1;
+        if (s2.leeuwerik === 'meadow') meadowLark += 1;
+        if (s2.leeuwerik === 'hide') hideLark += 1;
+        if (s2.extra) extras += 1;
+      }
+    }
+  }
+  // (the woodlark still comes on both walks, and the little extra still comes often)
+  assert.ok(meadowLark > n / 20 && hideLark > n / 20, `the woodlark on the walk to the grass ${meadowLark}×, to the hide ${hideLark}× (of ${n})`);
+  assert.ok(extras > n / 8, `a little extra in ${extras} of ${n} plays`);
+  // (the buzzard and a rubbed birch still come in one play, the birch by the walk to the grass)
+  assert.equal(bothHide, 0);
+  assert.ok(buzzBirch > 0, `the buzzard with a birch by the walk to the grass ${buzzBirch}×`);
+});
+
+test('ree-discover: a fresh save meets all four small things as the mornings come: within four plays nearly always, five at most (the woodlark and the buzzard first where they have room)', () => {
+  let inFour = 0;
+  const N = 400;
+  for (let base = 1; base <= N; base++) {
+    const found = new Set<ReeSmall>();
+    const last: string[] = [];
+    let at = 0;
+    for (let n = 0; n < 5 && !at; n++) {
+      const p = draw(base * 10 + n, last);
+      last.push(p.variant);
+      for (const s2 of reeSurprises(play(base * 10 + n), (id) => found.has(id), optsOf(p)).small) found.add(s2);
+      if (found.size === 4) at = n + 1;
+    }
+    assert.ok(at > 0, `seed ${base}: five plays meet all four (${[...found]})`);
+    if (at <= 4) inFour += 1;
+  }
+  assert.ok(inFour >= N * 0.95, `all four within four plays in ${inFour} of ${N} fresh saves`);
+});
+
+test('ree-discover: the morning stays the same with its small things drawn (each from its own fork)', () => {
+  for (let seed = 1; seed <= 100; seed++) {
+    const before = draw(seed);
+    reeSurprises(play(seed), none, { birches: 2 });
+    assert.deepEqual(draw(seed), before);
+    // a variant with the mood, the rare and the morning keeps the morning and the small things
+    const pl = play(seed);
+    pl.note('mood', 'ochtendnevel'); pl.note('rare', 'tweeling'); pl.note('ree', before.variant);
+    pl.note('vr', reeSurprises(pl, none, { birches: 2 }).code);
+    const va = compactVariant(pl.variant)!;
+    assert.ok(va.includes(`ree:${before.variant}`) && va.includes(',vr:'), va);
+  }
+});
+
+test('ree-discover: a cuckoo calls in one of her listening pauses, never the one at the hide; the rest of the watch is the same', () => {
+  let n = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    for (const pauses of [1, 2, 3]) {
+      const plain = watchScript(play(seed), { pauses, way: 2 });
+      const bird = watchScript(play(seed), { pauses, way: 2, koekoek: true });
+      assert.equal(bird.length, plain.length);
+      const k = bird.filter((e) => e.cue === 'koekoek');
+      assert.equal(k.length, 1, `seed ${seed}, ${pauses} pauses: one cuckoo`);
+      assert.equal(k[0].act, 'listen');
+      assert.equal(k[0].line, 'koekoek');
+      bird.forEach((e, i) => {
+        if (e.cue === 'koekoek') { assert.ok(plain[i].act === 'listen' && plain[i].cue !== 'hut', 'it takes a rustle\'s pause'); n += 1; return; }
+        assert.deepEqual(e, plain[i], `seed ${seed}: the watch is the same round it`);
+      });
+    }
+  }
+  assert.ok(n > 0);
+  for (const id of ['koekoek', 'tweeling']) assert.ok(id in COPY, `${id} is in the copy`);
+});
+
+test('ree-discover: the home\'s veldgids rows — the mother, four small things, the twins (rare); found by doing', () => {
+  const rows = ontdekkingenVan(MISSION);
+  const ids = rows.map((o) => o.id.split('.')[1]);
+  for (const id of ['reekalf', 'moeder', ...REE_SMALL, 'tweeling']) assert.ok(ids.includes(id), id);
+  assert.equal(rows.filter((o) => o.soort === 'zeldzaam').length, 1);
+  assert.equal(rows.find((o) => o.id.endsWith('.tweeling'))?.soort, 'zeldzaam');
+  assert.equal(rows.find((o) => o.id.endsWith('.veegsporen'))?.soort, 'spoor');
+  for (const o of rows) assert.ok(o.hint.split(/\s+/).length <= 7, `${o.id}: its hint is ≤ 7 words`);
+});
+
+test('ree-discover: the twins come within three won plays of a fresh save (the pity rule), by its seed', () => {
+  const twins = ONTDEKKINGEN.find((o) => o.id === `${MISSION}.tweeling`)!;
+  let lucky = 0;
+  for (let base = 1; base <= 300; base++) {
+    // a fresh save: plays base, base+1, base+2, each won, nothing rare found before
+    let count = 0, got = -1;
+    for (let n = 0; n < 3 && got < 0; n++) {
+      const pl = newPlay(MISSION, base + n, n + 1);
+      const r = rollRare({ home: MISSION, play: pl, table: ONTDEKKINGEN, found: {}, counts: { [MISSION]: count }, mood: 'ochtendnevel' });
+      if (r) { assert.equal(r.id, twins.id, 'the home\'s rare is the twins'); got = n; }
+      count = nextRareCount(count, { won: true, gotRare: !!r });
+    }
+    assert.ok(got >= 0, `seed ${base}: no twins in three plays`);
+    if (got === 0) lucky += 1;
+    // in every mood the ree plays in
+    for (const mood of ['ochtendnevel', 'zonnig', 'bewolkt', 'gouden-uur'] as const) {
+      assert.ok(rollRare({ home: MISSION, play: newPlay(MISSION, base, 3), table: ONTDEKKINGEN, found: {}, counts: { [MISSION]: 2 }, mood }), mood);
+    }
+  }
+  assert.ok(lucky > 60 && lucky < 160, `the twins came on the first play by luck ${lucky} of 300 times`);
+});
+
+test('ree-discover: her listening pauses never say the same line twice in one watch', () => {
+  for (let seed = 1; seed <= 300; seed++) {
+    for (const koekoek of [false, true]) {
+      const lines = watchScript(play(seed), { pauses: 3, way: 2, koekoek }).filter((e) => e.act === 'listen').map((e) => e.line);
+      assert.equal(new Set(lines).size, lines.length, `seed ${seed}: ${lines.join(', ')}`);
+    }
+  }
+});
+
+test('close: every line the reekalf says on its strip is at most 7 words, all of it (a calm moment\'s good and wrong words too)', () => {
+  // (the close of the lane: a reach at the calf\'s nose put "Nu ruikt het kalf naar jou. Dan
+  // durft de moeder niet te komen." on the strip, 13 words over two lines; the encounters\'
+  // words are said on the world\'s strip as one line, plain and knap)
+  const m = AREA_VELUWE.missies.find((x) => x.id === MISSION)!;
+  const lines: [string, string][] = [];
+  m.stappen.forEach((st, si) => {
+    const skin = st.skin as { copy?: Record<string, string>; encounters?: Record<string, unknown>[] };
+    for (const [k, t] of Object.entries(skin.copy ?? {})) lines.push([`step${si}.${k}`, t]);
+    for (const e of skin.encounters ?? []) {
+      for (const k of ['vraag', 'vraagKnap', 'uitleg', 'uitlegKnap', 'gevolg', 'gevolgKnap']) {
+        if (typeof e[k] === 'string') lines.push([`${String(e.id)}.${k}`, e[k] as string]);
+      }
+    }
+  });
+  const av = (m as { avontuur?: Record<string, Record<string, string>> }).avontuur ?? {};
+  for (const tier of Object.keys(av)) for (const [k, t] of Object.entries(av[tier])) lines.push([`avontuur.${tier}.${k}`, t]);
+  assert.ok(lines.length > 40, `the ree's lines (${lines.length})`);
+  const long = lines.filter(([, t]) => countWords(t) > MAX_WORDS_PER_SENTENCE).map(([k, t]) => `${k}: "${t}" (${countWords(t)})`);
+  assert.deepEqual(long, [], `lines over ${MAX_WORDS_PER_SENTENCE} words on the strip`);
 });

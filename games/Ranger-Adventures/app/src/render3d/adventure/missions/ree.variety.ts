@@ -208,9 +208,9 @@ export function printRuns(legs: readonly number[], gaps: number): PrintRun[] {
 /* --------------------------------------------------------- run 7: the watch ---- */
 
 /** What the mother turns her head to in a listening pause or a look: a rustle in the
- *  heather beside her, the hide (him), round about, the grass where her calf lies.
- *  (ree-discover adds the birds she may listen to.) */
-export type WatchCue = 'ritsel' | 'hut' | 'rond' | 'gras';
+ *  heather beside her, the hide (him), round about, the grass where her calf lies, and
+ *  (ree-discover) a cuckoo calling from the trees off to one side. */
+export type WatchCue = 'ritsel' | 'hut' | 'rond' | 'gras' | 'koekoek';
 
 /** The mother's small acts in the watch, in play order. */
 export type WatchAct = 'rustle' | 'out' | 'walk' | 'listen' | 'bite' | 'look' | 'call' | 'calf' | 'sniff';
@@ -241,6 +241,8 @@ export const WATCH_LINES = {
   call: ['roept'],
   calf: ['kalfKomt'],
   sniff: ['ruikt'],
+  // ree-discover: the pause a cuckoo calls in (after its call)
+  koekoek: ['koekoek'],
 } as const;
 
 /** How long each act lasts (s), before the seed's jitter (±12 %). */
@@ -256,12 +258,38 @@ export const WATCH_S = { rustle: 3.0, listen: 3.6, bite: 2.4, look: 2.4, call: 3
  * coming to her, and her nose at it. The number of pauses is the level's, never the seed's; the seed picks the
  * order, the lines and the timing. ~25-35 s with her walks.
  */
-export function watchScript(play: Pick<Play, 'fork'>, o: { pauses: number; way: 1 | 2 }): WatchEvent[] {
+export function watchScript(play: Pick<Play, 'fork'>, o: { pauses: number; way: 1 | 2; koekoek?: boolean }): WatchEvent[] {
+  const out = watchEvents(play, o);
+  // ree-discover: a cuckoo calls in one of her listening pauses (a play that drew it): she
+  // turns her head to it instead of to a rustle. Its own fork, so the rest of the watch
+  // (its acts, their order, lines and timing) is the same with or without it; never the
+  // pause that looks at the hide (that one is about him)
+  if (o.koekoek) {
+    const at = out.flatMap((e, i) => (e.act === 'listen' && e.cue !== 'hut' ? [i] : []));
+    if (at.length) {
+      const e = out[play.fork('ree-koekoek').pick(at)];
+      e.cue = 'koekoek';
+      e.line = WATCH_LINES.koekoek[0];
+    }
+  }
+  return out;
+}
+
+/** The watch's events (watchScript without the birds). */
+function watchEvents(play: Pick<Play, 'fork'>, o: { pauses: number; way: 1 | 2 }): WatchEvent[] {
   const rnd = play.fork('ree-wacht');
   const pauses = Math.max(1, Math.min(3, Math.round(o.pauses)));
   const j = (s: number): number => Math.round(s * rnd.between(0.88, 1.12) * 100) / 100;
   const line = (pool: readonly string[]): string => rnd.pick(pool);
-  const listen = (cue: WatchCue): WatchEvent => ({ act: 'listen', s: j(WATCH_S.listen), cue, line: line(WATCH_LINES.listen) });
+  // (her listening pauses each say another line of the pool: at three pauses the same one
+  // came back, ~9 s on one line — ree-growth review r2; its own fork, the rest unchanged)
+  const heard = play.fork('ree-wacht-luister').shuffle(WATCH_LINES.listen);
+  let heardN = 0;
+  const listen = (cue: WatchCue): WatchEvent => {
+    const s = j(WATCH_S.listen);
+    rnd.pick(WATCH_LINES.listen); // (the watch's own stream draws as it did: its order and timing stay)
+    return { act: 'listen', s, cue, line: heard[heardN++ % heard.length] };
+  };
   const look = (cue: 'rond' | 'hut'): WatchEvent => ({ act: 'look', s: j(WATCH_S.look), cue, line: line(WATCH_LINES[cue]) });
   const out: WatchEvent[] = [
     // the bracken at her gap stirs while she gets up and comes out between her bushes,
@@ -322,3 +350,107 @@ export const WATCH_WALK_S = 2.5;
 /** …and her walk out of her gap into the open (her walk out of her bed, unseen, is the
  *  rustle's: she is seen as "Daar is de moeder!" is said). */
 export const WATCH_OUT_S = 2.0;
+
+/* ------------------------------------------------- run 7: something to notice ---- */
+
+/**
+ * The small things of the heath a play may hold (ree-discover, design §6.8): a woodlark
+ * that sings up out of the heather on one of his walks, a buzzard circling over the heath
+ * on his way to the hide, a cuckoo the mother turns her head to in the watch, a young
+ * birch a roebuck rubbed pale beside his path. Each is a row of the veldgids
+ * (content/ontdekkingen.ts, `ree-niet-aanraken.<id>`).
+ */
+export type ReeSmall = 'leeuwerik' | 'buizerd' | 'koekoek' | 'veegsporen';
+export const REE_SMALL: readonly ReeSmall[] = ['leeuwerik', 'buizerd', 'koekoek', 'veegsporen'];
+
+/** A little more to see that has no row: a stonechat ticking on a heather stalk by his
+ *  path, or a heath blue butterfly crossing it (only on the walk to the hide: never before
+ *  the search, whose look-alikes they are). */
+export type ReeExtra = 'tapuit' | 'vlinder';
+
+export interface ReeSurprises {
+  /** this play's small things (one or two) */
+  small: readonly ReeSmall[];
+  /** the walk the woodlark sings up on (null: no woodlark this play) */
+  leeuwerik: 'meadow' | 'hide' | null;
+  /** which of the layout's young birches is rubbed (null: none this play) */
+  boompje: number | null;
+  /** a little extra on the walk to the hide, or none */
+  extra: ReeExtra | null;
+  /** compact, logged with the play (`vr:lb.t`): the small things' first letters, the extra's */
+  code: string;
+}
+
+/** The play's note key for its surprises (never starts with `ree`: lastReeVariants reads that). */
+export const SURPRISE_KEY = 'vr';
+
+/** The chance a play holds two small things instead of one. */
+export const TWO_SMALL_P = 0.5;
+/** The chance of a little extra on the walk to the hide. */
+export const EXTRA_P = 0.5;
+
+/**
+ * This play's small things (pure; ree.variety.test.ts): one or two of the four, the ones he
+ * has not found yet first (`found(id)`: the save's discoveries, by the short id), in a
+ * seeded order; where each happens (the woodlark's walk, the rubbed birch among the
+ * layout's `birches`); and now and then a little extra. Deterministic from the play's seed
+ * and the save; each decision from its own fork. None of it ever happens during the search,
+ * a hold or a listening pause that is not its own (the cuckoo IS a pause's cue): only on
+ * the walks and in the watch's pause it calls in.
+ *
+ * One thing at a time on the walks (review r1: the woodlark, the buzzard and the stonechat
+ * all came on one walk to the hide while the walk to the grass had nothing). The woodlark
+ * flies only on a walk with room for it this morning (`larkOn`: the layout's, by its pool's
+ * side; none: no woodlark this morning), and on the one the buzzard (always on the walk to
+ * the hide) and the rubbed birch (beside the walk `birchOn` names) leave free when it may
+ * choose; the woodlark never shares a walk with the buzzard or the rubbed birch, nor the buzzard
+ * with a birch rubbed beside the walk to the hide (where one would, the play holds the next
+ * thing instead: one new card a walk, review r2). While he has not found the woodlark or the buzzard, a morning
+ * with room for it holds it first (not every morning has). The pool is its walk's own moment (his feet answer
+ * it): with the pool on his way to the hide (`hideFree` false) that walk holds no buzzard
+ * and no little extra. The little extra (always on the walk to the hide) comes only while
+ * that walk holds less than two things and no woodlark.
+ */
+export function reeSurprises(play: Pick<Play, 'fork'>, found: (id: ReeSmall) => boolean,
+  o: { birches: number; larkOn?: readonly ('meadow' | 'hide')[]; birchOn?: readonly ('meadow' | 'hide')[]; hideFree?: boolean }): ReeSurprises {
+  const f = play.fork('ree-zien');
+  const walks = o.larkOn ?? (['meadow', 'hide'] as const);
+  const fresh = f.shuffle(REE_SMALL.filter((s) => !found(s)));
+  const known = f.shuffle(REE_SMALL.filter((s) => found(s)));
+  const two = f.chance(TWO_SMALL_P);
+  const hideFree = o.hideFree ?? true;
+  // (the woodlark and the buzzard need a walk with room, which not every morning has: while
+  // he has not found one, a morning with room for it holds it first — the woodlark, whose
+  // mornings are fewest, before the buzzard)
+  const rank = (x: ReeSmall): number => (x === 'leeuwerik' && walks.length > 0 ? 0 : x === 'buizerd' && hideFree ? 1 : 2);
+  const first = [0, 1, 2].flatMap((r) => fresh.filter((x) => rank(x) === r));
+  // (which of the layout's young birches is rubbed, if this morning holds one: its own fork)
+  const birchIdx = o.birches > 0 ? play.fork('ree-boompje').int(0, o.birches - 1) : null;
+  const birchWalk = birchIdx !== null ? o.birchOn?.[birchIdx] ?? null : null;
+  /** may `x` join the others? (no woodlark without a walk for it, no buzzard on a walk with
+   *  the pool; the woodlark never on one walk with the buzzard or the rubbed birch, nor the
+   *  buzzard with a birch rubbed beside the walk to the hide — two cards on one short walk,
+   *  the second cut off by its end) */
+  const fits = (x: ReeSmall, others: readonly ReeSmall[]): boolean => {
+    const all = [x, ...others];
+    if (all.includes('leeuwerik') && !walks.length) return false;
+    if (all.includes('buizerd') && !hideFree) return false;
+    if (all.includes('buizerd') && all.includes('veegsporen') && birchWalk === 'hide') return false;
+    if (!all.includes('leeuwerik')) return true;
+    if (all.includes('buizerd') && !walks.includes('meadow')) return false;
+    return !(all.includes('veegsporen') && birchWalk && walks.every((w) => w === birchWalk));
+  };
+  const small: ReeSmall[] = [];
+  for (const s of [...first, ...known]) if (small.length < (two ? 2 : 1) && fits(s, small)) small.push(s);
+  const boompje = small.includes('veegsporen') ? birchIdx : null;
+  const birchOn = boompje !== null ? birchWalk : null;
+  /** how many of the play's other things a walk holds */
+  const holds = (w: 'meadow' | 'hide'): number => (w === 'hide' && small.includes('buizerd') ? 1 : 0) + (birchOn === w ? 1 : 0);
+  const freest = walks.filter((w) => holds(w) === Math.min(...walks.map(holds)));
+  const leeuwerik = small.includes('leeuwerik') ? play.fork('ree-leeuwerik').pick(freest) : null;
+  const xf = play.fork('ree-extra');
+  const want = xf.chance(EXTRA_P) ? xf.pick(['tapuit', 'vlinder'] as const) : null;
+  const extra = !hideFree || leeuwerik === 'hide' || holds('hide') >= 2 ? null : want;
+  const order = REE_SMALL.filter((s) => small.includes(s)).map((s) => s[0]).join('');
+  return { small, leeuwerik, boompje, extra, code: `${order}${extra ? `.${extra[0]}` : ''}` };
+}

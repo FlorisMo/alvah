@@ -18,7 +18,7 @@ import {
   cluePosts, clueGap, bootPrints, CLUE_FRAME, WAYS, WAY_IDS, FAMILY_LAYOUTS, nookAt, decoyAt, placesFor, useWay, wallowLog,
   wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, outSpotOf, bagView, sideBySideView, BAG_REACH, type WayId, type Way, type WayView,
   zeugStare, zeugView, ZEUG_STARE_M, NEST_R, ZEUG_STEP_M, walkOnSpot, yearlingSideOf, yearlingWay, legGap, YEARLING_LOG_M,
-  larkLandings, LARK_LAND, LENS_BACK,
+  larkLandings, LARK_LAND, LENS_BACK, NOOK_CLEAR_PX,
 } from './frisling.places.ts';
 import { WALK_ON_M } from '../beats/walk-math.ts';
 import { anchorInBiome, biomeAt, heightAt, VEN_CENTER } from '../../Biomes.ts';
@@ -436,6 +436,28 @@ for (const id of WAY_IDS) {
     }
     const cover = standCover(id);
     for (let i = 0; i < w.decoySpots.length; i++) assert.equal(cover.filter((c) => c.decoy === spotTag(i)).length, 1, `one dead clump on spot ${i}`);
+    // run 7 (growth): in the search's picture no look-alike stands over his nook or right
+    // beside it — every spot nearer than NOOK_CLEAR_PX (any way he lies, a bird low or high
+    // on its perch) is named in `nearNook`, and only those; and with them left out every
+    // nook still has a spot for each of the content's look-alikes (the top band lays them
+    // all) and an edge spot for the nightjar
+    const all = AREA_VELUWE.missies.find((m) => m.id === 'frisling')!.stappen[0].skin.distractors ?? [];
+    for (let n = 0; n < w.nooks.length; n++) {
+      const near: number[] = [];
+      for (let i = 0; i < w.decoySpots.length; i++) {
+        let min = Infinity;
+        for (const pose of [0, 1, 2] as const) {
+          const a = project(nookAt(id, n, pose), LYING_H * 0.8, lens);
+          for (const y of [0.2, 0.45, 0.7]) { const b = project(decoyAt(id, i), y, lens); min = Math.min(min, Math.hypot(a.x - b.x, a.y - b.y)); }
+        }
+        if (min < NOOK_CLEAR_PX) near.push(i);
+        else assert.ok(!(w.nearNook?.[n] ?? []).includes(i) || min < NOOK_CLEAR_PX + 20, `${id} nook ${n}: spot ${i} is kept out but lies ${min.toFixed(0)} px off`);
+      }
+      for (const i of near) assert.ok((w.nearNook?.[n] ?? []).includes(i), `${id} nook ${n}: spot ${i} stands over him in the picture: name it in nearNook`);
+      const free = w.decoySpots.map((_, i) => i).filter((i) => !(w.nearNook?.[n] ?? []).includes(i));
+      assert.ok(free.length >= all.length, `${id} nook ${n}: ${free.length} spots left for ${all.length} look-alikes`);
+      assert.ok(free.some((i) => w.decoySpots[i].edge), `${id} nook ${n}: an edge spot left for the nightjar`);
+    }
     // no plain clump stands on a nook (he lies in his bed, never in a tussock)
     for (let n = 0; n < w.nooks.length; n++) {
       const p = nookAt(id, n, 0);

@@ -124,7 +124,19 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          frisling (the wallow), ree (the copse, the meadow, the hide; run 7:
                          ree.variety.ts its seeded mornings, growth and watch script,
                          ree.window.ts the calf's glimpse fitted to the level both ways,
-                         for the lens the search really frames: `searchBeat`'s `fit`),
+                         for the lens the search really frames: `searchBeat`'s `fit`;
+                         ree-discover: ree.finds.ts what there is to notice, one or two
+                         small things a play drawn by `reeSurprises` (a woodlark flushed
+                         on a walk, a buzzard hunting low beyond the hide, a cuckoo as a
+                         listening pause's cue, a young birch a roebuck rubbed) and the
+                         rare twins at the reunion, each `k.discover`ed once seen or heard;
+                         one thing at a time: the woodlark and the buzzard only on a walk
+                         with room for them (`larkOn` by the pool's side, never beside the
+                         pool or the doe slipping in), never together, the buzzard never
+                         beside a birch rubbed by the walk to the hide; the woodlark flies
+                         only where his way runs on straight 7 m (`straightAhead`); a find's
+                         card still waiting as he arrives shows while he stands at the
+                         walk's end (`walkCards`), never held for the reunion),
                          wildcamera (the crossing, the glade, the thicket, the snare; its
                          trap photos in wildcamera.photos.ts; run 7: wildcamera.variety.ts
                          draws how each visitor comes (side + stop) and the night choir's
@@ -164,8 +176,9 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
 - *where things are*: `k.ranger()` (x, z, heading, speed, running), `k.lensFor(frame)`,
   `k.ctx.groundY`, `k.world` (the World: `residents`, `camera`, `faceRanger`).
 - *the animals*: `const fam = k.borrow()` → `fam.actors[key]` (Actors), `fam.dressing` (the
-  home), `fam.voice(key, on)`; `k.reunion(async () => …)` marks the mission done and plays
-  the reunion under its line; `k.dispose(state)` (the flow calls it) hands the home back.
+  home), `fam.voice(key, on)`; `k.reunion(async () => …, { holdS? })` marks the mission done
+  and plays the reunion under its line (`holdS`: the line may stay that much longer while the
+  play still shows new finds' cards); `k.dispose(state)` (the flow calls it) hands the home back.
 - *the lens*: `await k.frame({ at, heading, halfW, halfD, pitchDeg, include }, { face })`
   holds a framed view (a Stage fit at a world anchor, the ranger's spot among `include`),
   eased, ≤ 90°/s, a cut under reduced motion (run 7: `{ dip: true }` — a view that would turn
@@ -264,7 +277,8 @@ ui/hud/Reveal.ts     "Nieuw in je veldgids!" ("Dat hoorde je!" for a bird he met
                      (ui/hud/reveal-queue.ts: the pure rules); the real animal's picture, a
                      soft chime, a calm fade; the first reveals add "Je veldgids zit onder
                      Pauze." until he has opened his gids; one cut short comes back, one
-                     still speaking stays
+                     still speaking stays; a guide lesson waits only where it is on screen
+                     (the explore HUD), never over an adventure's reveals
 ui/veldgids/         the veldgids (Pauze's fifth tile, the hut's chip): Veldgids.ts a page per
                      place in story order and "Overal" last (◀ ▶ and the arrow keys, round
                      and round), a found thing's picture and name (a rare one's gold rim, a
@@ -305,7 +319,9 @@ mission records its helped animal (`geholpen`) quietly, and the home's rare coun
   `glimpse`); never invent a difficulty number in a home.
 - `k.discover(id, { quiet? })` — he really saw it (on screen, big enough, long enough) or
   heard it: recorded at once, a new one gets one calm reveal at the next quiet beat (a walk,
-  a look, the ending). Returns whether it was new. `k.rare()` — this play's rare visitor for
+  a look, the ending). Returns whether it was new. `k.revealsWaiting()` — how many reveals
+  still wait or show (a home may hold a calm picture until they have been seen: the ree's
+  reunion). `k.rare()` — this play's rare visitor for
   the home (rolled at the briefing), or null: show it, and discover it once he saw it.
 - `k.mood` — the mood this play stands in (`world.mood()`: the session's and the one on
   screen; `Adventure.moods: { allow, perPlay }` lets a home ask for its own light, `perPlay`

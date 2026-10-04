@@ -102,8 +102,10 @@ export interface ResidentGroup {
   dressing: HomeDressing | null;
   /** switch a resident's calls on or off while it is borrowed (a squeak to follow);
    *  `far` (m): meanwhile it calls while he is that far off and is heard that far (a
-   *  squeak he follows across a meadow), instead of its free-roam reach */
-  voice(key: string, on: boolean, far?: number): void;
+   *  squeak he follows across a meadow), instead of its free-roam reach; `every` (s, run 7
+   *  growth, additive): meanwhile it calls this often (a clearer trail: more often),
+   *  instead of its own `every` */
+  voice(key: string, on: boolean, far?: number, every?: readonly [number, number]): void;
 }
 
 interface Home {
@@ -117,7 +119,7 @@ interface Home {
   state: HomeState;
   borrowed: boolean;
   rest: FarRest;
-  voices: Map<string, { next: number; on: boolean; far: number | null }>;
+  voices: Map<string, { next: number; on: boolean; far: number | null; every?: readonly [number, number] | null }>;
   centre: { x: number; z: number };
   /** free roam: how each animal is reacting to the ranger (see `react`) */
   reacting: Map<string, Reaction>;
@@ -240,13 +242,17 @@ export class Residents {
    * the spec's pose until the next call. When the home is in that state and nobody borrows
    * it, the resident goes there now: `walk` = a calm walk (within its reach), else at once
    * (under the briefing card: a calf lying hidden in tall grass). A stop then lays it back
-   * here, where the play had it, never at a spot from another play.
+   * here, where the play had it, never at a spot from another play. Run 7 (ree-discover,
+   * additive): `pose` null gives the resident its spec's pose in that state back (a twin
+   * that only some plays have: the spec has none, so it is not there).
    */
-  repose(missionId: string, key: string, state: HomeState, pose: ResidentPose, opts: { walk?: boolean; cover?: Shy['to'] } = {}): void {
+  repose(missionId: string, key: string, state: HomeState, pose: ResidentPose | null, opts: { walk?: boolean; cover?: Shy['to'] } = {}): void {
     const home = this.homes.get(missionId);
     const r = home?.spec.residents.find((q) => q.key === key);
     if (!home || !r) return;
-    home.poses.set(key, { ...home.poses.get(key), [state]: pose });
+    const poses = { ...home.poses.get(key) };
+    if (pose) poses[state] = pose; else delete poses[state];
+    home.poses.set(key, poses);
     // (a shy one slips into THIS play's cover, never one across the heath: a cover too far
     // to walk to was a jump)
     if (opts.cover) home.covers.set(key, { ...home.covers.get(key), [state]: opts.cover });
@@ -300,7 +306,7 @@ export class Residents {
       missionId,
       actors: Object.fromEntries(home.actors),
       dressing: home.dressing,
-      voice: (key, on, far) => { const v = home.voices.get(key); if (v) { v.on = on; v.far = on ? far ?? null : null; if (on) v.next = Math.min(v.next, 1.2); } },
+      voice: (key, on, far, every) => { const v = home.voices.get(key); if (v) { v.on = on; v.far = on ? far ?? null : null; v.every = on ? every ?? null : null; if (on) v.next = Math.min(v.next, 1.2); } },
     };
   }
 
@@ -309,7 +315,7 @@ export class Residents {
     const home = this.homes.get(missionId);
     if (!home) return;
     home.borrowed = false;
-    for (const v of home.voices.values()) { v.on = true; v.far = null; }
+    for (const v of home.voices.values()) { v.on = true; v.far = null; v.every = null; }
     this.lay(home, state, fresh && !this.env.reduced());
   }
 
@@ -511,7 +517,8 @@ export class Residents {
       if (!near || speaking || !geluid) { v.next = near ? 0.8 : 1.5; continue; }
       Sound.callAt(voice.call, a.x, a.z, listenerOf(camera), v.far ?? undefined);
       a.called(); // (a squirrel flicks its tail as it chatters)
-      v.next = voice.every[0] + Math.random() * (voice.every[1] - voice.every[0]);
+      const every = v.every ?? voice.every;
+      v.next = every[0] + Math.random() * (every[1] - every[0]);
     }
   }
 

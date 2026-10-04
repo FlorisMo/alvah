@@ -88,11 +88,14 @@ export interface FlowHooks {
   fact(i: number): Promise<void>;
   /** the mission is won: the flow marks it done and shows the reunion line while the
    *  world plays `play` (the family together again) */
-  reunion(play: () => Promise<void>): Promise<void>;
+  reunion(play: () => Promise<void>, holdS?: number): Promise<void>;
   /** the pause card is up (the mission clock stands still) */
   paused(): boolean;
-  /** run 7 (§4.4): a NEW discovery's calm reveal (queued; it waits for a quiet moment) */
-  reveal?(o: Ontdekking): void;
+  /** run 7 (§4.4): a NEW discovery's calm reveal (queued; it waits for a quiet moment);
+   *  `heard` (ree-discover, additive): he met it by its call alone ("Dat hoorde je!") */
+  reveal?(o: Ontdekking, opts?: { heard?: boolean }): void;
+  /** ree-discover (additive): how many reveals wait or show now (none when not wired) */
+  revealsWaiting?(): number;
 }
 
 export interface KitOptions {
@@ -389,17 +392,22 @@ export class AdventureKit {
    * save at once; a NEW one gets one calm reveal at a quiet moment (`quiet`: none).
    * Returns whether it was new. Once a play: a second call for the same id in this play
    * records nothing (safe to call from a tick). An id missing from content/ontdekkingen.ts
-   * is a bug: it warns and records nothing.
+   * is a bug: it warns and records nothing. `heard` (ree-discover, additive): he met it by
+   * its call alone (a cuckoo in the trees): its reveal says "Dat hoorde je!".
    */
-  discover(id: string, opts: { quiet?: boolean } = {}): boolean {
+  discover(id: string, opts: { quiet?: boolean; heard?: boolean } = {}): boolean {
     const row = ontdekking(id);
     if (!row) { console.warn(`[adventure] k.discover: no discovery "${id}" in content/ontdekkingen.ts`); return false; }
     if (this.found.has(id)) return false; // (once a play: "times seen" counts plays, not frames)
     this.found.add(id);
     const fresh = store.discover(id);
-    if (fresh && !opts.quiet) this.hooks.reveal?.(row);
+    if (fresh && !opts.quiet) this.hooks.reveal?.(row, opts.heard ? { heard: true } : undefined);
     return fresh;
   }
+
+  /** How many new finds' reveals still wait for a quiet moment, or show now (ree-discover,
+   *  additive): a home may hold a calm picture until they have all been seen. */
+  revealsWaiting(): number { return this.hooks.revealsWaiting?.() ?? 0; }
 
   /** THIS play's rare visitor for this home (rolled at the briefing, §4.4), or null. Show
    *  it in the world; call `discover(its id)` once he really saw or heard it. */
@@ -417,15 +425,17 @@ export class AdventureKit {
     await this.guard(this.hooks.fact(i));
   }
 
-  /** The mission is won: the flow marks it done, and shows its line while `play` plays. */
-  async reunion(play: () => Promise<void>): Promise<void> {
+  /** The mission is won: the flow marks it done, and shows its line while `play` plays.
+   *  `holdS` (ree-discover, additive): how much longer than its usual most the line may
+   *  stay while `play` still plays (new finds' cards still to be seen there). */
+  async reunion(play: () => Promise<void>, opts: { holdS?: number } = {}): Promise<void> {
     // the EF contract: a mission is done only once every step was played and logged
     const missing = this.steps.map((_, i) => i).filter((i) => !this.logged.includes(i));
     if (missing.length) throw new Error(`[adventure] the reunion came before step(s) ${missing.join(', ')} were played`);
     this.beat = 'reunion';
     this.ui.say(null);
     this.ui.setChip(null);
-    await this.guard(this.hooks.reunion(play));
+    await this.guard(this.hooks.reunion(play, opts.holdS));
   }
 
   /** Borrow this mission's home animals (they stop idling on their own). */

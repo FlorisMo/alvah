@@ -35,9 +35,9 @@ test('the same seed gives the same play; its choices are noted on the play', () 
     assert.deepEqual(variant(seed), variant(seed));
     const play = newPlay('frisling', seed, 1);
     const v = frislingVariant(play, [], DECOYS);
-    assert.equal(play.variant.way, `${v.way}/${FAMILY_LAYOUTS[v.family].id}`, 'the way and the family, one note');
-    assert.equal(play.variant.nook, `${v.nook}/${v.pose}`);
-    assert.deepEqual(Object.keys(play.variant), ['way', 'nook'], 'the nook noted last');
+    assert.equal(play.variant.way, `${v.way}/${FAMILY_LAYOUTS[v.family].id}/${v.nook}`, 'the way, the family and the nook, one note');
+    assert.equal(play.variant.pose, v.pose);
+    assert.deepEqual(Object.keys(play.variant), ['way', 'pose'], 'the pose noted last');
   }
 });
 
@@ -167,6 +167,19 @@ test('a way that comes again hides him in another nook than the last time that w
   }
 });
 
+test('no look-alike is laid over the nook he lies in (run 7 growth: nearNook), at any level', () => {
+  for (const count of [4, 5, 6, 7, 8]) {
+    const decoys = DECOYS.slice(0, count);
+    for (let seed = 0; seed < 300; seed++) {
+      const v = frislingVariant(newPlay('frisling', seed, 2), [], decoys);
+      const near = WAYS[v.way].nearNook?.[v.nook] ?? [];
+      for (const s of v.decoySpots) assert.ok(!near.includes(s), `seed ${seed}: ${v.way} nook ${v.nook} gets look-alike spot ${s}`);
+      assert.equal(new Set(v.decoySpots).size, count, 'one spot each');
+      decoys.forEach((d, i) => { if (wantsEdge(d)) assert.ok(WAYS[v.way].decoySpots[v.decoySpots[i]].edge, 'the nightjar at an edge spot'); });
+    }
+  }
+});
+
 test('the seed table: a fresh save\'s first play draws each way', () => {
   for (const id of WAY_IDS) assert.equal(variant(SEED_TABLE[id]).way, id, `seed ${SEED_TABLE[id]} draws ${id}`);
 });
@@ -268,7 +281,7 @@ test('thirty plays in a row: never the same way twice, no fixed cycle, every way
       assert.ok(!recentRust(history.slice(0, i * 3), 'frisling', start + i).includes(plays[i].rust), `never the calm order of his last two plays (${label})`);
       // a way that comes again: another nook than the last time (when the history kept it)
       const prev = plays.slice(0, i).reverse().find((p) => p.way === ways[i]);
-      if (prev && prev.va.includes(',nook:')) assert.notEqual(plays[i].nook, prev.nook, `${ways[i]} again, the same nook (${label})`);
+      if (prev) assert.notEqual(plays[i].nook, prev.nook, `${ways[i]} again, the same nook (${label})`);
       if (prev) assert.notEqual(plays[i].fam, prev.fam, `${ways[i]} again, the family lies as it did then (${label})`);
     }
     // from the fourth play on, the ways are no fixed three-play cycle (nor is the family)
@@ -290,7 +303,7 @@ test('thirty plays in a row: never the same way twice, no fixed cycle, every way
   }
 });
 
-test('the history keeps what the next play reads: the light, a rare visitor, the calm order, the way and the family fit in 60 characters', () => {
+test('the history keeps what the next play reads: the light, a rare visitor, the calm order, the way, the family and the nook fit in 60 characters', () => {
   // the longest light and this home's longest rare visitor (the design's magpie, or a
   // longer one the table adds): the worst a play's variant can start with
   const longestMood = [...MOOD_IDS].sort((a, b) => b.length - a.length)[0];
@@ -300,19 +313,29 @@ test('the history keeps what the next play reads: the light, a rare visitor, the
     const history: { m: string; sd: number; va?: string }[] = [];
     const p = playInto(history, seed, 1, { mood: longestMood, rare });
     assert.ok(p.va.length <= 60, p.va);
-    assert.match(p.va, new RegExp(`^mood:${longestMood},rare:${rare},rust:[a-z]{5},way:[a-z]+/[a-z]+`), p.va);
+    assert.match(p.va, new RegExp(`^mood:${longestMood},rare:${rare},rust:[a-z]{5},way:[a-z]+/[a-z]+/\\d+`), p.va);
     assert.deepEqual(recentWays(history), [p.way], p.va);
     assert.deepEqual(recentFams(history), [p.fam], p.va);
+    assert.deepEqual(recentPlays(history).map((q) => q.nook), [p.nook], p.va);
     assert.deepEqual(recentRust(history, 'frisling', seed + 1), [p.rust], p.va);
   }
-  // the worst case the review named, laid by hand: it fits whole but for the nook
+  // the worst case the review named, laid by hand: the way, the family and the nook all fit
+  // (only how he lay in the nook may be cut)
   const play = newPlay('frisling', 7, 1);
   play.note('mood', 'ochtendnevel');
   play.note('rare', rare);
   play.note('rust', 'advzp');
-  play.note('way', 'steen/modder');
-  play.note('nook', '3/1');
+  play.note('way', 'steen/modder/3');
+  play.note('pose', 1);
   const va = compactVariant(play.variant)!;
   const h = [{ m: 'frisling', sd: 7, va }];
-  assert.deepEqual([recentWays(h), recentFams(h), recentRust(h, 'frisling', 8)], [['steen'], ['modder'], ['advzp']], va);
+  assert.deepEqual([recentWays(h), recentFams(h), recentPlays(h).map((q) => q.nook), recentRust(h, 'frisling', 8)], [['steen'], ['modder'], [3], ['advzp']], va);
+});
+
+test('a save from before the nook joined the way note still reads back its way, family and nook', () => {
+  const old = [
+    { m: 'frisling', sd: 11, va: 'mood:zonnig,rust:advpz,way:berk/rand,nook:4/2' },
+    { m: 'frisling', sd: 12, va: 'mood:schemer,rust:avdzp,way:steen/boom/2,pose:0' },
+  ];
+  assert.deepEqual(recentPlays(old), [{ sd: 12, way: 'steen', fam: 'boom', nook: 2 }, { sd: 11, way: 'berk', fam: 'rand', nook: 4 }]);
 });
