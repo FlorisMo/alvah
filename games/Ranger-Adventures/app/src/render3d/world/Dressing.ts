@@ -677,10 +677,18 @@ export class Dressing {
     this.plantFields.push(field);
     if (wind > 0) {
       for (const c of field.chunks) {
-        this.windMeshes.push({
-          mesh: c.mesh, strength: wind,
-          items: c.items.map((p) => ({ x: p.x, y: p.y, z: p.z, sx: p.s, sy: p.sy ?? p.s, phase: p.phase ?? 0, rotY: p.rotY })),
-        });
+        const items = c.items.map((p) => ({ x: p.x, y: p.y, z: p.z, sx: p.s, sy: p.sy ?? p.s, phase: p.phase ?? 0, rotY: p.rotY }));
+        this.windMeshes.push({ mesh: c.mesh, strength: wind, items });
+        // run 7 (additive): where each blade is PLANTED (no wind lean), for the dev seat probe
+        // (play/kit `seating`): a blade the breeze bends is still standing where it stood —
+        // its swaying pose is not a thing that moved or sank (a reed by the ven's marker
+        // read as 'appeared, 6 cm in the ground' between two moments of the breeze)
+        c.mesh.userData.restMatrixAt = (i: number, out: THREE.Matrix4): THREE.Matrix4 => {
+          const it = items[i];
+          const q = new THREE.Quaternion();
+          if (it.rotY) q.setFromAxisAngle(Dressing._up, it.rotY);
+          return out.compose(new THREE.Vector3(it.x, it.y, it.z), q, new THREE.Vector3(it.sx, it.sy, it.sx));
+        };
       }
       this.lastWindT = NaN; // pose the new blades on the next tick
     }

@@ -346,8 +346,11 @@ function placedThings(v: LiveView, x: number, z: number, r: number,
     if (inst.isInstancedMesh) {
       if (!onInstance) return;
       if (!inst.geometry.boundingBox) inst.geometry.computeBoundingBox();
+      // (run 7, additive: a plant the breeze sways says where it is planted — its seat is
+      // that, not this frame's lean; without the hook, the instance as drawn, as before)
+      const rest = inst.userData.restMatrixAt as ((i: number, out: THREE.Matrix4) => THREE.Matrix4) | undefined;
       for (let i = 0; i < inst.count; i++) {
-        inst.getMatrixAt(i, m4);
+        if (rest) rest(i, m4); else inst.getMatrixAt(i, m4);
         m4.premultiply(inst.matrixWorld);
         c.setFromMatrixPosition(m4);
         if (Math.hypot(c.x - x, c.z - z) <= r) onInstance(o.name || inst.geometry.type, i, inst.geometry.boundingBox!.clone().applyMatrix4(m4));
