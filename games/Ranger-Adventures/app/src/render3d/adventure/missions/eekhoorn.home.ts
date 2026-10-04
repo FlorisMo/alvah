@@ -23,14 +23,14 @@ import type { HomeState, Spot } from '../types';
 import { PatchField } from '../patches';
 import { boxObstacle } from '../../CharacterController';
 import { lineClear, trunkUpright, type Trunk, type Upright } from '../squirrel-math';
-import { Squirrel, pineConeGeometry, pineConeMaterial, type SquirrelTree } from '../squirrel';
+import { Squirrel, PINE_CONE_LEN, pineConeGeometry, pineConeMaterial, type SquirrelTree } from '../squirrel';
 import type { ActorEnv } from '../actors';
 import { SIZE } from '../../AnimalScale';
 import {
   GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, JAY_GROUND, JAY_WAIT, NEIGHBOURS, PERCH, ROUTES, SEEDLING_AT, SLOTS, SNAG, SPOT_SIZE, STUMP, WOODPECKER,
   EEKHOORN_PLACES, FIRST_TRIO, gladeSpots, type EekhoornPlay, type FieldSym, type HomeTree, type Slot, type Trio,
   NEST, DINING, STRONK, STAM, SeenClock, diningById, nestOf, nestSolid, type DiningId, type DiningSpot, type NestSpot,
-  SECOND_HIDE, JAY_CACHE,
+  SECOND_HIDE, JAY_CACHE, CONE_DROP, CONE_FALL,
 } from './eekhoorn.places';
 import { headingTo, stream } from '../places';
 import { acornGeometry, acornMaterial } from '../acorn';
@@ -131,9 +131,6 @@ const SCALE_LIFE = 9;
 /** The jay's pecks as it pushes its acorn into the needles, a woodpecker's drum roll (s). */
 const PECK_S = 1.2;
 const DRUM_S = 0.85;
-/** A pine cone dropping from a crown: from how high (m), how fast it gathers speed (a cone
- *  through pine twigs, m/s²: a little slower than a stone), how much of it the one bounce keeps. */
-const CONE_FALL = { from: 6.5, g: 6, bounce: 0.3 } as const; // (a fall of ~1.5 s: seen coming down)
 const SEEDLING_SEE = { within: 6, px: 30, secs: 1 } as const;
 /** How fast the nest fades when the lens comes by it (s), like a crown. */
 const NEST_FADE_S = 0.25;
@@ -172,7 +169,9 @@ export class EekhoornHome implements HomeDressing {
   /** run 7 (ek-day): a pine cone dropped from a crown beside his path (the surprise), and
    *  how it falls */
   private readonly cone = new THREE.Mesh(pineConeGeometry(), pineConeMaterial());
-  private coneFall: { vx: number; vz: number; vy: number; bounced: boolean; landed: (() => void) | null } | null = null;
+  private coneFall: { vx: number; vz: number; vy: number; bounced: boolean; landed: (() => void) | null; t: number; T: number; q0: THREE.Quaternion; q1: THREE.Quaternion } | null = null;
+  /** the way the dropped cone lies, across his view (a unit vector over the ground) */
+  private coneAcross = new THREE.Vector3(1, 0, 0);
   /** run 7 (ek-day): the scales a pine cone it nibbles sheds — they flutter down from its
    *  paws and lie on the needles a while (one mesh, drawn only while any is there) */
   private readonly scales: THREE.InstancedMesh;
@@ -285,7 +284,7 @@ export class EekhoornHome implements HomeDressing {
     /* -- run 7 (ek-day): a pine cone that may drop beside his path (one mesh) -- */
     this.cone.name = 'dropped-pine-cone';
     this.cone.visible = false;
-    this.cone.scale.setScalar(2.6); // (generous, like the acorn: a child sees it drop some 5 m off)
+    this.cone.scale.setScalar(CONE_DROP.len / PINE_CONE_LEN); // (generous, like the acorn: ≥ 25 px where it lands, eekhoorn.places CONE_DROP)
     this.group.add(this.cone);
 
     /* -- run 7 (ek-day): the scales of a cone it nibbles (one mesh) -- */
@@ -644,19 +643,32 @@ export class EekhoornHome implements HomeDressing {
   /** Where the bird on the store pine's bark is (its drum comes from there). */
   stamAt(): Spot { return { x: PERCH.stam.x, z: PERCH.stam.z }; }
 
-  /** Run 7 (ek-day, the surprise `denappel`): a pine cone drops from the crown above `at`,
-   *  lands on the needles (`landed`: the soft thud), bounces once a little away from the
-   *  lens at `lens`, and lies there for the rest of the play. A cut under reduced motion. */
+  /** Run 7 (ek-day, the surprise `denappel`): a pine cone drops from the crown above `at` —
+   *  from just above the top of his picture (eekhoorn.places CONE_FALL), turning over as it
+   *  falls — lands on the needles (`landed`: the soft thud), bounces once a little away from
+   *  the lens at `lens`, and lies there on its side, across his view, for the rest of the
+   *  play. A cut under reduced motion. */
   dropCone(at: Spot, lens: Spot, landed: () => void): void {
     const g = this.env.groundY(at.x, at.z);
     const away = headingTo(lens, at);
     this.cone.position.set(at.x, g + CONE_FALL.from, at.z);
-    this.cone.rotation.set(0.4, 0, 1.2);
+    // (it starts tip down, a little tilted, and comes to lie across the view)
+    this.coneAcross.set(Math.cos(away), 0, -Math.sin(away));
+    const up = new THREE.Vector3(0, 1, 0);
+    const q0 = new THREE.Quaternion().setFromUnitVectors(up, new THREE.Vector3(Math.sin(away) * 0.35, -1, Math.cos(away) * 0.35).normalize());
+    const q1 = new THREE.Quaternion().setFromUnitVectors(up, this.coneAcross.clone().add(new THREE.Vector3(0, 0.08, 0)).normalize());
+    this.cone.quaternion.copy(q0);
     this.cone.visible = true;
-    this.coneFall = { vx: Math.sin(away) * 0.35, vz: Math.cos(away) * 0.35, vy: 0, bounced: false, landed };
+    this.coneFall = { vx: Math.sin(away) * 0.35, vz: Math.cos(away) * 0.35, vy: 0, bounced: false, landed, t: 0, T: Math.sqrt((2 * CONE_FALL.from) / CONE_FALL.g), q0, q1 };
   }
   /** Where the dropped cone is (or null). */
   coneNow(): THREE.Vector3 | null { return this.cone.visible ? this.cone.position.clone() : null; }
+  /** Its two ends as it lies (or falls), for how big it reads (or null). */
+  coneEnds(): [THREE.Vector3, THREE.Vector3] | null {
+    if (!this.cone.visible) return null;
+    const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(this.cone.quaternion).multiplyScalar(CONE_DROP.len / 2);
+    return [this.cone.position.clone().add(axis), this.cone.position.clone().sub(axis)];
+  }
 
   /** An acorn laid at (x, z) sinks into the moss over `secs` (the squirrel buries it). */
   buryAcorn(x: number, z: number, secs: number): void { this.moveNut(x, z, 0.075, 0.01, secs); }
@@ -861,19 +873,22 @@ export class EekhoornHome implements HomeDressing {
       this.puffs.instanceMatrix.needsUpdate = true;
       this.puffs.visible = live;
     }
-    // a dropped pine cone: it falls through the crown, lands with a soft thud, bounces once
+    // a dropped pine cone: it falls, turning over to lie across his view, lands with a soft
+    // thud, bounces once
     if (this.coneFall) {
       const f = this.coneFall, c = this.cone.position;
       const floor = this.env.groundY(c.x, c.z) + 0.028 * this.cone.scale.x; // (lying on its side)
-      if (reduced) { c.y = floor; this.coneFall = null; f.landed?.(); }
+      if (reduced) { c.y = floor; this.cone.quaternion.copy(f.q1); this.coneFall = null; f.landed?.(); }
       else {
+        f.t += dt;
         f.vy -= CONE_FALL.g * dt;
         c.y += f.vy * dt;
-        if (f.bounced) { c.x += f.vx * dt; c.z += f.vz * dt; this.cone.rotation.x += dt * 4; }
+        this.cone.quaternion.slerpQuaternions(f.q0, f.q1, Math.min(1, f.t / f.T));
+        if (f.bounced) { c.x += f.vx * dt; c.z += f.vz * dt; }
         if (c.y <= floor) {
           c.y = floor;
           if (!f.bounced) { f.bounced = true; f.vy = -f.vy * CONE_FALL.bounce; f.landed?.(); f.landed = null; this.puffAt(c.x, c.z, reduced); }
-          else { this.coneFall = null; this.cone.rotation.set(Math.PI / 2, this.cone.rotation.y, 1.2); }
+          else { this.coneFall = null; this.cone.quaternion.copy(f.q1); }
         }
       }
     }

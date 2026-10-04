@@ -917,6 +917,8 @@ const MISSIE_EEKHOORN = {
       nogEenKeer: 'Nog een keer!',
       weerGevonden: 'Weer gevonden!',
       gaaiVerstopt: 'De gaai verstopt ook nootjes!',
+      // run 7 (ek-day, review r1): a pine cone drops in front of him as he walks up
+      plof: 'Plof! Een dennenappel.',
     },
     knap: {
       routeKijk: 'Kijk waar hij zijn voorraad verstopt.',

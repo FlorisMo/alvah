@@ -21,7 +21,7 @@ import {
   seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
-  drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, HIDE2_TURN, HIDE2_STEP, hide2Stand, denSpot, DEN_DAY, BURY_AT, JAY_CACHE, jayFliesAway, coneDrop, CONE_DROP, type Drawn,
+  drawDay, DEN_KINDS, EINDES, ANTICS, SUN_MOODS, SECOND_HIDE, ALL_HIDE_TREES, HIDE2_TURN, HIDE2_STEP, hide2Stand, denSpot, DEN_DAY, BURY_AT, JAY_CACHE, jayFliesAway, coneDrop, CONE_DROP, CONE_FALL, type Drawn,
   FOUND_RUN, foundRun, foundRunPath, lensBehind, JAY_SEE,
   NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
@@ -782,30 +782,63 @@ test('the surprises (ek-day, review r1): the jay buries its acorn where he sees 
   assert.ok(pxAt(JAY_SEE.h, 8.3) < JAY_SEE.px && pxAt(JAY_SEE.h, 8.0) >= JAY_SEE.px, `${JAY_SEE.px} px is a ${JAY_SEE.h} m jay about 8 m from the lens`);
 });
 
-test('the surprises (ek-day): a pine cone drops from the pine he walks up to, in front of its trunk beside his way, never on him, never on a trunk', () => {
-  let n = 0;
+test('the surprises (ek-day): a pine cone drops from the pine he walks up to, in front of its trunk beside his way, away from the squirrel — its fall plays in his picture and it lies big enough to read', () => {
+  let n = 0, walks = 0, walkDrops = 0;
+  const falls: number[] = [], sizes: number[] = [];
+  const T = Math.sqrt((2 * CONE_FALL.from) / CONE_FALL.g);
   for (const rid of ROUTE_IDS) for (const t of ROUTES[rid].waits) {
-    let fits = 0, tries = 0;
-    // (from wherever he walks up to it: all round it, 4-7.5 m off)
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) for (const d of [4.2, 5.5, 7.0]) {
-      const me = { x: t.x + Math.sin(a) * d, z: t.z + Math.cos(a) * d };
-      if (HOME_TREES.some((o) => dist(o, me) < trunkClear(o))) continue;
-      tries += 1;
-      const c = coneDrop(me, t);
+    const seat = seatOf(t);
+    // (he walks straight up to it from all round: somewhere on the way, at a frame's step, it drops)
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) {
+      const from = { x: t.x + Math.sin(a) * 6, z: t.z + Math.cos(a) * 6 };
+      if (HOME_TREES.some((o) => o !== t && segDist(o, from, t) < trunkClear(o))) continue;
+      walks += 1;
+      let me = { ...from }, c: { x: number; z: number } | null = null;
+      for (let s = 0; s < 40 && !c && dist(me, t) > 2.6; s++) {
+        const h = headingTo(me, t);
+        me = { x: me.x + Math.sin(h) * 0.1, z: me.z + Math.cos(h) * 0.1 };
+        c = coneDrop(me, t);
+      }
       if (!c) continue;
-      fits += 1; n += 1;
+      walkDrops += 1; n += 1;
+      const id = `${rid}/${t.id} from ${deg(a)}°`;
+      const h = headingTo(me, t);
       const r = dist(c, t);
-      assert.ok(r >= 1.45 && r <= 1.95, `${t.id}: in front of its trunk (${r.toFixed(2)} m)`);
-      assert.ok(dist(c, me) < dist(t, me), `${t.id}: on his side of the trunk`);
-      assert.ok(segDist(c, me, t) >= CONE_DROP.beside, `${t.id}: beside his way, never on it`);
-      assert.ok(dist(c, me) >= 2.0, `${t.id}: never on him`);
-      for (const o of HOME_TREES) assert.ok(dist(o, c) >= CONE_DROP.clear, `${t.id}: not on ${o.id}'s root spurs`);
+      assert.ok(r >= 1.45 && r <= 2.15, `${id}: in front of its trunk, under its crown (${r.toFixed(2)} m)`);
+      assert.ok(dist(c, me) < dist(t, me), `${id}: on his side of the trunk`);
+      assert.ok(segDist(c, me, t) >= CONE_DROP.beside, `${id}: beside his way, never on it`);
+      assert.ok(dist(c, me) >= 1.5, `${id}: never on him`);
+      assert.ok(dist(c, seat) >= CONE_DROP.seat, `${id}: away from the squirrel's stub`);
+      for (const o of HOME_TREES) assert.ok(dist(o, c) >= CONE_DROP.clear, `${id}: not on ${o.id}'s root spurs`);
       assert.equal(biomeAt(c.x, c.z), 'bos');
+      // through the follow lens behind him at the drop: where it starts is out of sight (over the
+      // picture's top, or under the line card), its last CONE_FALL.see s at least fall inside
+      // the picture, clear of his body and of the squirrel on its stub, and it lies big enough
+      const g = groundY(c.x, c.z);
+      const start = followPx(me, h, { x: c.x, y: g + CONE_FALL.from, z: c.z });
+      assert.ok(start.y <= 92, `${id}: it starts out of sight (${start.y.toFixed(0)} px from the top)`);
+      const sq = followPx(me, h, { x: seat.x, y: groundY(seat.x, seat.z) + WAIT_H + 0.15, z: seat.z });
+      let seen = 0;
+      for (let u = 0; u <= T; u += 0.01) {
+        const q = followPx(me, h, { x: c.x, y: g + CONE_FALL.from - (CONE_FALL.g * u * u) / 2, z: c.z });
+        if (!q.inside || q.y < 96) { assert.equal(seen, 0, `${id}: once in his picture it stays in it`); continue; }
+        seen += 0.01;
+        assert.ok(Math.abs(q.x - W / 2) >= 80, `${id}: clear of his body (${q.x.toFixed(0)} px)`);
+        assert.ok(Math.hypot(q.x - sq.x, q.y - sq.y) >= 70, `${id}: clear of the squirrel (${Math.hypot(q.x - sq.x, q.y - sq.y).toFixed(0)} px)`);
+      }
+      falls.push(seen);
+      assert.ok(seen >= CONE_FALL.see, `${id}: its fall is in his picture ${seen.toFixed(2)} s`);
+      const land = followPx(me, h, { x: c.x, y: g + 0.07, z: c.z });
+      assert.ok(land.inside && land.y > 200 && land.y < H - 120, `${id}: it lands in the middle of his picture (${land.y.toFixed(0)})`);
+      const size = pxAt(CONE_DROP.len, land.d);
+      sizes.push(size);
+      assert.ok(size >= CONE_DROP.px, `${id}: it lies ${size.toFixed(0)} px long`);
     }
-    assert.ok(fits / tries >= 0.8, `${rid}/${t.id}: a cone fits from ${fits} of ${tries} ways up to it`);
   }
+  console.log(`the cone: drops on ${walkDrops} of ${walks} walks up to a wait; its fall seen ${Math.min(...falls).toFixed(2)}-${Math.max(...falls).toFixed(2)} s; ${Math.min(...sizes).toFixed(0)}-${Math.max(...sizes).toFixed(0)} px where it lies`);
+  assert.ok(walkDrops / walks >= 0.85, `a cone drops on ${walkDrops} of ${walks} walks up to a wait`);
   assert.equal(coneDrop({ x: ROUTES.midden.waits[0].x + 9, z: ROUTES.midden.waits[0].z }, ROUTES.midden.waits[0]), null, 'not from far off');
-  assert.ok(n > 100, `${n} drops`);
+  assert.ok(n > 60, `${n} drops`);
 });
 
 test('the den look turns to the side the squirrel will lead him', () => {

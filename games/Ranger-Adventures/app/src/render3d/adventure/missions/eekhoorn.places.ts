@@ -318,22 +318,38 @@ export function jayFliesAway(me: Spot, at: Spot = JAY_CACHE.midden): boolean {
 /**
  * Run 7 (ek-day, the surprise `denappel`): where a pine cone from the crown of the pine he
  * walks up to (where the squirrel waits for him) lands — in front of its trunk on his side,
- * `r` m out from it and turned `turn` rad off his line to it (the first that fits: beside
- * his way, never on it — `beside` m off it at least — never on a trunk's root spurs
- * `clear`, nor a dining spot), while he is `from` m off the pine; else null. Walking up to
- * the squirrel he looks there: it falls in the middle of his picture (played 2026-10-04: a
- * cone dropped beside his own path, from a pine he passed under, fell at the picture's edge
- * or behind him as he walked on and turned, a speck nobody saw).
+ * `r` m out from it (under its crown, nearest him first) and turned `turn` rad off his line
+ * to it, on the side away from the stub the squirrel sits on (`seat` m from its seat at
+ * least) — the first that fits: beside his way, never on it (`beside` m off it at least),
+ * never on a trunk's root spurs (`clear`) nor a dining spot, and big enough where it lies
+ * (its `len` m at least `px` of an 800 px picture through the follow lens behind him facing
+ * `heading`) — while he is `from` m off the pine; else null. Walking up to the squirrel he
+ * looks there (played 2026-10-04, review r1: dropped 3-6 m ahead of him it lay 15-25 px on
+ * the needles, and its fall from 6.5 m up was above his picture: nobody saw it fall).
  */
-export const CONE_DROP = { r: [1.5, 1.9], turn: [0.75, 1.0], from: [4.0, 7.5], beside: 0.9, clear: 1.25 } as const;
-export function coneDrop(me: Spot, t: HomeTree): Spot | null {
+export const CONE_DROP = { r: [2.1, 1.8, 1.5], turn: [0.6, 0.75, 0.9], from: [3.0, 5.0], beside: 0.9, clear: 1.25, seat: 1.0, len: 0.25, px: 25 } as const;
+/**
+ * …and how it falls (eekhoorn.home): from `from` m up — just above the top of his picture
+ * (under the line card), so it is never seen to start in the air, while its last `see` s at
+ * least fall inside it (the follow lens shows ~2.7 m of air over the needles there: a cone
+ * from the crown, 6.5 m up, crossed it in a third of a second) — gathering speed `g` m/s²
+ * (a cone through pine twigs), one bounce keeping `bounce` of it.
+ */
+export const CONE_FALL = { from: 3.1, g: 5, bounce: 0.3, see: 0.6 } as const;
+/** How tall `size` m at `d` m reads through the 55° follow lens, as a share of the picture. */
+const shareAt = (size: number, d: number): number => size / (2 * d * Math.tan((55 / 2) * Math.PI / 180));
+export function coneDrop(me: Spot, t: HomeTree, heading: number = headingTo(me, t)): Spot | null {
   const d = dist(me, t);
   if (d < CONE_DROP.from[0] || d > CONE_DROP.from[1]) return null;
   const toMe = headingTo(t, me);
-  for (const r of CONE_DROP.r) for (const a of CONE_DROP.turn) for (const s of [1, -1]) {
+  const seat = seatOf(t);
+  const stub = t.branch ? Math.sign(wrapA(t.branch.ang - toMe)) || 1 : 1;
+  const lens = { x: me.x - Math.sin(heading) * FOUND_RUN.back, z: me.z - Math.cos(heading) * FOUND_RUN.back };
+  for (const r of CONE_DROP.r) for (const a of CONE_DROP.turn) for (const s of [-stub, stub]) {
     const p = { x: t.x + Math.sin(toMe + s * a) * r, z: t.z + Math.cos(toMe + s * a) * r };
     if (HOME_TREES.some((o) => dist(o, p) < CONE_DROP.clear) || segDist(p, me, t) < CONE_DROP.beside) continue;
-    if (DINING.some((q) => dist(q, p) < 1.0)) continue;
+    if (DINING.some((q) => dist(q, p) < 1.0) || dist(p, seat) < CONE_DROP.seat) continue;
+    if (shareAt(CONE_DROP.len, Math.hypot(dist(lens, p), 2.4)) * 800 < CONE_DROP.px) continue;
     return p;
   }
   return null;

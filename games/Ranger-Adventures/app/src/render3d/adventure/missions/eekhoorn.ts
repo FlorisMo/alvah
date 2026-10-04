@@ -50,7 +50,7 @@ import {
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
   DEN_VISITOR, DINING_SEE, NEST, NEST_SEE, NEST_WATCH, SeenClock, YOUNG, denVisitor, nestPeek, nestTrees, nestWatch, youngPeek,
-  ANTICS, DEN_KINDS, DEN_DAY, denSpot, EINDES, BURY_AT, SECOND_HIDE, coneDrop, jayFliesAway, hide2Stand, foundRun, JAY_SEE,
+  ANTICS, DEN_KINDS, DEN_DAY, denSpot, EINDES, BURY_AT, SECOND_HIDE, coneDrop, CONE_FALL, jayFliesAway, hide2Stand, foundRun, JAY_SEE,
 } from './eekhoorn.places';
 import { ontdekking } from '../../../content/ontdekkingen';
 
@@ -538,17 +538,51 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     V1.project(cam);
     return Math.abs(V1.x) <= xMax && V1.y >= yMin && V1.y <= 0.5;
   };
-  /** the cone: as he walks up to the pine the squirrel waits on, one drops from its crown
-   *  in front of its trunk, beside his way, in the middle of his picture */
-  const coneTick = (walkFrom: number, t: HomeTree): void => {
+  /** where a point `up` m over the ground at `q` is in his picture now (ndc), or null behind
+   *  the lens */
+  const ndcOf = (q: { x: number; z: number }, up: number): THREE.Vector3 | null => {
+    const cam = k.world.camera;
+    cam.updateMatrixWorld();
+    V1.set(q.x, k.ctx.groundY(q.x, q.z) + up, q.z);
+    if (V3.copy(V1).applyMatrix4(cam.matrixWorldInverse).z > -0.5) return null;
+    return V1.project(cam);
+  };
+  /** the cone: as he walks up to the pine the squirrel waits on, one drops from its crown in
+   *  front of its trunk, beside his way, away from the squirrel's stub, in the middle of his
+   *  picture, near enough to read where it lands (eekhoorn.places coneDrop) — from just above
+   *  the top of his picture, so its fall plays in it (CONE_FALL; review r1: from the crown it
+   *  fell above his picture and lay a speck); 'Plof! Een dennenappel.' as it lands */
+  const coneTick = (walkFrom: number, t: HomeTree, name: string, line: string): void => {
     if (verrDone || verr !== 'denappel') return;
     const m = k.ranger();
     if (k.now - walkFrom < 1.5) return;
-    const spot = coneDrop(m, t);
+    const spot = coneDrop(m, t, m.heading);
     if (!spot || !inPicture(spot, 0.1, 0.5, -0.5)) return;
+    // (where it starts: over the top of his picture or under the line card, never in sight)
+    const H = k.ctx.canvas.clientHeight || 800;
+    const top = ndcOf(spot, CONE_FALL.from);
+    if (top && top.y < 1 - (2 * 92) / H) return;
     verrDone = true;
     k.stats.verr_go = 1;
-    home.dropCone(spot, lens(), () => { k.stats.verr_land = 1; if (settings.geluid) Sound.dig(); });
+    let inFall = 0, lastT = k.now;
+    const offFall = k.onTick(() => {
+      const c = home.coneNow(), dt = k.now - lastT;
+      lastT = k.now;
+      const q = c ? ndcOf(c, c.y - k.ctx.groundY(c.x, c.z)) : null;
+      if (q && Math.abs(q.x) <= 1 && q.y <= 1 - (2 * 96) / H && q.y >= -1) inFall += dt;
+    });
+    home.dropCone(spot, lens(), () => {
+      offFall();
+      k.stats.verr_land = 1;
+      k.stats.verr_fall_s = Math.round(inFall * 100) / 100;
+      // (how long it reads where it lies)
+      const e = home.coneEnds();
+      const a = e && ndcOf(e[0], e[0].y - k.ctx.groundY(e[0].x, e[0].z)), b = e && ndcOf(e[1], e[1].y - k.ctx.groundY(e[1].x, e[1].z));
+      if (a && b) k.stats.verr_px = Math.round(Math.hypot((a.x - b.x) * (k.ctx.canvas.clientWidth || 1280), (a.y - b.y) * H) / 2);
+      if (settings.geluid) Sound.dig();
+      k.say(c.plof);
+      void k.wait(1.8).then(() => { if (k.beat === `walk:${name}`) k.say(line); }).catch(() => {});
+    });
   };
   // run 7 (its finds): along the way he may see its gnawed cones — into his veldgids once he
   // really saw them (big enough in his picture, for a moment); its nest goes in with its own
@@ -656,7 +690,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
           hint.tick();
           // (as he walks up to the pine it is off to — where he looks — a cone drops in front
           // of it; never with its nest's own moment)
-          if (wi !== p.nest) coneTick(walkFrom, t);
+          if (wi !== p.nest) coneTick(walkFrom, t, name, line);
           if (!arrived) return;
           anticTick();
           if (k.now - lastChatter > 3.2 && !anticOn) chatter();
