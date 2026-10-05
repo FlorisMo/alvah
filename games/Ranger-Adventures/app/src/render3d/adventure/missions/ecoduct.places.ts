@@ -16,8 +16,9 @@
  * or south-south-east along the sand track: sideways in his picture, never at the lens.
  *
  * Every play draws from its forks (decision 1; `ecoductLayout`): which groups cross and in
- * which order (red deer, a sow with her piglets, a roe with her calf, a fox alone; never his
- * last play's first group), which corner each comes round and which way it leaves, how big
+ * which order (red deer, a sow with her piglets, a roe with her calf, a fox alone — only in
+ * the mist and at dusk; never his last play's first group), which corner each comes round
+ * and which way it leaves, how big
  * a group is. None of it changes a knob: every corner is as far from the bed, every group
  * walks as calmly, every route is the corsi core's; how long a route is, how many groups
  * cross for it, how long he must keep still and how long the animals wait are the level's.
@@ -30,6 +31,7 @@ import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { atLocal, dist, headingTo, segDist, toLocal, toward, uniformLocal, type Frame } from '../places.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import type { Play } from '../../../core/play.ts';
+import type { MoodId } from '../../Moods.ts';
 
 export const MISSION = 'ecoduct';
 
@@ -219,6 +221,11 @@ export const GROUPS: Readonly<Record<Kind, { members: readonly string[]; min: nu
   ree: { members: ['ree', 'reekalf'], min: 2, young: 'reekalf', disc: 'ecoduct.ree' },
   vos: { members: ['vos'], min: 1, young: 'vos', disc: 'ecoduct.vos' },
 };
+/** The light the fox crosses in: the morning mist and dusk (its veldgids row says so); in
+ *  the golden hour and an overcast evening it stays away — a reason to come back in another
+ *  light. Construct-neutral: which kinds cross never changes a route or a moment's knobs. */
+export const FOX_LIGHT: readonly MoodId[] = ['ochtendnevel', 'schemer'];
+
 /** The rare visitor's resident key. */
 export const DAS = 'das';
 export const DAS_ID = 'ecoduct.das';
@@ -281,7 +288,7 @@ export interface EcoductLaid {
  * leaves: seeded, never three groups in a row round the same corner (the hind and her calf
  * leave onto the heath, north). How many piglets come: seeded.
  */
-export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: readonly string[], last: readonly string[] = []): EcoductLaid {
+export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: readonly string[], last: readonly string[] = [], mood?: MoodId): EcoductLaid {
   const n = crossingsFor(rounds);
   const prev = last.length ? readVariant(last[last.length - 1]) : null;
   // (the first group never one of his last two plays' first groups)
@@ -303,7 +310,7 @@ export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: r
       if (i && kinds[i - 1] === k) continue;
       if (!i && before.includes(k)) continue;
       if (i === n - 2 && k === 'hert') continue;
-      if (k === 'vos' && groupOnly.has(i)) continue;
+      if (k === 'vos' && (groupOnly.has(i) || (mood && !FOX_LIGHT.includes(mood)))) continue;
       kinds.push(k);
     }
   }

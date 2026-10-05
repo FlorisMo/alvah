@@ -5,7 +5,8 @@
  * One calm look at the green bridge for animals; a quiet walk to the wildlife screen in front
  * of its mouth; then he watches who comes over. Groups come down off the bridge behind its
  * ends and round its corner to the raked sand bed: red deer, a sow with her piglets, a roe
- * with her calf, a fox alone — another mix, other corners and other ways out every play. As
+ * with her calf, a fox alone (in the mist and at dusk) — another mix, other corners and other
+ * ways out every play; each group waits out of his picture and walks in at its edge. As
  * the first group comes, the first calm moment: keep his FEET still (a step and they stop and
  * stare at the screen) or keep his HANDS still when the young one comes right up to the
  * screen and looks at him (a click calls it: it startles and trots off, and comes back). Then
@@ -100,7 +101,9 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Eco
     .encounters.map((e) => e.id);
   // how many groups cross for the route: the level's rounds (the skin may cap them)
   const rounds = buildCorsiTrial(mission.stappen[0].skin, store.knobs('corsi')).knobs.rounds;
-  const laid = ecoductLayout(play, rounds, order, lastVariants(s.geschiedenis));
+  // (the light this play stands in: the fox only crosses in the mist and at dusk)
+  const mood = typeof play.variant?.mood === 'string' ? play.variant.mood as MoodId : undefined;
+  const laid = ecoductLayout(play, rounds, order, lastVariants(s.geschiedenis), mood);
   play.note(VARIANT_KEY, laid.variant);
   // the bed raked smooth for tonight's tracks
   home.rake();
@@ -699,10 +702,15 @@ async function toBed(k: AdventureKit): Promise<void> {
   k.lockFollow();
   k.world.stopRanger();
   k.beat = 'sporen';
+  // (he stands among the tracks facing the bridge, the lens behind him: however he walked
+  // round the screen, the next group's wait lies out of this picture — pinned)
+  k.world.faceRanger(BED.heading);
   k.say(c.zoveel);
   k.discover('ecoduct.sporen', { first: true });
   k.stats.sporen = 1;
-  await k.wait(2.4);
+  const t0 = k.now;
+  await k.behind();
+  await k.wait(Math.max(0.4, 2.4 - (k.now - t0)));
 }
 
 /** Back behind the screen (a group will come, and there he keeps still). */

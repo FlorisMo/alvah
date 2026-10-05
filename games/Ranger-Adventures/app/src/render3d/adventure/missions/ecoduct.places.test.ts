@@ -32,7 +32,7 @@ import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import { venClearings } from './ven.places.ts';
 import {
-  ASIDE, BACK_MAX, BED, BED_HALF, BED_STAND, BED_VIEW, BEFORE_HINDE, BEFORE_KALF, ECODUCT_HOME, ECODUCT_PLACES, ECODUCT_RESIDENTS, EXITS, FERN, FOX_LOOP, GROUPS,
+  ASIDE, BACK_MAX, BED, FOX_LIGHT, BED_HALF, BED_STAND, BED_VIEW, BEFORE_HINDE, BEFORE_KALF, ECODUCT_HOME, ECODUCT_PLACES, ECODUCT_RESIDENTS, EXITS, FERN, FOX_LOOP, GROUPS,
   GROVE, HIDEAWAY, HOME, MARKER, PATCH_SIZE, SCREEN, SIDES, STAND, TRAILS, AFTER_HINDE, AFTER_KALF,
   asideView, backCorner, backOff, backWay, bedSpots, crossingLine, crossingsFor, ductGap, ecoductClearings, ecoductLayout, fileBack, flipFacing, haltOf, lastVariants, leaveWay, lineDist, mouthOf, onBed, readVariant, roepSpot,
   screenObstacle, type ViewSpec,
@@ -421,6 +421,26 @@ test('a play\'s crossings: drawn from its seed, the deer always, never two alike
   assert.equal(firsts.size, 4, 'every kind comes first now and then');
   // (a play's groups before the last: at least two kinds)
   assert.equal(corners.size, 2, 'both corners');
+});
+
+test('the fox crosses only in the mist and at dusk (its veldgids row says so); every light keeps the moments\' groups', () => {
+  const fox = ontdekkingenVan('ecoduct').find((o) => o.id === 'ecoduct.vos')!;
+  assert.deepEqual([...(fox.stemming ?? [])].sort(), [...FOX_LIGHT].sort(), 'the fox\'s row names its light');
+  for (const mood of ['ochtendnevel', 'gouden-uur', 'bewolkt', 'schemer'] as const) {
+    let foxes = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      for (const order of ORDERS) for (const rounds of [2, 3]) {
+        const last = [`hzrh-NSNN-NSNN`, `zrhh-SNSN-SNSN`];
+        const l = ecoductLayout(newPlay('ecoduct', seed, 1), rounds, order, last, mood);
+        const kinds = l.crossings.map((c) => c.kind);
+        foxes += kinds.filter((k) => k === 'vos').length;
+        for (let i = 1; i < kinds.length; i++) assert.notEqual(kinds[i], kinds[i - 1], `${mood} seed ${seed}: never two alike in a row`);
+        assert.equal(kinds.length, crossingsFor(rounds), `${mood} seed ${seed}: every crossing has its group`);
+      }
+    }
+    if (FOX_LIGHT.includes(mood)) assert.ok(foxes > 20, `${mood}: the fox comes now and then (${foxes})`);
+    else assert.equal(foxes, 0, `${mood}: no fox`);
+  }
 });
 
 test('three plays in a row: another first group each time, never one of his last two plays\'', () => {

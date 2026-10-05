@@ -191,7 +191,7 @@ const ECODUCT: Ontdekking[] = [
   { id: 'ecoduct.ree', home: 'ecoduct', soort: 'dier', naam: 'de ree met haar kalfje', naamKnap: 'de reegeit met haar kalf',
     hint: 'Wie stapt er licht over?', model: 'animal-ree-roedeer' },
   { id: 'ecoduct.vos', home: 'ecoduct', soort: 'dier', naam: 'de vos op de brug',
-    hint: 'Wie komt er alleen over?', model: 'animal-vos-fox' },
+    hint: 'Wie sluipt er bij schemer over?', model: 'animal-vos-fox', stemming: ['ochtendnevel', 'schemer'] },
   { id: 'ecoduct.sporen', home: 'ecoduct', soort: 'spoor', naam: 'de sporen in het zand', naamKnap: 'het sporenbed',
     hint: 'Wie liep er door het zand?', icon: 'paw' },
   { id: 'ecoduct.das', home: 'ecoduct', soort: 'zeldzaam', naam: 'de das op de brug',
