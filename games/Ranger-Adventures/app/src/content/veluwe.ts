@@ -761,18 +761,19 @@ const MISSIE_ECODUCT = {
   verhaalHaak: 'band',
   kort: 'Controleer het ecoduct. Steken de dieren veilig over?',
   briefing: {
+    // run 7: at the real ecoduct — he watches from behind a screen who comes over the
+    // bridge, reads their way over the sand bed, and keeps out of their way
     simpel: [
       'Een ecoduct is een brug voor dieren.',
-      'Zo steken ze veilig over de weg.',
-      'Gaat dat goed? Kijk jij even?',
-      'Onthoud de weg die ze lopen.',
-      'Wijs daarna de weg terug.',
+      'Welke dieren steken er over?',
+      'Kijk stil achter het scherm.',
+      'Onthoud welke weg ze lopen.',
     ],
     knap: [
       'Een ecoduct is een brug voor dieren.',
-      'Zo steken ze veilig over de snelweg.',
-      'Kijk in welke volgorde ze oversteken.',
-      'Wijs daarna de weg terug.',
+      'Wie steekt er over de snelweg?',
+      'Kijk stil achter het kijkscherm.',
+      'Onthoud hun wissel door het zand.',
     ],
   },
   beloning: {
@@ -780,12 +781,58 @@ const MISSIE_ECODUCT = {
     vaktermBadge: { id: 'knap-ecoduct', naam: 'Knap woord: ecoduct' },
   },
   reunion: { sprite: 'edelhert', tekst: 'De dieren staken veilig over.' },
+  /* run 7: De oversteek as an adventure at the real ecoduct (render3d/adventure/missions/
+     ecoduct.ts): one look at the bridge, a quiet walk to the screen, groups that come round
+     its ends and cross the raked sand bed (their way over it is the route he points back),
+     and the three calm moments with his body: feet still as they come, hands still when
+     one looks at him, step aside when they want over. One line per beat. */
+  avontuur: {
+    simpel: {
+      kijk: 'Kijk. Een brug voor dieren.',
+      naarScherm: 'Loop stil naar het scherm.',
+      chipScherm: 'Het scherm',
+      sst: 'Sst. Loop stil.',
+      wacht: 'Wacht stil. Wie steekt er over?',
+      // the first moment (feet still) as a group comes: the encounter's words follow
+      komt: 'Er komt iets aan. Sta stil.',
+      // the route over the sand (corsi)
+      routeKijk: 'Kijk welke weg ze lopen.',
+      routeWijs: 'Welke weg liepen ze? Tik de plekken.',
+      routeMis: 'Kijk nog een keer.',
+      nogMeer: 'Sst. Daar komen er nog meer.',
+      nogEenWeg: 'Kijk, weer een andere weg.',
+      // a young one looks at him (hands still): its name, then this
+      kijktJe: 'kijkt naar je. Niet roepen.',
+      kalfje: 'Het kalfje',
+      biggetje: 'Het biggetje',
+      vos: 'De vos',
+      // they want over and he stands in their way (the flip)
+      opzij: 'Ze willen over. Ga maar opzij.',
+      chipOpzij: 'Opzij',
+      nietNaar: 'Niet naar ze toe. Ga opzij.',
+      // the bed up close, back behind the screen
+      sporen: 'Kijk de sporen eens van dichtbij.',
+      chipZand: 'Het zand',
+      zoveel: 'Kijk. Allemaal sporen in het zand.',
+      terug: 'Ga weer achter het scherm.',
+      // the rare one
+      das: 'Kijk! Een das!',
+    },
+    knap: {
+      chipScherm: 'Het kijkscherm',
+      routeKijk: 'Kijk welke wissel ze lopen.',
+      kalfje: 'Het hertenkalf',
+      biggetje: 'De frisling',
+      chipZand: 'Het sporenbed',
+      zoveel: 'Kijk. Een sporenbed vol prenten.',
+    },
+  },
   stappen: [
     {
       ef: 'corsi',
       skin: {
         copy: {
-          instructie: 'Onthoud de weg over het ecoduct.',
+          instructie: 'Onthoud de weg over het zand.',
           toon: 'Kijk welke weg de dieren liepen…',
           terug: 'Wijs de weg terug.',
           goed: 'Precies de goede weg!',
@@ -801,28 +848,24 @@ const MISSIE_ECODUCT = {
         dier: 'edelhert',
         metgezel: 'geen',
         copy: { instructie: 'Blijf rustig. Houd de oversteek veilig.' },
-        regels: ['Hou afstand', 'Loop rustig'],
+        regels: ['Dieren komen? Sta stil.', 'Niet roepen.'],
+        /* run 7: the three moments come in a drawn order each play (the 2D floor asks them
+           as cards in the same order, from the same seed); stepping aside (the flip) is
+           never the first */
+        rustPlan: [{ slot: 'ecoduct' }],
         encounters: [
-          { id: 'pad', subject: 'pad-veilig', flip: true,
-            vraag: 'Het ecoduct is vrij. De dieren wachten.',
-            opties: [{ label: 'Blijf staan', goed: false }, { label: 'Wuif ze door', goed: true }],
-            uitleg: 'Precies. Nu steken ze rustig over.',
-            gevolg: 'Je wacht te lang. De dieren lopen terug.',
-            reactie: 'recede', eikelKost: 0, terug: 0.6 },
-          { id: 'slang', subject: 'adder', dier: 'adder',
-            vraag: 'Een slang zont midden op het ecoduct.',
-            opties: [{ label: 'Pak hem weg', goed: false }, { label: 'Hou afstand', goed: true }],
-            uitleg: 'Goed. Hij glijdt zo vanzelf de struiken in.',
-            gevolg: 'De slang schrikt. Wacht tot hij zelf gaat.',
-            reactie: 'rear', eikelKost: 1, terug: 0.5 },
-          { id: 'modder', subject: 'modderpoel',
-            vraag: 'Er ligt een plas op het ecoduct.',
-            opties: [{ label: 'Recht erdoor', goed: false }, { label: 'Loop eromheen', goed: true }],
-            uitleg: 'Goed. Rustig eromheen, dan schrik je niemand op.',
-            gevolg: 'Plons! Dat maakt veel lawaai.',
-            reactie: 'mud', eikelKost: 1, terug: 0.7 },
+          { id: 'stil', slot: 'ecoduct', subject: 'edelhert', dier: 'hinde', vraag: 'Er komen herten aan.',
+            opties: [{ label: 'Naar ze toe', goed: false }, { label: 'Sta stil', goed: true }],
+            uitleg: 'Goed zo. Nu komen ze rustig dichterbij.', gevolg: 'Ze schrikken. Ze blijven staan.', reactie: 'rear' },
+          { id: 'roep', slot: 'ecoduct', subject: 'reekalf', dier: 'ree', vraag: 'Een kalfje kijkt naar je.',
+            opties: [{ label: 'Roep hem', goed: false }, { label: 'Stil blijven', goed: true }],
+            uitleg: 'Mooi. Je laat hem gewoon gaan.', gevolg: 'Hij schrikt. Hij rent een stukje weg.', reactie: 'flee',
+            vraagKnap: 'Een reekalf kijkt naar je.' },
+          { id: 'opzij', slot: 'ecoduct', subject: 'edelhert', dier: 'hinde', flip: true, vraag: 'Je staat in hun weg.',
+            opties: [{ label: 'Blijf staan', goed: false }, { label: 'Ga opzij', goed: true }],
+            uitleg: 'Precies. Nu kunnen ze veilig over.', gevolg: 'Je wacht te lang. Ze lopen terug.', reactie: 'recede' },
         ],
-        feit: 'Ook slangen en eekhoorns gebruiken het ecoduct.',
+        feit: 'Ook dassen en vossen gebruiken het ecoduct.',
         feitDier: 'edelhert',
       },
       moeilijkheid: { slowmo: 'settings', wissel: 'settings' },

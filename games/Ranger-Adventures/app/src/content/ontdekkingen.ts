@@ -176,6 +176,28 @@ const VEN: Ontdekking[] = [
     hint: 'Soms is een kikker heel even blauw.', model: 'heikikker-blauw' },
 ];
 
+/* ------------------------------------------------------- ecoduct (the crossing) ---- */
+// (run 7, the adventures lane, package oversteek: render3d/adventure/missions/ecoduct.ts.
+// Who comes over the bridge differs every play: the red deer always (the animals the
+// mission helps: theirs once it is won), and of a sow with her piglets, a roe with her calf
+// and a fox alone those the play brings — each his once he really saw it cross; the tracks
+// once he stood in the sand bed and looked at them; and now and then, round the bridge's
+// end, a badger trundles over (rare: a seeded chance and the pity rule).)
+const ECODUCT: Ontdekking[] = [
+  { id: 'ecoduct.edelhert', home: 'ecoduct', soort: 'dier', naam: 'het hert met haar kalfje', naamKnap: 'de hinde met haar kalf',
+    hint: 'Wie komt er over de brug?', model: 'hinde', geholpen: true },
+  { id: 'ecoduct.wildzwijn', home: 'ecoduct', soort: 'dier', naam: 'het zwijn met haar biggen', naamKnap: 'de zeug met frislingen',
+    hint: 'Wie knort er over de brug?', model: 'animal-wildzwijn-boar' },
+  { id: 'ecoduct.ree', home: 'ecoduct', soort: 'dier', naam: 'de ree met haar kalfje', naamKnap: 'de reegeit met haar kalf',
+    hint: 'Wie stapt er licht over?', model: 'animal-ree-roedeer' },
+  { id: 'ecoduct.vos', home: 'ecoduct', soort: 'dier', naam: 'de vos op de brug',
+    hint: 'Wie sluipt er bij schemer over?', model: 'animal-vos-fox', stemming: ['ochtendnevel', 'schemer'] },
+  { id: 'ecoduct.sporen', home: 'ecoduct', soort: 'spoor', naam: 'de sporen in het zand', naamKnap: 'het sporenbed',
+    hint: 'Wie liep er door het zand?', icon: 'paw' },
+  { id: 'ecoduct.das', home: 'ecoduct', soort: 'zeldzaam', naam: 'de das op de brug',
+    hint: 'Wie waggelt er laat over de brug?', model: 'animal-das-badger' },
+];
+
 /* ------------------------------------------------- wereld (the open world) ---- */
 // The free roam's small surprises (render3d/world/Surprises.ts stages them, one at a time):
 // each is met by seeing it (on screen, big enough, long enough) or hearing its call close by.
@@ -199,7 +221,7 @@ const WERELD: Ontdekking[] = [
     hint: 'Wie waggelt in de schemer voorbij?', model: 'animal-das-badger', stemming: ['schemer'] },
 ];
 
-export const ONTDEKKINGEN: readonly Ontdekking[] = [...FRISLING, ...REE, ...WILDCAMERA, ...EEKHOORN, ...VEN, ...WERELD];
+export const ONTDEKKINGEN: readonly Ontdekking[] = [...FRISLING, ...REE, ...WILDCAMERA, ...EEKHOORN, ...VEN, ...ECODUCT, ...WERELD];
 
 /** One row by id, or undefined. */
 export function ontdekking(id: string): Ontdekking | undefined {

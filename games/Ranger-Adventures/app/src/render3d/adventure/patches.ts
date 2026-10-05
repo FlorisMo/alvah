@@ -127,6 +127,47 @@ function mossGeometry(seed: number): THREE.BufferGeometry {
   return g;
 }
 
+/** Run 7 (the ecoduct's sand bed): one patch of trodden sand in the raked bed, 1 m across
+ *  before scaling — a shallow, smoothed dish a little darker than the raked sand round it
+ *  (where hooves pressed it), its rim pushed up and feathered into the rake lines. Look-
+ *  alikes: nothing nameable. */
+function sandGeometry(seed: number): THREE.BufferGeometry {
+  const rnd = stream(seed);
+  const RINGS = 6, SEG = 28;
+  const P: number[] = [], C: number[] = [], I: number[] = [];
+  const pressed = new THREE.Color('#a8916a'), sandC = new THREE.Color('#bba57d'), rim = new THREE.Color('#c8b48b');
+  P.push(0, 0.002, 0); C.push(pressed.r, pressed.g, pressed.b);
+  const ph = [rnd() * 6.3, rnd() * 6.3, rnd() * 6.3];
+  const wave = (a: number): number => Math.sin(a * 2 + ph[0]) * 0.5 + Math.sin(a * 3 + ph[1]) * 0.3 + Math.sin(a * 5 + ph[2]) * 0.2;
+  for (let r = 1; r <= RINGS; r++) {
+    const k = r / RINGS;
+    for (let i = 0; i < SEG; i++) {
+      const a = (i / SEG) * Math.PI * 2;
+      const rr = 0.5 * k * (1 + wave(a) * 0.16 * k + (rnd() - 0.5) * 0.04);
+      // a shallow dish, its rim a soft lip of pushed-up sand, the edge into the bed
+      const lip = Math.exp(-((k - 0.8) ** 2) / 0.02) * 0.012;
+      const h = 0.002 + lip + (k < 1 ? rnd() * 0.003 : -0.004);
+      P.push(Math.cos(a) * rr, h, Math.sin(a) * rr);
+      const c = k >= 1 ? sandC : new THREE.Color().copy(pressed).lerp(k > 0.7 ? rim : sandC, k > 0.7 ? (k - 0.7) / 0.3 : k * 0.25);
+      C.push(c.r, c.g, c.b);
+    }
+  }
+  for (let i = 0; i < SEG; i++) I.push(0, 1 + ((i + 1) % SEG), 1 + i);
+  for (let r = 1; r < RINGS; r++) {
+    const a0 = 1 + (r - 1) * SEG, b0 = 1 + r * SEG;
+    for (let i = 0; i < SEG; i++) {
+      const i1 = (i + 1) % SEG;
+      I.push(a0 + i, a0 + i1, b0 + i, a0 + i1, b0 + i1, b0 + i);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  g.setIndex(I);
+  g.computeVertexNormals();
+  return g;
+}
+
 /** An oak leaf lying on the ground (a flat, lobed oval), 1 m long before scaling. */
 function leafGeometry(): THREE.BufferGeometry {
   const P: number[] = [];
@@ -162,8 +203,10 @@ function fleckGeometry(): THREE.BufferGeometry {
 }
 
 /** How the spots look: turned earth with trotter prints (the frisling's rooting field),
- *  or mossy cushions in leaf litter where fresh soil shows once dug (the squirrel's glade). */
-export type PatchLook = 'earth' | 'moss';
+ *  or mossy cushions in leaf litter where fresh soil shows once dug (the squirrel's glade),
+ *  or (run 7, additive) trodden patches in a raked sand bed where hoof prints show (the
+ *  ecoduct's sand bed). */
+export type PatchLook = 'earth' | 'moss' | 'sand';
 
 export interface PatchFieldOpts {
   parent: THREE.Object3D;
@@ -214,9 +257,10 @@ export class PatchField {
     this.glow = Array(n).fill(0); this.glowWant = Array(n).fill(0);
     this.colorDirty = Array(n).fill(false);
     const moss = o.look === 'moss';
-    const moundGeo = moss ? mossGeometry(o.seed) : moundGeometry(o.seed);
+    const sand = o.look === 'sand'; // (run 7: the ecoduct's sand bed)
+    const moundGeo = moss ? mossGeometry(o.seed) : sand ? sandGeometry(o.seed) : moundGeometry(o.seed);
     const printGeo = moss ? fleckGeometry() : printGeometry();
-    const printMat = new THREE.MeshStandardMaterial({ color: moss ? '#2e1f14' : '#241710', roughness: 1, transparent: true, opacity: moss ? 0.95 : 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+    const printMat = new THREE.MeshStandardMaterial({ color: moss ? '#2e1f14' : sand ? '#5a4630' : '#241710', roughness: 1, transparent: true, opacity: moss ? 0.95 : sand ? 0.8 : 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
     this.prints = new THREE.InstancedMesh(printGeo, printMat, n * this.per);
     this.prints.name = 'patch-prints';
     this.prints.renderOrder = 2;
@@ -224,7 +268,7 @@ export class PatchField {
     this.mats.push(printMat);
     const rnd = stream(o.seed + 5);
     const q = new THREE.Quaternion(), e = new THREE.Euler();
-    const CLODS = moss ? 9 : 11;
+    const CLODS = moss ? 9 : sand ? 4 : 11;
     const clodGeo = moss ? leafGeometry() : new THREE.DodecahedronGeometry(1, 0);
     const clodMat = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: !moss, side: moss ? THREE.DoubleSide : THREE.FrontSide });
     this.clods = new THREE.InstancedMesh(clodGeo, clodMat, n * CLODS);
@@ -232,7 +276,8 @@ export class PatchField {
     this.clods.receiveShadow = true;
     this.geos.push(clodGeo);
     this.mats.push(clodMat);
-    const earth = [new THREE.Color('#4a3727'), new THREE.Color('#5e4632'), new THREE.Color('#3b2c20')];
+    const earth = sand ? [new THREE.Color('#9a8f7c'), new THREE.Color('#8a806d'), new THREE.Color('#a69b86')]
+      : [new THREE.Color('#4a3727'), new THREE.Color('#5e4632'), new THREE.Color('#3b2c20')];
     const sod = new THREE.Color('#5b5a31');
     const cm = new THREE.Matrix4(), cq = new THREE.Quaternion(), ce = new THREE.Euler(), cv = new THREE.Vector3(), cs = new THREE.Vector3();
     this.spots.forEach((s, i) => {
@@ -272,7 +317,7 @@ export class PatchField {
       // clods thrown out round the rim, and a few torn-up sods (grass side up)
       for (let k = 0; k < (moss ? 0 : CLODS); k++) {
         const a = rnd() * Math.PI * 2;
-        const turf = k < 3;
+        const turf = !sand && k < 3; // (sand: a few small pebbles, no sods)
         const rr = o.size * (0.36 + rnd() * 0.3);
         const cx = s.x + Math.cos(a) * rr, cz = s.z + Math.sin(a) * rr;
         const size = o.size * (turf ? 0.07 + rnd() * 0.04 : 0.028 + rnd() * 0.04);
@@ -294,7 +339,7 @@ export class PatchField {
         const fa = k * 2.4 + i, fr = moss ? o.size * (k ? 0.1 + 0.05 * (k % 3) : 0) : 0;
         const px = moss ? s.x + Math.cos(fa) * fr : s.x + fx * t - fz * side;
         const pz = moss ? s.z + Math.sin(fa) * fr : s.z + fz * t + fx * side;
-        const fs = moss ? o.size * (k ? 0.12 : 0.34) : 0.1;
+        const fs = moss ? o.size * (k ? 0.12 : 0.34) : sand ? 0.13 : 0.1;
         const pm = new THREE.Matrix4().compose(
           new THREE.Vector3(px, o.groundY(px, pz) + (moss ? 0.058 : 0.045), pz),
           new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), moss ? fa : o.heading),

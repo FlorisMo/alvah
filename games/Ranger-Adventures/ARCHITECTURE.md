@@ -191,7 +191,27 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          one instanced mesh each, culled by a sphere that follows them) and
                          its `Seen` records a find only once it was really in his picture;
                          small surprises only on his walks (`surprisesOn`), never in a
-                         search, a hold or a listening stop)
+                         search, a hold or a listening stop); run 7 (oversteek): ecoduct
+                         (the real ecoduct on the west rim: a raked sand bed before its
+                         mouth, a wildlife screen to watch from; ecoduct.places.ts the bed's
+                         seven patches (PRINT_SPOTS, uniform), the trails past the bridge's
+                         two ends (the arch is open and its ends are low: nothing hides behind
+                         it, so a group waits OUTSIDE every picture he watches from, pinned
+                         through the kit's own lenses, and walks in at the picture's edge;
+                         `Group.enter` never moves an animal he can see and, should the lens he
+                         has now see a wait, lets the file wait further back), the ways out,
+                         where he steps aside, and `ecoductLayout` — this play's groups (red
+                         deer, a sow with piglets, a roe with her calf, a fox in the mist and at dusk; the hind and
+                         her calf always last, they graze by the screen after), their corners
+                         and ways out, never his last play's first; ecoduct.home.ts the sand
+                         (a rake texture drawn once), the screen, the trails, the tracks the
+                         crossings leave; ecoduct.ts the beats: one look at the bridge, a quiet
+                         walk to the screen, the first moment as the first group comes, the
+                         route (the lead treads the patches: corsi, one group a round), then
+                         the other two moments in the trial's order — feet still as a group
+                         comes, hands still when a young one looks at him, and the flip:
+                         on the bed among the tracks he stands in their way and steps aside;
+                         now and then a badger (k.rare))
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          run 7: a home may record what he saw of it in free roam
                          (`DressingEnv.discover`, wired by WorldSession to the save and the

@@ -111,13 +111,13 @@ export const TABLEAUS: Record<string, Tableau> = {
       { id: 'heikikker', kind: 'animal', a: 0.7, s: -0.7, face: 'hero', arrive: true },
     ],
   },
-  // "De dieren staken veilig over." — a hind and her calf, calm on the crossing
+  // "De dieren staken veilig over." — run 7 (the adventures lane): the hind and her calf LIVE
+  // at the ecoduct (world/Residents.ts, adventure/missions/ecoduct.places.ts): by its north
+  // foot before, on the heath by the screen after, and the sand bed keeps their tracks; the
+  // marker's ring stays empty and gets only the "klaar" flag
   ecoduct: {
-    hero: 'edelhert',
-    pieces: [
-      { id: 'edelhert', kind: 'animal', h: SIZE.hinde.h, a: 1.5, s: -2.0, face: 1.4, arrive: true, antlers: false },
-      { id: 'edelhert', kind: 'animal', h: SIZE.hertenkalf.h, a: 0.9, s: -1.3, face: 1.4, arrive: true, antlers: false },
-    ],
+    hero: '',
+    pieces: [],
   },
   // "De nachtzwaluw blijft rustig op het nest." — a quiet zone, fenced off
   stuifzand: {
