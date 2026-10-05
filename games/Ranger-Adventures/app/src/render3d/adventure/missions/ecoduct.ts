@@ -60,6 +60,9 @@ export const ECODUCT_MOODS = { allow: ['ochtendnevel', 'gouden-uur', 'bewolkt', 
 
 /** How fast each kind walks down to the bed and over it (m/s): calm, never a dash. */
 const PACE: Readonly<Record<Kind | 'das', number>> = { hert: 1.35, zwijn: 1.0, ree: 1.25, vos: 1.2, das: 1.15 };
+/** The hind and her calf's walk over the sand and home at the end (m/s): brisk, so they are
+ *  grazing at their spot while the reunion's line is still up. */
+const HOME_PACE = 1.5;
 /** A curious young one's trot up to him (m/s), before its last careful steps. */
 const YOUNG_TROT = 1.8;
 /** How far each walks behind the one before it (m). */
@@ -423,10 +426,12 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   /* 8 · the reunion: the hind and her calf cross into the heath by the screen, where they
      graze from now on: "De dieren staken veilig over." */
   const homeWalk: Hold = { paused: false, stop: false };
+  // (the line stays while they walk over the sand and onto the heath to their spot: a calm
+  // ending he sees whole, and nothing left for the home to walk after it)
   await k.reunion(async () => {
-    if (finale) await k.guard(Promise.race([crossHome(home, finale, homeWalk), k.wait(7)]));
-    await k.wait(1.2);
-  });
+    if (finale) await k.guard(Promise.race([crossHome(home, finale, homeWalk), k.wait(12)]));
+    await k.wait(0.8);
+  }, { holdS: 2 });
   /* 9 · the raaf: badgers and foxes use it too */
   await k.fact(1);
   // (the home takes them over now: they walk the rest of the way to their spot by themselves)
@@ -452,10 +457,10 @@ async function crossOver(home: EcoductHome, g: Group, ahead: boolean): Promise<v
  *  screen, to where they graze from now on (the home's after state: nothing pops there). */
 async function crossHome(home: EcoductHome, g: Group, hold: Hold): Promise<void> {
   const mouth = mouthOf(g.from);
-  if (dist(g.lead, mouth) > 1.2) await g.walk([mouth], hold);
-  await g.walk([{ x: BED.x, z: BED.z }], hold);
+  if (dist(g.lead, mouth) > 1.2) await g.walk([mouth], hold, HOME_PACE);
+  await g.walk([{ x: BED.x, z: BED.z }], hold, HOME_PACE);
   home.tread(crossingLine(g.from, 'N'), g.kind, g.members.length, 41);
-  await g.walk([EXITS.N[0], EXITS.N[1], AFTER_HINDE], hold);
+  await g.walk([AFTER_HINDE], hold, HOME_PACE);
   if (hold.stop) return;
   const kalf = g.young;
   await k0(kalf.go(AFTER_KALF.x, AFTER_KALF.z, { speed: 'walk', face: AFTER_KALF.yaw }));
