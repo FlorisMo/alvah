@@ -53,7 +53,7 @@ import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
 import { Nightjar, Lifted, ZandHome, zandBody } from './stuifzand.home';
 import {
   ARRIVE, BURROW, GUARD_STAND, GUARD_VIEW, GUESTS, HOL_JUNIPER, LEAVE, MISSION, NESTS, OFF_PATH_S, PRESSED_H, SETTLE, STOP, VARIANT_KEY,
-  DISPLAY_UP, ZAND_HOME, ZWALUW_LEN, approachOf, closeViewOf, displayOf, dist, endViewOf, femaleAt, flushOf, gapsOf, gapsTo, GAPS_FROM, headingAt, headingTo, larkFrom, lastVariants, maleAt,
+  DISPLAY_UP, ZAND_HOME, ZWALUW_LEN, approachOf, closeViewOf, displayOf, dist, endSpot, endViewOf, femaleAt, flushOf, gapsOf, gapsTo, GAPS_FROM, headingAt, headingTo, larkFrom, lastVariants, maleAt,
   pointAt, project, setNestNow, slotsOf, zandClearings, zandLayout,
   type Edge, type Pass, type ViewSpec, type ZandLaid,
 } from './stuifzand.places';
@@ -495,14 +495,14 @@ function sink(k: AdventureKit, a: Lifted, by: number, secs: number): Promise<boo
 async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nightjar, he: Nightjar): Promise<void> {
   const c = k.copy;
   const settings = store.get().settings;
-  const nest = NESTS[laid.nest];
-  const stand = nest.stands[laid.side];
-  await k.walkRanger(stand.x, stand.z, 0.04);
+  // (he steps to her side, level with her: the lens comes close to her from behind the scrape)
+  const side = endSpot(laid.nest, laid.side);
+  await k.walkRanger(side.x, side.z, 0.04);
   k.beat = 'look:nest';
   const unhint = k.hint(() => null); // (a perfect player looks)
-  const close = closeViewOf(laid.nest, laid.spot);
+  const close = closeViewOf(laid.nest, laid.spot, laid.side);
   try {
-    await k.frame(close, { face: stand.heading });
+    await k.frame(close, { face: side.heading });
     // the tufts in front of her lean aside (she is in plain view now), and she shifts off her
     // eggs: two speckled eggs on the sand
     home.cover.partAt(she.x, she.z, 0.55, 0.6, 30);
@@ -525,7 +525,7 @@ async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nig
     // now and then the male rises and claps his wings over the sand: the lens draws back over
     // the scrape and his branch to see it, then comes close to her again
     if (k.rare()?.id === 'stuifzand.vlucht') {
-      await k.frame(endViewOf(laid.nest, laid.side), { face: stand.heading });
+      await k.frame(endViewOf(laid.nest, laid.side), { face: side.heading });
       k.say(c.vlucht);
       he.onClap = () => { if (settings.geluid) Sound.call('vleugelklap'); };
       let seenClap = 0;
@@ -536,7 +536,7 @@ async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nig
       if (seenClap > 0.6 || k.reduced) k.discover('stuifzand.vlucht', { first: true });
       await k.wait(0.6);
       k.say(null);
-      await k.frame(close, { face: stand.heading });
+      await k.frame(close, { face: side.heading });
     }
   } finally { unhint(); }
   // she stays calmly on her nest (the reunion's line over her), the male churring nearby

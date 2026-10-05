@@ -319,14 +319,20 @@ export function nestClumps(n: NestId): Clump[] {
   return out;
 }
 
-/** At dusk, back at the scrape: a close look at her on her eggs (the lens comes down near her,
- *  him at its edge or just out of it), and the wider picture the reunion stands in — her, the
- *  branch where the male rests, the air over it where he may clap his wings, and him. */
-export function closeViewOf(n: NestId, spot: 0 | 1): ViewSpec {
+/** At dusk, back at the scrape: he steps to her side (`endSpot`: beside the scrape on the side
+ *  he searched it from, level with her) and the lens comes close to her from behind it — her
+ *  big in the picture, him at its edge, never between the lens and her. */
+export function endSpot(n: NestId, side: Pass): Place {
+  const N = NESTS[n];
+  const p = atLocal(N.frame, (side === 'l' ? 1 : -1) * 1.35, 0.35);
+  return { ...p, r: 0.4, heading: headingTo(p, N.c) };
+}
+export function closeViewOf(n: NestId, spot: 0 | 1, side: Pass = 'l'): ViewSpec {
   const N = NESTS[n], s = N.spots[spot];
+  void side;
   return {
     at: { x: s.x + Math.sin(s.yaw) * 0.1, z: s.z + Math.cos(s.yaw) * 0.1 }, heading: N.frame.heading,
-    halfW: 0.62, halfD: 0.42, tall: 0.35, pitchDeg: 40, insetTop: 112, insetBottom: 24, near: 1.3,
+    halfW: 0.55, halfD: 0.42, tall: 0.35, pitchDeg: 38, insetTop: 112, insetBottom: 24, near: 1.4,
   };
 }
 /** Where the male claps his wings over the sand at dusk (the rare): a little up from his
@@ -338,10 +344,10 @@ export function displayOf(n: NestId): Spot {
 }
 export function endViewOf(n: NestId, side: Pass): ViewSpec {
   const N = NESTS[n];
-  const v = N.views[side];
+  const me = endSpot(n, side);
   return {
     at: atLocal(N.frame, 0, 0.75), heading: N.frame.heading, halfW: 1.25, halfD: 1.3, tall: DISPLAY_UP + 0.5, pitchDeg: 24,
-    insetTop: 112, insetBottom: 24, include: v.include,
+    insetTop: 112, insetBottom: 24, include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT, r: 0.3 }],
   };
 }
 

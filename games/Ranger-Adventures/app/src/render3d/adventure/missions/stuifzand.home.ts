@@ -571,10 +571,10 @@ export class ZandHome implements HomeDressing {
     /* -- her eggs (two, speckled; shown when she shifts on them) -- */
     const egg = (dx: number, rot: number): THREE.BufferGeometry => {
       const e = new THREE.SphereGeometry(0.5, 10, 8);
-      e.scale(0.06, 0.044, 0.044).rotateY(rot).translate(dx, 0.04, 0);
+      e.scale(0.075, 0.054, 0.054).rotateY(rot).translate(dx, 0.048, 0);
       return e.toNonIndexed();
     };
-    const eggGeo = paint(mergeGeometries([egg(-0.045, 1.8), egg(0.045, 1.4)])!, ['#f1ead8', '#e2d6bd', '#f1ead8', '#8c7c66'], 61, 0.4);
+    const eggGeo = paint(mergeGeometries([egg(-0.055, 1.8), egg(0.055, 1.4)])!, ["#f3ecdc", "#e6dbc3", "#f3ecdc", "#f3ecdc", "#7a6a56"], 61, 0.4);
     this.eggs = keep(new THREE.Mesh(eggGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 })), scrapes);
     this.eggs.name = 'stuifzand-eggs';
     this.eggs.visible = false;
