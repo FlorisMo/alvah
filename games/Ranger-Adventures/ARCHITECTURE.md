@@ -231,9 +231,13 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          presses flat on its eggs, flies on its own wings, drags a wing along the
                          sand, shifts off its eggs and claps its wings; stuifzand.ts the beats:
                          one look at the tracks, the follow (a run says birds breed here), the
-                         flush, the search (zoeken), the guard at dusk (wisselen through aimBeat,
-                         the card's animal on its own sky: `tag: 'beeld'`), back to the scrape:
-                         the eggs, now and then the wing claps (k.rare), the reunion)
+                         flush, the search (zoeken), one calm look at the guard place (the
+                         burrow's find card there, before the first visitor), the guard at dusk
+                         (wisselen through aimBeat, the card's animal on its own sky: `tag:
+                         'beeld'`), back to the scrape: he steps back out of the close look
+                         (`endSpot`, pinned feet to head) and sees the eggs, now and then the
+                         wing claps (k.rare) in one dusk picture held through the reunion
+                         (`endViewOf`/`displayOf`, pinned: big, in the air, sand behind him))
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          run 7: a home may record what he saw of it in free roam
                          (`DressingEnv.discover`, wired by WorldSession to the save and the
