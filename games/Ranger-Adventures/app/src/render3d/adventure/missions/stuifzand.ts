@@ -528,15 +528,17 @@ async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nig
     await k.wait(0.5);
     home.showEggs(true);
     k.say(c.eitjes);
-    k.discover('stuifzand.eieren', { first: true });
+    const fresh = k.discover('stuifzand.eieren', { first: true });
     k.stats.eggs = 1;
     await k.wait(2.8);
+    // (new eggs: she stays off them until their card has been seen, with them in the picture —
+    // never over what comes next)
+    if (fresh) await k.until(() => k.revealsWaiting() === 0, CARD_S + 1.5);
     she.shift(false);
     await k.wait(0.7);
     home.showEggs(false);
     she.pressFlat(true);
     k.say(null);
-    // (the eggs' card, when they are new, is seen here, with them: never over what comes next)
     await k.until(() => k.revealsWaiting() === 0, CARD_S);
     await k.until(() => he.grounded, 3);
     he.idle();
