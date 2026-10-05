@@ -59,7 +59,9 @@ import {
 export const ECODUCT_MOODS = { allow: ['ochtendnevel', 'gouden-uur', 'bewolkt', 'schemer'] as readonly MoodId[], perPlay: 2 };
 
 /** How fast each kind walks down to the bed and over it (m/s): calm, never a dash. */
-const PACE: Readonly<Record<Kind | 'das', number>> = { hert: 1.35, zwijn: 1.0, ree: 1.25, vos: 1.2, das: 0.9 };
+const PACE: Readonly<Record<Kind | 'das', number>> = { hert: 1.35, zwijn: 1.0, ree: 1.25, vos: 1.2, das: 1.15 };
+/** A curious young one's trot up to him (m/s), before its last careful steps. */
+const YOUNG_TROT = 1.8;
 /** How far each walks behind the one before it (m). */
 const GAP: Readonly<Record<Kind | 'das', number>> = { hert: 2.1, zwijn: 0.95, ree: 1.5, vos: 1.2, das: 1 };
 /** Its calls: a soft contact call (a temptation) and its alarm (a reach). */
@@ -470,20 +472,21 @@ async function roepAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group, 
   const settings = store.get().settings;
   k.beat = 'roep:komt';
   // the group round the corner from out of sight and down toward the bed; there the young
-  // one leaves it and comes up to him
+  // one leaves it and comes up to him, a quick trot and then a careful last few steps
   await g.walk(TRAILS[g.from].slice(1, 3));
-  g.stare(k.ranger(), 1.0);
-  await k.wait(0.4);
+  g.stare(k.ranger(), 0.8);
   const y = g.young;
   const me0 = k.ranger();
   const spot = roepSpot(where === 'scherm' ? STAND : me0, g.from, where === 'scherm' ? 'scherm' : 'bed');
-  // it comes up to him (the others watch from the mouth)
+  // it comes up to him (the others watch from the bridge's foot)
   for (const m of g.members) if (m !== y) { m.idle(); void m.lookAt(() => ({ x: y.x, z: y.z, speed: 0 }), 99); }
   if (where !== 'scherm') {
     // (on the open sand: one held picture of him and it, side on)
     await k.frame(roepView(me0, spot), { face: headingTo(me0, spot), dip: true });
   }
-  await y.go(spot.x, spot.z, { speed: g.kind === 'zwijn' ? 0.9 : 1.1 });
+  const near0 = toward(spot, y, 1.4);
+  await y.go(near0.x, near0.z, { speed: YOUNG_TROT });
+  await y.go(spot.x, spot.z, { speed: 0.6 });
   const atHim = (): { x: number; z: number; speed: number } => { const r = k.ranger(); return { x: r.x, z: r.z, speed: 0 }; };
   void y.lookAt(atHim, 99);
   let pull = 0;
@@ -498,15 +501,14 @@ async function roepAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group, 
       else if (kind === 'snuif') { const r = k.ranger(); void y.sniff(r.x, r.z, 1.1, Math.max(1.3, dist(y, r) - 0.1)).then(() => y.lookAt(atHim, 99)); }
       else { void y.lookAt(() => ({ x: g.lead.x, z: g.lead.z, speed: 0 }), 0.9).then(() => y.lookAt(atHim, 99)); if (settings.geluid && !speaking()) Sound.callAt(CALL[g.kind].soft, y.x, y.z, listenerOf(k.world.camera), 18); }
     },
-    // called: it startles, trots off a few metres, stops, looks back, and comes back calmly
+    // called: it startles and trots off a few metres, stops and looks back (the words come
+    // then); it comes back calmly while they are said
     wrong: async () => {
       if (settings.geluid) Sound.callAt(CALL[g.kind].alarm, y.x, y.z, listenerOf(k.world.camera), 20);
-      const back = toward(y, mouthOf(g.from), 3.2);
-      await y.go(back.x, back.z, { speed: 'trot' });
+      const off = toward(y, mouthOf(g.from), 3.2);
+      await k.guard(Promise.race([y.go(off.x, off.z, { speed: 'trot' }), k.wait(2.2)]));
       void y.lookAt(atHim, 99);
-      await k.wait(1.1);
-      await y.go(spot.x, spot.z, { speed: 0.45 });
-      void y.lookAt(atHim, 99);
+      void k.wait(1.6).then(() => y.go(spot.x, spot.z, { speed: 0.6 })).then(() => y.lookAt(atHim, 99)).catch(() => {});
     },
     // left alone: it trots back to its group
     right: async () => {
@@ -576,6 +578,8 @@ async function opzijAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group)
   const way = [...trail.slice(2), { x: BED.x, z: BED.z }, ...EXITS[g.out]];
   const aside = ASIDE[g.out];
   let why: 'stay' | 'closer' = 'stay';
+  /** their walk back and down again after he waited too long (a newer one stops the last) */
+  let back: Hold = { paused: false, stop: false };
   await rust.go(e.id, {
     line: c.opzij,
     family: () => nearestOn(k.ranger(), way),
@@ -584,15 +588,22 @@ async function opzijAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group)
     get mis(): string | undefined { return why === 'closer' ? c.nietNaar : undefined; },
     wrong: async (w) => {
       why = w;
-      // they give up and walk back up behind the corner, then come out to the mouth again
+      // they give up and turn back up toward the bridge's end (the words come as they go);
+      // a moment later they come down to its foot again (the same moment)
+      back.stop = true;
+      const turn: Hold = { paused: false, stop: false };
+      back = turn;
       g.lead.idle();
-      await g.walk([trail[1], trail[0]]);
-      await k.wait(1.2);
-      await g.walk(trail.slice(1, 3));
-      g.stare(k.ranger(), 99);
+      await k.guard(Promise.race([g.walk([trail[1]], turn), k.wait(2.4)]));
+      void k.wait(2.6).then(async () => {
+        if (turn.stop) return;
+        await g.walk([trail[2]], turn);
+        if (!turn.stop) g.stare(k.ranger(), 99);
+      }).catch(() => {});
     },
     // he watches them come: from behind him, over the bed (one soft dip: he faces the other way)
     right: async () => {
+      back.stop = true;
       const r = k.ranger();
       k.world.faceRanger(headingTo(r, { x: BED.x, z: BED.z }));
       await k.frame(asideView(r), { face: headingTo(r, { x: BED.x, z: BED.z }), dip: true });

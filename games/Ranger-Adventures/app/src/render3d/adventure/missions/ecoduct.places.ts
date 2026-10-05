@@ -214,7 +214,7 @@ export interface EcoductLaid {
  * The last group over is always the hind and her calf (the ecoduct's own animals, the ones
  * the mission helps: they cross into the heath by the screen and graze there after). Before
  * them the kinds come in shuffled rounds of all four, never two alike in a row, the first
- * never his last play's first. The group that must wait for him to step aside (`opzij`) is a
+ * never one of his last two plays' first. The group that must wait for him to step aside (`opzij`) is a
  * group, never the fox alone (their words say "ze"). The corner each comes round and the
  * way it leaves: seeded, never three groups in a row round the same corner (the hind and her
  * calf leave onto the heath, north). How many piglets come: seeded.
@@ -222,6 +222,8 @@ export interface EcoductLaid {
 export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: readonly string[], last: readonly string[] = []): EcoductLaid {
   const n = crossingsFor(rounds);
   const prev = last.length ? readVariant(last[last.length - 1]) : null;
+  // (the first group never one of his last two plays' first groups)
+  const before = last.slice(-2).map((v) => readVariant(v)?.kinds[0]).filter((k): k is Kind => !!k);
   const kf = play.fork('ec-groepen');
   // the kinds before the last: shuffled rounds of all four, never two alike in a row (nor the
   // deer right before the deer), the first never his last play's first
@@ -231,7 +233,7 @@ export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: r
     for (const k of deck) {
       if (kinds.length >= n - 1) break;
       if (kinds.length && kinds[kinds.length - 1] === k) continue;
-      if (!kinds.length && prev?.kinds[0] === k) continue;
+      if (!kinds.length && before.includes(k)) continue;
       if (kinds.length === n - 2 && k === 'hert') continue;
       kinds.push(k);
     }

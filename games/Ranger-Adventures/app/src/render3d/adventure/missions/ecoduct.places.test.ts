@@ -314,14 +314,14 @@ test('a play\'s crossings: drawn from its seed, the deer always, never two alike
   assert.equal(corners.size, 2, 'both corners');
 });
 
-test('three plays in a row: another first group each time, never the last play\'s', () => {
+test('three plays in a row: another first group each time, never one of his last two plays\'', () => {
   for (let base = 1; base <= 40; base++) {
     const history: { m: string; sd?: number; va?: string }[] = [];
     const firsts: string[] = [];
     for (let i = 0; i < 3; i++) {
       const seed = base * 10 + i;
       const l = ecoductLayout(newPlay('ecoduct', seed, i + 1), 2, ['stil', 'roep', 'opzij'], lastVariants(history));
-      if (firsts.length) assert.notEqual(l.crossings[0].kind, firsts[firsts.length - 1], `base ${base}: play ${i + 1} first group again ${l.variant}`);
+      for (const f of firsts.slice(-2)) assert.notEqual(l.crossings[0].kind, f, `base ${base}: play ${i + 1} first group one of the last two plays' ${l.variant}`);
       firsts.push(l.crossings[0].kind);
       history.push({ m: 'ecoduct', sd: seed, va: `mood:schemer,ec:${l.variant}` });
     }
