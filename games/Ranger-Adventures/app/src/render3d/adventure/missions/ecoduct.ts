@@ -488,11 +488,12 @@ async function stilAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group):
   const c = k.copy;
   const settings = store.get().settings;
   const trail = TRAILS[g.from];
-  // round the corner first (out of sight behind the bridge until there): then the line
+  // round the corner and a few steps down toward the bed (big enough to see what comes):
+  // then the line, and they come on down to the bed's edge while he keeps still
   k.beat = 'stil:komt';
   const hold: Hold = { paused: false, stop: false };
-  await g.walk([trail[1]]);
-  const down = g.walk(trail.slice(2), hold, g.pace * 0.75).catch(() => false);
+  await g.walk([trail[1], trail[2]]);
+  const down = g.walk(trail.slice(3), hold, g.pace * 0.6).catch(() => false);
   let pull = 0;
   const kinds = ['pauze', 'roep', 'jong'] as const;
   await rust.still(e.id, {
