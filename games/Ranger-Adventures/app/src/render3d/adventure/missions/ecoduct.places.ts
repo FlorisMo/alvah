@@ -439,8 +439,9 @@ export const ECODUCT_HOME: HomeSpec = {
   places: ECODUCT_PLACES,
   residents: ECODUCT_RESIDENTS,
   marker: { at: MARKER, look: 'none' },
-  // (the bed, the screen and the two corners lie over ~25 m: it stays drawn near any of them)
-  spread: [{ x: BED.x, z: BED.z }, { x: SCREEN.x, z: SCREEN.z }, DUCT_NE, DUCT_SE, BEFORE_HINDE],
+  // (the bed, the screen, where the hind grazes before and after: it stays drawn near any of
+  // them, and rests from the other homes' views — the frisling's fields are ~45 m off)
+  spread: [{ x: BED.x, z: BED.z }, { x: SCREEN.x, z: SCREEN.z }, BEFORE_HINDE, HOME],
 };
 
 /** Is `p` within `r` m of a polyline? */
