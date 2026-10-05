@@ -8,8 +8,9 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { routeStop, segSegDist, STOP_CLEAR, STOP_REACH, RANGER_H, RANGER_R, type P3 } from './route-math.ts';
-import { fieldSpots, FRISLING_PLACES } from '../missions/frisling.places.ts';
+import { routeStop, segSegDist, sniffStop, SNIFF_APART, SNIFF_CLEAR, SNIFF_REACH, STOP_CLEAR, STOP_REACH, RANGER_H, RANGER_R, type Body, type P3 } from './route-math.ts';
+import { fieldFrame, fieldSpots, fieldSpotsOf, FRISLING_PLACES, WAYS, WAY_IDS } from '../missions/frisling.places.ts';
+import { SIZE } from '../../AnimalScale.ts';
 
 const flat = (): number => 0;
 const SPOTS = fieldSpots().map((s) => ({ ...s, y: 0 }));
@@ -76,4 +77,77 @@ test('he nearly always finds such a place, and keeps the old stop when it was cl
   const lone = [{ x: 0, y: 0, z: 0 }];
   const stop = routeStop({ spot: { x: 0, z: 0 }, from: { x: 0, z: 4 }, spots: lone, eye: { x: 3, y: 4, z: 6 }, groundY: flat })!;
   assert.ok(Math.abs(stop.x) < 1e-9 && Math.abs(stop.z - STOP_REACH) < 1e-9, JSON.stringify(stop));
+});
+
+/* -- the animal he leads (lander, run 7): golden seed 3089106450 saw "1" behind actor-lost -- */
+
+/** The piglet as route.ts sizes it: its height + 0.1 m, half its length + 0.05 m. */
+const PIGLET: Body = { h: SIZE.frisling.h + 0.1, r: SIZE.frisling.len / 2 + 0.05 };
+
+/** Lenses behind a stand, looking in at a field's middle (as `lenses()`, for any way). */
+function lensesAt(stand: { x: number; z: number }, centre: { x: number; z: number }): P3[] {
+  const dx = stand.x - centre.x, dz = stand.z - centre.z, d = Math.hypot(dx, dz);
+  const out: P3[] = [];
+  for (const back of [3, 4.5, 6]) for (const up of [3, 4, 5.5]) for (const side of [-1, 0, 1]) {
+    out.push({ x: stand.x + (dx / d) * back - (dz / d) * side, y: up, z: stand.z + (dz / d) * back + (dx / d) * side });
+  }
+  return out;
+}
+
+/** Independent, for any body: sample every lens → spot ray against its cylinder. */
+function hiddenBy(at: { x: number; z: number }, body: Body, eye: P3, spots: readonly (P3 & { id: number })[]): string[] {
+  const out: string[] = [];
+  for (const q of spots) {
+    for (let i = 0; i <= 400; i++) {
+      const t = i / 400;
+      const p = { x: eye.x + (q.x - eye.x) * t, y: eye.y + (q.y + 0.05 - eye.y) * t, z: eye.z + (q.z - eye.z) * t };
+      if (p.y >= 0 && p.y <= body.h && Math.hypot(p.x - at.x, p.z - at.z) < body.r - 0.01) { out.push(String(q.id)); break; }
+    }
+  }
+  return out;
+}
+
+test('on every way\'s field: the piglet sniffs each picked spot from its edge, on no patch, hiding no spot from the lens', () => {
+  for (const id of WAY_IDS) {
+    const way = WAYS[id];
+    const spots = fieldSpotsOf(way.field).map((q) => ({ ...q, y: 0 }));
+    for (const eye of lensesAt(way.fieldApproach, fieldFrame(way.field))) {
+      for (const s of spots) {
+        // from its place beside him, and from where it sniffed any other spot before
+        const froms = [way.fieldSide, ...spots.filter((q) => q.id !== s.id).map((q) => sniffStop({ spot: q, from: way.fieldSide, spots, eye, groundY: flat, body: PIGLET }) ?? q)];
+        for (const from of froms) {
+          // (he walks after it to his own stop, or stays at the stand)
+          const ranger = routeStop({ spot: s, from: way.fieldApproach, spots, eye, groundY: flat }) ?? way.fieldApproach;
+          const at = sniffStop({ spot: s, from, spots, eye, groundY: flat, body: PIGLET, ranger });
+          if (!at) continue; // (it sniffs from where it stands)
+          assert.ok(Math.hypot(at.x - ranger.x, at.z - ranger.z) >= SNIFF_APART, `${id} spot ${s.id}: it would stand in his legs`);
+          const reach = Math.hypot(at.x - s.x, at.z - s.z);
+          assert.ok(SNIFF_REACH.some((r) => Math.abs(reach - r) < 1e-9), `${id} spot ${s.id}: beside it (${reach.toFixed(2)} m)`);
+          for (const q of spots) assert.ok(Math.hypot(q.x - at.x, q.z - at.z) >= SNIFF_CLEAR, `${id} spot ${s.id}: it would stand on patch ${q.id}`);
+          assert.deepEqual(hiddenBy(at, PIGLET, eye, spots), [], `${id} spot ${s.id}: from ${JSON.stringify(eye)} it hides spots`);
+        }
+      }
+    }
+  }
+});
+
+test('the piglet nearly always finds such a place at the patch\'s edge, and walks the shortest way', () => {
+  for (const id of WAY_IDS) {
+    const way = WAYS[id];
+    const spots = fieldSpotsOf(way.field).map((q) => ({ ...q, y: 0 }));
+    const eye = lensesAt(way.fieldApproach, fieldFrame(way.field))[13]; // (4.5 m back, 4 m up, straight behind)
+    let found = 0, edge = 0;
+    for (const s of spots) {
+      const ranger = routeStop({ spot: s, from: way.fieldApproach, spots, eye, groundY: flat }) ?? way.fieldApproach;
+      const at = sniffStop({ spot: s, from: way.fieldSide, spots, eye, groundY: flat, body: PIGLET, ranger });
+      if (at) found += 1;
+      if (at && Math.abs(Math.hypot(at.x - s.x, at.z - s.z) - SNIFF_REACH[0]) < 1e-9) edge += 1;
+    }
+    assert.ok(found === spots.length, `${id}: a place beside ${found} of ${spots.length} spots`);
+    assert.ok(edge >= 5, `${id}: at the edge of ${edge} of ${spots.length} spots`);
+  }
+  // a lone spot: it sniffs from its own side (the shortest trot), at the edge
+  const lone = [{ x: 0, y: 0, z: 0 }];
+  const at = sniffStop({ spot: { x: 0, z: 0 }, from: { x: 4, z: 0 }, spots: lone, eye: { x: 0, y: 4, z: 6 }, groundY: flat, body: PIGLET })!;
+  assert.ok(Math.abs(at.x - SNIFF_REACH[0]) < 1e-9 && Math.abs(at.z) < 1e-9, JSON.stringify(at));
 });

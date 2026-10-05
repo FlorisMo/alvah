@@ -258,6 +258,9 @@ export class Actor {
   /** What it is doing now. */
   get doing(): string { return this.task.kind; }
 
+  /** Its body's length (m; run 7, additive: the route's walker reads its size). */
+  get bodyLen(): number { return this.len; }
+
   /** Dev read: its behaviour's numbers (where to, how stuck). */
   get detail(): string {
     const t = this.task as Record<string, unknown>;

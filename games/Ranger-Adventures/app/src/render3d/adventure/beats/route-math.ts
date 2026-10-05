@@ -6,7 +6,11 @@
  * click next, hidden behind him (golden: "6" behind the ranger). He now stops beside the
  * spot where his body covers no spot from the lens, the shortest walk first; when no such
  * place exists he stays where he stands (which was chosen the same way, or is the stand).
- * No THREE, no DOM.
+ * The animal he leads (the piglet) is held to the same bar (`sniffStop`): it used to trot
+ * straight at the spot he picked and stop on it, or wherever its 1.2 s ran out, so it
+ * could stand between the lens and the spot he must see lit or click next (golden, seed
+ * 3089106450: "1" behind actor-lost). It now sniffs each spot from its edge, on a side
+ * where its own body hides no spot. No THREE, no DOM.
  */
 
 export interface P3 { x: number; y: number; z: number }
@@ -15,6 +19,9 @@ export interface GroundSpot { x: number; y: number; z: number }
 /** His body for the covering test: feet to the top of his hat (m), and its radius (m). */
 export const RANGER_H = 1.35;
 export const RANGER_R = 0.45;
+/** A body for the covering test: an upright cylinder, feet to top `h`, radius `r` (m). */
+export interface Body { h: number; r: number }
+export const RANGER_BODY: Body = { h: RANGER_H, r: RANGER_R };
 /** How far from the spot he stops (as before), and how far from any spot's middle. */
 export const STOP_REACH = 1.25;
 export const STOP_CLEAR = 0.9;
@@ -46,11 +53,29 @@ export function segSegDist(a0: P3, a1: P3, b0: P3, b1: P3): number {
   return Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
 }
 
-/** Does a ranger standing at (x, z) hide any of `spots` from the lens at `eye`? */
-export function coversASpot(at: { x: number; z: number }, groundY: number, spots: readonly GroundSpot[], eye: P3): boolean {
+/** Does a ranger (or `body`) standing at (x, z) hide any of `spots` from the lens at `eye`? */
+export function coversASpot(at: { x: number; z: number }, groundY: number, spots: readonly GroundSpot[], eye: P3, body: Body = RANGER_BODY): boolean {
   const feet = { x: at.x, y: groundY, z: at.z };
-  const head = { x: at.x, y: groundY + RANGER_H, z: at.z };
-  return spots.some((q) => segSegDist(eye, { x: q.x, y: q.y + 0.05, z: q.z }, feet, head) < RANGER_R);
+  const head = { x: at.x, y: groundY + body.h, z: at.z };
+  return spots.some((q) => segSegDist(eye, { x: q.x, y: q.y + 0.05, z: q.z }, feet, head) < body.r);
+}
+
+/** Where to stand to see to `spot`: `reach` from it (16 places round it, the one nearest
+ *  `from` first), at least `clear` from every spot's middle, `body` hiding no spot from
+ *  the lens. Null: no such place. */
+function besideSpot(o: { spot: { x: number; z: number }; from: { x: number; z: number }; spots: readonly GroundSpot[]; eye: P3; groundY: (x: number, z: number) => number; reach: number; clear: number; body: Body; avoid?: readonly { x: number; z: number }[]; apart?: number }): { x: number; z: number } | null {
+  const toward = Math.atan2(o.from.z - o.spot.z, o.from.x - o.spot.x);
+  const places = Array.from({ length: 16 }, (_, i) => {
+    const a = toward + (i * Math.PI) / 8;
+    return { x: o.spot.x + Math.cos(a) * o.reach, z: o.spot.z + Math.sin(a) * o.reach };
+  }).sort((p, q) => Math.hypot(p.x - o.from.x, p.z - o.from.z) - Math.hypot(q.x - o.from.x, q.z - o.from.z));
+  for (const p of places) {
+    if (o.spots.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < o.clear)) continue;
+    if (o.avoid?.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < (o.apart ?? 0))) continue;
+    if (coversASpot(p, o.groundY(p.x, p.z), o.spots, o.eye, o.body)) continue;
+    return p;
+  }
+  return null;
 }
 
 /**
@@ -60,15 +85,28 @@ export function coversASpot(at: { x: number; z: number }, groundY: number, spots
  * stop, straight on his side, when that is clear). Null: no such place (he stays put).
  */
 export function routeStop(o: { spot: { x: number; z: number }; from: { x: number; z: number }; spots: readonly GroundSpot[]; eye: P3; groundY: (x: number, z: number) => number }): { x: number; z: number } | null {
-  const toward = Math.atan2(o.from.z - o.spot.z, o.from.x - o.spot.x);
-  const places = Array.from({ length: 16 }, (_, i) => {
-    const a = toward + (i * Math.PI) / 8;
-    return { x: o.spot.x + Math.cos(a) * STOP_REACH, z: o.spot.z + Math.sin(a) * STOP_REACH };
-  }).sort((p, q) => Math.hypot(p.x - o.from.x, p.z - o.from.z) - Math.hypot(q.x - o.from.x, q.z - o.from.z));
-  for (const p of places) {
-    if (o.spots.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < STOP_CLEAR)) continue;
-    if (coversASpot(p, o.groundY(p.x, p.z), o.spots, o.eye)) continue;
-    return p;
+  return besideSpot({ ...o, reach: STOP_REACH, clear: STOP_CLEAR, body: RANGER_BODY });
+}
+
+/** How far from a picked spot's middle the animal he leads stands to sniff it (m: at its
+ *  edge first, its nose on the turned earth; a step further out when no side there is
+ *  clear), and how far from any spot's middle (never in the middle of a patch). */
+export const SNIFF_REACH: readonly number[] = [0.75, 1.0, 1.25];
+export const SNIFF_CLEAR = 0.7;
+/** How far it keeps from where he will stand (m: his body and its own never meet). */
+export const SNIFF_APART = 0.9;
+
+/**
+ * Where the animal he leads (`body`: its own size) stands to sniff the spot he picked
+ * (from where it is, `from`): beside the spot, on no patch's middle, `SNIFF_APART` from
+ * where he will stand (`ranger`), its body hiding no spot from the lens, the shortest trot
+ * first. Null: no such place (it sniffs from where it stands, which was chosen the same
+ * way, or is its place beside him).
+ */
+export function sniffStop(o: { spot: { x: number; z: number }; from: { x: number; z: number }; spots: readonly GroundSpot[]; eye: P3; groundY: (x: number, z: number) => number; body: Body; ranger?: { x: number; z: number } }): { x: number; z: number } | null {
+  for (const reach of SNIFF_REACH) {
+    const p = besideSpot({ ...o, reach, clear: SNIFF_CLEAR, avoid: o.ranger ? [o.ranger] : [], apart: SNIFF_APART });
+    if (p) return p;
   }
   return null;
 }

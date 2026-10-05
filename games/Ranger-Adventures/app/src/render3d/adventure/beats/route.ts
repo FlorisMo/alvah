@@ -26,7 +26,7 @@ import { Sound } from '../../../core/sound';
 import { GROEI } from '../../../content/copy';
 import { buildCorsiTrial, CorsiRun, type SpanResult } from '../../../engines/corsi';
 import type { AdventureKit, FrameSpec } from '../kit';
-import { routeStop } from './route-math';
+import { routeStop, sniffStop } from './route-math';
 import type { Actor } from '../actors';
 import type { PatchField } from '../patches';
 import type { Place } from '../types';
@@ -129,8 +129,30 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
     } else k.say(o.lines.wijs);
   };
 
+  /** The animal he leads sniffs each spot he picks from its edge, on a side where it hides
+   *  no spot from the lens (route-math `sniffStop`): it trots there, then noses the earth.
+   *  Resolves once it stands there (never rejects); a newer pick takes over its way.
+   *  `ranger`: where he will stand (it keeps clear of him). */
+  let trotting = false;
+  let pickNo = 0;
+  const sniffAt = (w: Actor, s: { x: number; z: number }, ranger: { x: number; z: number }): Promise<void> => {
+    const me = ++pickNo;
+    const at = sniffStop({
+      spot: s, from: { x: w.x, z: w.z }, spots: field.spots, eye: camera.position, ranger,
+      groundY: (x, z) => k.ctx.groundY(x, z), body: { h: w.height + 0.1, r: w.bodyLen / 2 + 0.05 },
+    });
+    trotting = !!at;
+    const there = at ? w.go(at.x, at.z, { speed: 'trot' }) : Promise.resolve(true);
+    return there.then(() => {
+      if (me !== pickNo) return;
+      trotting = false;
+      void w.sniff(s.x, s.z, 1.2, Math.hypot(w.x - s.x, w.z - s.z) + 0.15);
+    }, () => { if (me === pickNo) trotting = false; });
+  };
+
   const unhint = k.hint(() => {
-    if (phase !== 'recall' || busy) return null;
+    // (no hint while the animal trots to its place: a player watches it go, golden too)
+    if (phase !== 'recall' || busy || trotting) return null;
     const m = field.mounds[run.expected];
     return m ? { id: String(run.expected), target: m } : null;
   });
@@ -165,9 +187,6 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
     const res = run.tap(id);
     const s = field.spots[i];
     busy = true;
-    // the piglet trots there and sniffs; the ranger walks after him (feedback, not input)
-    // — or the beat's own feedback (the squirrel dashes there and sniffs)
-    if (o.walker && !o.picked) void o.walker.sniff(s.x, s.z, 1.2);
     const me = k.ranger();
     const d = Math.hypot(s.x - me.x, s.z - me.z);
     // run 7: he stops beside the spot where he hides no spot from the lens (the route shows
@@ -175,13 +194,18 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
     const stop = !o.picked && d > 1.6
       ? routeStop({ spot: s, from: me, spots: field.spots, eye: camera.position, groundY: (x, z) => k.ctx.groundY(x, z) })
       : null;
+    // the piglet trots there and sniffs; the ranger walks after him (feedback, not input)
+    // — or the beat's own feedback (the squirrel dashes there and sniffs)
+    const sniffed = o.walker && !o.picked ? sniffAt(o.walker, s, stop ?? me) : Promise.resolve();
     const walk = o.picked ? o.picked(s, pickOf(res)).catch(() => {}) : stop ? k.walkRanger(stop.x, stop.z, 0.04).catch(() => false) : Promise.resolve(true);
+    // (a route shows again, or a new one, only once the animal stands at its place too)
+    const settled = Promise.all([walk, sniffed]);
     if (res === 'replay' || res === 'ease') {
       // a wrong spot: the route again ('replay'), or silently a shorter one ('ease')
       field.mark(i, 'wrong');
       if (settings.geluid) { Sound.sniff(); Sound.tryAgain(); }
       k.say(o.lines.mis);
-      void walk.then(() => k.wait(1.2)).then(() => { busy = false; return show(null); }).catch(() => {});
+      void settled.then(() => k.wait(1.2)).then(() => { busy = false; return show(null); }).catch(() => {});
       return;
     }
     field.mark(i, 'ok');
@@ -202,7 +226,7 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
       const back = (): Promise<unknown> => (o.picked || Math.hypot(k.ranger().x - o.stand.x, k.ranger().z - o.stand.z) < 0.8
         ? Promise.resolve() : k.walkRanger(o.stand.x, o.stand.z, 0.04).catch(() => false));
       const between = (): Promise<unknown> => (o.between ? k.guard(o.between(roundNo, roundSpots)) : Promise.resolve());
-      void walk.then(() => k.wait(0.5)).then(back).then(between).then(() => { busy = false; return show(o.lines.nogEen ?? GROEI.nogEenWeg); }).catch(() => {});
+      void settled.then(() => k.wait(0.5)).then(back).then(between).then(() => { busy = false; return show(o.lines.nogEen ?? GROEI.nogEenWeg); }).catch(() => {});
       return;
     }
     void walk.then(() => { busy = false; });
