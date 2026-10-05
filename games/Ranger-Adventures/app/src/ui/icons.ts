@@ -86,6 +86,17 @@ const PATHS = {
     '<path d="M12 9.2C9.4 7.3 5.2 7 3 8.3c1.8 2 6.3 2.4 9 .9z" fill="currentColor" fill-opacity=".16"/>' +
     '<path d="M12 9.2c2.6-1.9 6.8-2.2 9-.9-1.8 2-6.3 2.4-9 .9z" fill="currentColor" fill-opacity=".16"/>' +
     '<path d="M12 11.8c-2.3-1.1-5.6-.9-7.4.5 1.7 1.4 5 1.3 7.4-.5zM12 11.8c2.3-1.1 5.6-.9 7.4.5-1.7 1.4-5 1.3-7.4-.5z"/>',
+  // run 7 (stille-zand): two speckled eggs lying side by side on the sand (a nightjar's)
+  egg:
+    '<path d="M8.6 19.6c-2.6 0-4.4-2-4.4-4.7 0-3.3 2-6.6 4.4-6.6S13 11.6 13 14.9c0 2.7-1.8 4.7-4.4 4.7z" fill="currentColor" fill-opacity=".16"/>' +
+    '<path d="M15.6 19.6c-2.3 0-3.9-1.8-3.9-4.2 0-2.9 1.8-5.9 3.9-5.9s3.9 3 3.9 5.9c0 2.4-1.6 4.2-3.9 4.2z" fill="currentColor" fill-opacity=".16"/>' +
+    '<path d="M3 21h18"/><circle cx="7.4" cy="13.6" r=".55" fill="currentColor"/><circle cx="9.6" cy="16.2" r=".55" fill="currentColor"/>' +
+    '<circle cx="16.4" cy="14.4" r=".55" fill="currentColor"/>',
+  // run 7 (stille-zand): an anthill — a heap of pine needles on the sand, ants on its flank
+  mound:
+    '<path d="M2.8 19.5C4.6 13.2 8 8.6 12 8.6s7.4 4.6 9.2 10.9z" fill="currentColor" fill-opacity=".16"/>' +
+    '<path d="M2.5 19.6h19"/><path d="M8.6 15.6l1.6-1.2M12.6 12.6l1.4 1.4M14.8 16.6l1.7-.9M10.6 17.9l1.2.6"/>' +
+    '<circle cx="17.9" cy="13.6" r=".7" fill="currentColor"/><circle cx="6.4" cy="17.1" r=".7" fill="currentColor"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

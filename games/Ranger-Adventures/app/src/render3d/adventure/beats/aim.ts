@@ -82,6 +82,12 @@ export interface AimWorld {
 
 export interface AimOpts {
   view: FrameSpec;
+  /** run 7 (additive, stille-zand): how the card shows whether the animal is a day or a night
+   *  animal — `'woord'` (default, as before: a tag with its sun or moon and the word "Dag-dier"
+   *  / "Nacht-dier"), or `'beeld'`: no word on the card, the animal's own picture sits on a
+   *  small day sky (its sun) or night sky (its moon), the same marks the rule's chips carry.
+   *  The voice still says it (the 2D floor's words), as before. */
+  tag?: 'woord' | 'beeld';
   /** where the ranger stands while he aims (the view's own include spot) */
   stand: Place;
   world: AimWorld;
@@ -151,9 +157,11 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
       `<div class="p3-card">` +
       (flip ? `<p class="p3-flip aim-flip">${esc(flip)}</p>` : '') +
       `<div class="p3-row">` +
-      `<span class="aim-pic" aria-hidden="true">${aimPicture(item.id)}</span>` +
+      (o.tag === 'beeld'
+        ? `<span class="aim-pic aim-sky ${item.dag ? 'dag' : 'nacht'}" aria-hidden="true"><span class="aim-sky-mark">${dayNightIcon(item.dag)}</span>${aimPicture(item.id)}</span>`
+        : `<span class="aim-pic" aria-hidden="true">${aimPicture(item.id)}</span>`) +
       `<div class="p3-lines"><p class="p3-text">${esc(komt)}</p><p class="p3-sub">${esc(o.lines.vraag)}</p></div>` +
-      `<span class="aim-tag ${item.dag ? 'dag' : 'nacht'}">${dayNightIcon(item.dag)}${esc(cue.woord)}</span>` +
+      (o.tag === 'beeld' ? '' : `<span class="aim-tag ${item.dag ? 'dag' : 'nacht'}">${dayNightIcon(item.dag)}${esc(cue.woord)}</span>`) +
       `${SPEAK_BTN}` +
       `</div>` +
       `<div class="p3-chips" aria-label="De regel">${chip(c1)}${chip(c2)}</div>` +

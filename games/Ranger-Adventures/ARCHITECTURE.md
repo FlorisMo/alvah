@@ -211,7 +211,33 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          the other two moments in the trial's order — feet still as a group
                          comes, hands still when a young one looks at him, and the flip:
                          on the bed among the tracks he stands in their way and steps aside;
-                         now and then a badger (k.rare))
+                         now and then a badger (k.rare)); run 7 (stille-zand): stuifzand (the
+                         drift sand north-east of the spawn: a car drove up the sand path and on
+                         over the sand where nightjars breed; stuifzand.places.ts its three
+                         scrapes along a corridor from the path's end to the east rim, each with
+                         two spots for her and its own search frame (`NESTS`, searched from the
+                         side the car passed: `stands`/`views`), the car's two routes past all
+                         three (`routeOf`), where the wind blew sand over them (`gapsOf`: the
+                         level's `trailLegs`, `rutAlpha` its `trailClarity`), where a flushed
+                         parent flutters to and drags a wing, always away from the eggs
+                         (`flushOf`), the guard place — a juniper with a rabbit's burrow and a
+                         stretch of open sand, the stop between them, the ways in and out pinned
+                         outside its picture — and `zandLayout`, this play's scrape (never one of
+                         his last two plays'), spot, route, flutter and woodlark;
+                         stuifzand.home.ts the sand (wind ripples, twigs, cones, bark, buntgras
+                         tufts fitted to the level's glimpse, the tyre ruts with their tread), the
+                         look-alikes (bark, a dead stub, cones: the trial's decoys on a scrape's
+                         slots), the juniper, the anthill, the eggs, and `Nightjar`, an Actor that
+                         presses flat on its eggs, flies on its own wings, drags a wing along the
+                         sand, shifts off its eggs and claps its wings; stuifzand.ts the beats:
+                         one look at the tracks, the follow (a run says birds breed here), the
+                         flush, the search (zoeken), one calm look at the guard place (the
+                         burrow's find card there, before the first visitor), the guard at dusk
+                         (wisselen through aimBeat, the card's animal on its own sky: `tag:
+                         'beeld'`), back to the scrape: he steps back out of the close look
+                         (`endSpot`, pinned feet to head) and sees the eggs, now and then the
+                         wing claps (k.rare) in one dusk picture held through the reunion
+                         (`endViewOf`/`displayOf`, pinned: big, in the air, sand behind him))
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          run 7: a home may record what he saw of it in free roam
                          (`DressingEnv.discover`, wired by WorldSession to the save and the
@@ -391,6 +417,8 @@ mission records its helped animal (`geholpen`) quietly, and the home's rare coun
 between, callCap })` (the world's own four callers slot for slot, the jay backing off between
 two rounds, every call held to 0.6-1.2 s); a skin's `roepAllen` (every caller heard once
 before any calls again: engines/simon `spread`, the 2D floor reads the same skin);
+`aimBeat({ tag: 'beeld' })` (the card shows whether the animal is a day or a night animal by
+its picture on a small day or night sky, without the word tag: the drift sand's guard);
 `Adventure.moods.perPlay` as a number (never one of that many last plays' moods:
 `lastMoodsAt`); a home tree's `near` (its own full-detail range, world/Forest; a number, or
 a function read every frame: the squirrel's eleven pines are the real tree only while it

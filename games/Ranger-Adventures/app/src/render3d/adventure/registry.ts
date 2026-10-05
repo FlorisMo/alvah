@@ -18,6 +18,7 @@ import { wildcameraAdventure } from './missions/wildcamera';
 import { eekhoornAdventure } from './missions/eekhoorn';
 import { venAdventure } from './missions/ven';
 import { ecoductAdventure } from './missions/ecoduct';
+import { stuifzandAdventure } from './missions/stuifzand';
 
 export interface Adventure {
   /** the mission id */
@@ -61,6 +62,9 @@ const ADVENTURES: Readonly<Record<string, Adventure>> = {
   // run 7 (the adventures lane, package oversteek): De oversteek at the real ecoduct, after
   // the ven (the story order offers it next)
   ecoduct: ecoductAdventure,
+  // run 7 (the adventures lane, package stille-zand): Het stille zand on the drift sand, after
+  // the ecoduct (the story order offers it next)
+  stuifzand: stuifzandAdventure,
 };
 
 /** The adventure a mission is played as, or null (the classic path). */

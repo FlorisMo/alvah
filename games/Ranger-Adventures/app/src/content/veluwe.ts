@@ -1250,19 +1250,20 @@ const MISSIE_STUIFZAND = {
   dier: 'nachtzwaluw',
   status: 'actief',
   verhaalHaak: 'band',     // tyre tracks lead out of the drifting sand
-  kort: 'Een nachtzwaluw broedt op het kale zand. Vind hem en sorteer de dieren.',
+  kort: 'Een nachtzwaluw broedt op het kale zand. Vind hem en pas op het nest.',
   briefing: {
+    // run 7: a car drove over the drift sand where the nightjars breed: he follows its tracks
     simpel: [
-      'Op het kale zand zit een vogel.',
+      'Er reed een auto over het zand.',
+      'Daar broedt een vogel.',
       'Hij lijkt precies op het zand.',
-      'Zoek hem heel goed.',
-      'Daarna sorteer je de dieren.',
+      'Zoek hem, maar loop voorzichtig.',
     ],
     knap: [
-      'Op het stuifzand broedt een nachtzwaluw.',
-      'Hij is bijna niet te zien.',
-      'Zoek hem en sorteer dan de dieren.',
-      'Welk dier hoort bij dag of nacht?',
+      'Er reed een auto over het stuifzand.',
+      'Daar broedt een nachtzwaluw.',
+      'Hij lijkt precies op het zand.',
+      'Zoek hem, maar loop voorzichtig.',
     ],
   },
   beloning: {
@@ -1270,6 +1271,55 @@ const MISSIE_STUIFZAND = {
     vaktermBadge: { id: 'knap-stuifzand', naam: 'Knap woord: stuifzand' },
   },
   reunion: { sprite: 'nachtzwaluw', tekst: 'De nachtzwaluw blijft rustig op het nest.' },
+  /* run 7: Het stille zand as an adventure on the drift sand (render3d/adventure/missions/
+     stuifzand.ts): one look at the car's tracks on the path, a careful walk along them (a run
+     says why to walk calmly), a nightjar that flutters up and drags a wing to lead him away,
+     the search for its mate pressed flat on the sand, the guard by the juniper as the evening
+     falls (each animal that comes by goes to its place: wisselen), and back to the nest. One
+     line per beat. */
+  avontuur: {
+    simpel: {
+      kijk: 'Kijk. Sporen van een auto.',
+      volg: 'Volg de sporen. Loop voorzichtig.',
+      chipSporen: 'De sporen',
+      cueSporen: 'kijk naar het zand',
+      rustig: 'Rustig. Hier broeden vogels.',
+      gat: 'Waar gaan de sporen verder?',
+      vliegt: 'Kijk! Daar vliegt een vogel op.',
+      gewond: 'Hij doet alsof hij gewond is.',
+      lokt: 'Hij lokt je weg van het nest.',
+      nogEen: 'Sta stil. Er zit er nog een.',
+      zoek: 'Waar zit de vogel? Tik op hem.',
+      mis: 'Hier niet. Zoek verder.',
+      hint: 'Kijk goed bij het gras.',
+      naarStruik: 'Loop naar de grote struik.',
+      chipStruik: 'De grote struik',
+      wacht: 'Wie komt er langs?',
+      vraag: 'Waar hoort hij nu?',
+      kijk_ree: 'Kijk, een ree.',
+      kijk_eekhoorn: 'Kijk, een eekhoorn.',
+      kijk_das: 'Kijk, een das.',
+      kijk_wildzwijn: 'Kijk, een wild zwijn.',
+      kijk_nachtzwaluw: 'Kijk, een nachtzwaluw.',
+      goed: 'Goed zo. Daar hoort hij.',
+      leeg: 'Daar hoort hij nu niet.',
+      avond: 'Het wordt avond.',
+      dag: 'Het wordt weer dag.',
+      andersom: 'Nu is het andersom!',
+      naarNest: 'Kijk nog even bij het nest.',
+      chipNest: 'Het nest',
+      eitjes: 'Kijk! Twee eitjes.',
+      vlucht: 'Kijk! Hij klapt met zijn vleugels.',
+    },
+    knap: {
+      volg: 'Volg de bandensporen. Loop voorzichtig.',
+      chipSporen: 'De bandensporen',
+      gewond: 'Hij doet alsof zijn vleugel breekt.',
+      zoek: 'Waar zit de nachtzwaluw? Tik op hem.',
+      naarStruik: 'Loop naar de jeneverbes.',
+      chipStruik: 'De jeneverbes',
+    },
+  },
   stappen: [
     {
       ef: 'zoeken',
