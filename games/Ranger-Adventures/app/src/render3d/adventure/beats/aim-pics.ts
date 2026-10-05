@@ -72,12 +72,26 @@ const FOX = SVG(
   '<path d="M48 27.5 L49.5 19.5 L53.5 26 Z M52.5 26.5 L55.5 19.5 L57 27.5 Z" fill="#c25d22"/>' +
   '<path d="M49.5 22 L50.2 25.6 L51.8 25.8 Z" fill="#2b2420"/>' +
   '<circle cx="62.2" cy="33.4" r="1.3" fill="#1c1714"/><circle cx="54.6" cy="30" r="1.2" fill="#1c1714"/>');
+/** Run 7 (stille-zand): a red squirrel side-on, sitting up: its rust-red coat, the big bushy
+ *  tail curled up over its back, the ear tufts, a pale belly — in the badger's style. */
+const SQUIRREL = SVG(
+  '<path d="M20 50 Q6 46 7 30 Q8 16 19 14 Q27 14 26 22 Q20 21 18 28 Q17 38 25 44 Z" fill="#b5522a"/>' +
+  '<path d="M17 24 Q14 30 17 37" fill="none" stroke="#d9773f" stroke-width="2.2" stroke-linecap="round"/>' +
+  '<ellipse cx="34" cy="42" rx="10" ry="11" fill="#c45f2c"/>' +
+  '<ellipse cx="37" cy="45" rx="5.2" ry="7" fill="#f2e3c8"/>' +
+  '<circle cx="42" cy="27" r="7.6" fill="#c45f2c"/>' +
+  '<path d="M38 21 L37.2 13.5 L41.6 19.6 Z M43.6 20 L44.6 12.6 L47.4 20.6 Z" fill="#a8471f"/>' +
+  '<path d="M49 28.5 Q51 30 48.6 31.4" fill="none" stroke="#5a2a14" stroke-width="1.3" stroke-linecap="round"/>' +
+  '<circle cx="44.6" cy="25.6" r="1.6" fill="#1a110b"/>' +
+  '<path d="M33 52 L30 56 M39 52 L41 56" stroke="#8a3c1c" stroke-width="2.6" stroke-linecap="round"/>' +
+  '<path d="M44 36 Q48 38 46 41" fill="none" stroke="#8a3c1c" stroke-width="2.4" stroke-linecap="round"/>');
+
 /** A sun and a moon drawn like the game's line icons (24 grid, round 2 px stroke, currentColor). */
 const LINE = (paths: string): string => `<svg class="ic aim-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 const SUN = LINE('<circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity=".25"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/>');
 const MOON = LINE('<path d="M19.2 14.8A7.8 7.8 0 1 1 9.2 4.8a6.2 6.2 0 0 0 10 10z" fill="currentColor" fill-opacity=".25"/>');
 
-const PICS: Record<string, string> = { edelhert: STAG, das: BADGER, wildzwijn: BOAR, nachtzwaluw: NIGHTJAR, vos: FOX };
+const PICS: Record<string, string> = { edelhert: STAG, das: BADGER, wildzwijn: BOAR, nachtzwaluw: NIGHTJAR, vos: FOX, eekhoorn: SQUIRREL };
 
 /** The picture of an animal on the aim card (the roe, the hind and the jay keep their 2D
  *  floor's drawings). */

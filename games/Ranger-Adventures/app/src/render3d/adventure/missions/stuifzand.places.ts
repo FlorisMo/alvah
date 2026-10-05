@@ -191,16 +191,16 @@ export function onCorridor(s: number, t: number): Spot {
 
 /** The search's frame round a scrape (m): half its width and depth, its tilt — a close, steep
  *  look down on the sand, him at its bottom edge (`r`: his shoulders both in it). */
-export const SEARCH = { halfW: 1.1, halfD: 0.82, tall: 0.45, pitchDeg: 38, insetTop: 112, insetBottom: 24, r: 0.22 } as const;
+export const SEARCH = { halfW: 0.95, halfD: 0.66, tall: 0.4, pitchDeg: 44, insetTop: 112, insetBottom: 24, r: 0.22 } as const;
 /** Where he stands to search: back from the scrape's middle (m) and aside, on the side the
  *  car passed it (`l`: north, the frame's +u). */
-const STAND_UV = { u: 1.3, v: -0.95 } as const;
+const STAND_UV = { u: 1.15, v: -0.65 } as const;
 /** Her two spots in the frame (`u` across, `v` along: never its middle), the way she faces
  *  (rad off the frame's heading), and the look-alikes' eight slots (each by a tuft). */
-const SPOTS_UV: readonly { u: number; v: number; turn: number }[] = [{ u: -0.52, v: 0.12, turn: 1.15 }, { u: 0.5, v: -0.05, turn: -2.0 }];
+const SPOTS_UV: readonly { u: number; v: number; turn: number }[] = [{ u: -0.45, v: 0.1, turn: 1.15 }, { u: 0.45, v: -0.05, turn: -2.0 }];
 const SLOTS_UV: readonly { u: number; v: number }[] = [
-  { u: -0.88, v: 0.52 }, { u: -0.2, v: 0.56 }, { u: 0.42, v: 0.6 }, { u: 0.92, v: 0.36 },
-  { u: -0.92, v: -0.36 }, { u: -0.12, v: -0.32 }, { u: 0.1, v: 0.18 }, { u: 0.95, v: -0.42 },
+  { u: -0.8, v: 0.44 }, { u: -0.12, v: 0.5 }, { u: 0.42, v: 0.46 }, { u: 0.84, v: 0.24 },
+  { u: -0.84, v: -0.34 }, { u: -0.06, v: -0.4 }, { u: 0.0, v: 0.08 }, { u: 0.86, v: -0.42 },
 ];
 
 /** The three scrapes along the corridor, ~6.5 m apart, each ≥ 8 m beyond the path's end (his
@@ -227,8 +227,8 @@ function nest(id: NestId, c: Spot, turn: number): Nest {
   // the other parent rests beyond the scrape, a little to the side, by a dead branch
   return {
     id, c, frame, spots,
-    roost: { ...atLocal(frame, 0.65, 1.65), yaw: frame.heading + 2.4 },
-    branch: { ...atLocal(frame, 1.08, 1.5), yaw: frame.heading + 1.45, len: 0.85 },
+    roost: { ...atLocal(frame, 0.6, 1.85), yaw: frame.heading + 2.4 },
+    branch: { ...atLocal(frame, 1.02, 1.72), yaw: frame.heading + 1.45, len: 0.85 },
     stands, views: { l: viewOf('l'), r: viewOf('r') },
   };
 }
@@ -270,7 +270,10 @@ export function approachOf(n: NestId, side: Pass): Approach {
   const nest = NESTS[n];
   const route = routeOf(side);
   const pass = project(route, nest.c);
-  const s = Math.max(OFF_PATH_S + 0.5, pass.s - FLUSH_BEFORE);
+  // (where the tracks come nearest the spot he searches from, a step before it, and never
+  // nearer the scrape than FLUSH_BEFORE along them)
+  const near = project(route, nest.stands[side]).s - 0.6;
+  const s = Math.max(OFF_PATH_S + 0.5, Math.min(pass.s - 1.4, near));
   const ap = pointAt(route, s);
   const approach: Place = { ...ap, r: 1.0, heading: headingTo(ap, nest.c) };
   return { route, passS: pass.s, approach };
@@ -291,16 +294,22 @@ export function slotsOf(n: NestId): Spot[] {
 export function nestClumps(n: NestId): Clump[] {
   const N = NESTS[n];
   const out: Clump[] = [];
-  const size = 0.55;
+  const size = 0.6;
+  // (round each of her spots: two between the lens and her — the search looks the scrape's
+  // way, so these are what hide her — and three round her other sides)
+  const RING: readonly [number, number][] = [[-0.13, -0.21], [0.15, -0.2], [-0.31, 0.03], [0.3, 0.02], [0.02, 0.27]];
+  const F = N.frame;
+  const local = (p: Spot): { u: number; v: number } => toLocal(F, p);
   N.spots.forEach((s, j) => {
-    for (let i = 0; i < 6; i++) {
-      const a = s.yaw + (i / 6) * Math.PI * 2 + j * 0.4;
-      out.push({ x: s.x + Math.sin(a) * 0.27, z: s.z + Math.cos(a) * 0.27, kind: 'grass', size: size * (0.92 + (i % 3) * 0.06) });
-    }
+    const q = local(s);
+    RING.forEach(([du, dv], i) => {
+      out.push({ ...atLocal(F, q.u + du, q.v + dv), kind: 'grass', size: size * (0.92 + ((i + j) % 3) * 0.06) });
+    });
   });
+  // (a look-alike half in the grass as she is: one tuft between it and the lens, one beside)
   slotsOf(n).forEach((p, i) => {
-    const a = i * 2.1 + n;
-    out.push({ x: p.x + Math.sin(a) * 0.28, z: p.z + Math.cos(a) * 0.28, kind: 'grass', size: size * 0.95 });
+    const q = local(p);
+    out.push({ ...atLocal(F, q.u + (i % 2 ? 0.12 : -0.12), q.v - 0.2), kind: 'grass', size: size * 0.9 });
   });
   for (let i = 0; i < 6; i++) {
     const a = n * 1.7 + i * 1.05;
@@ -310,46 +319,59 @@ export function nestClumps(n: NestId): Clump[] {
   return out;
 }
 
+/** The tufts of all three scrapes, in the order the home grows them (one CoverField), and
+ *  its seed: the places test measures the glimpse of this very field. */
+export const COVER_SEED = 71;
+export function allClumps(): Clump[] {
+  return NEST_IDS.flatMap((n) => nestClumps(n));
+}
+
 /* ----------------------------------------------------------- the flush ---- */
 
 /**
- * Where the flushed parent flutters to and drags himself along the sand (the broken-wing
- * show), for a nest and the side of his way it flutters to (`l`: his left as he stands at
- * the approach facing the nest, `r` his right): out from the roost, sideways from him and
- * a little ahead, never toward him (nor toward the lens behind him). `land`: where it comes
- * down; `drag`: where it flops on to; `away`: where it flies off to at last (out of his
- * picture, far over the sand).
+ * Where the flushed parent flutters to and drags itself along the sand (the broken-wing
+ * show), as he stands at the walk's end facing the scrape: always AWAY from the scrape (it
+ * leads him off from the eggs), sideways from him and ahead, never toward him nor toward the
+ * lens behind him. `shape` (a play's fork) draws how: `l` further ahead, `r` more to the side.
+ * `land`: where it comes down; `drag`: where it flops on to; `away`: where it flies off to at
+ * last (far over the sand, out of his picture); `side`: his side it is on (r: his right).
  */
-export interface Flush { land: Spot; drag: Spot; away: Spot; view: ViewSpec; side: Pass }
+export interface Flush { land: Spot; drag: Spot; away: Spot; view: ViewSpec; side: Pass; shape: Pass }
 /** Is a spot open sand the flushed parent may come down on (clear of the solids, the path,
  *  the helipad, the scrapes)? */
 export function openSand(p: Spot): boolean {
-  return clearOfSolids(p, 1.0) && offPath(p) >= 0.8 && dist(p, PAD) >= PAD.r + 3.2 && Math.hypot(p.x, p.z) < 62;
+  return clearOfSolids(p, 1.0) && offPath(p) >= 0.8 && dist(p, PAD) >= PAD.r + 1.2 && Math.hypot(p.x, p.z) < 62
+    && dist(p, ROE_LOOP) - ROE_LOOP.r >= 5.5 && dist(p, BOAR_LOOP) - BOAR_LOOP.r >= 5.5;
 }
-export function flushOf(n: NestId, side: Pass, flutter: Pass): Flush {
+export function flushOf(n: NestId, side: Pass, shape: Pass): Flush {
   const a = approachOf(n, side);
-  const h = a.approach.heading!;
+  // (the way he walks along the tracks there: the scrape lies to one side of it)
+  const h = headingAt(a.route, project(a.route, a.approach).s);
   const right = { x: -Math.cos(h), z: Math.sin(h) };
   const fwd = { x: Math.sin(h), z: Math.cos(h) };
   const from = a.approach;
-  const of = (fl: Pass): Flush => {
-    const sg = fl === 'r' ? 1 : -1;
-    // (it lands ~4.8 m from him: beside his way and a little ahead, flops on 1.2 m further out)
-    const land = { x: from.x + right.x * sg * 3.6 + fwd.x * 3.2, z: from.z + right.z * sg * 3.6 + fwd.z * 3.2 };
-    const drag = { x: land.x + right.x * sg * 1.0 + fwd.x * 0.6, z: land.z + right.z * sg * 1.0 + fwd.z * 0.6 };
+  // (the scrape lies to his right or left: it flutters to the other side)
+  const c = NESTS[n].c;
+  const away = (c.x - from.x) * right.x + (c.z - from.z) * right.z > 0 ? -1 : 1;
+  const of = (sh: Pass, sg: number, near = false): Flush => {
+    const [ahead, out] = near ? (sh === 'l' ? [3.0, 1.8] : [1.9, 2.0]) : sh === 'l' ? [2.5, 2.5] : [1.1, 3.3];
+    const land = { x: from.x + right.x * sg * out + fwd.x * ahead, z: from.z + right.z * sg * out + fwd.z * ahead };
+    const drag = { x: land.x + right.x * sg * 0.9 + fwd.x * 0.3, z: land.z + right.z * sg * 0.9 + fwd.z * 0.3 };
     const away = { x: land.x + right.x * sg * 14 + fwd.x * 8, z: land.z + right.z * sg * 14 + fwd.z * 8 };
-    // the held picture: him and where it shows, side by side, the lens a little behind him
-    const mid = { x: (from.x + land.x) / 2, z: (from.z + land.z) / 2 };
+    // the held picture: him and it side by side, the lens behind him turned a little to it
+    const at = { x: (from.x + land.x) / 2 + fwd.x * 0.3, z: (from.z + land.z) / 2 + fwd.z * 0.3 };
     const view: ViewSpec = {
-      at: mid, heading: h + sg * 0.32, halfW: 2.9, halfD: 1.6, tall: 1.2, pitchDeg: 24, insetTop: 110, insetBottom: 18,
+      at, heading: h + sg * 0.3, halfW: 2.0, halfD: 1.1, tall: 0.8, pitchDeg: 26, insetTop: 110, insetBottom: 18,
       include: [{ x: from.x, z: from.z, h: RANGER_STAND_HEIGHT, r: 0.3 }, { x: drag.x, z: drag.z, h: 0.3 }],
     };
-    return { land, drag, away, view, side: fl };
+    return { land, drag, away, view, side: sg > 0 ? 'r' : 'l', shape: sh };
   };
-  // (toward the side drawn; where that is no open sand — the boulder, the helipad — the other)
-  const want = of(flutter);
-  if (openSand(want.land) && openSand(want.drag)) return want;
-  return of(flutter === 'l' ? 'r' : 'l');
+  // (the shape drawn on the side away from the scrape; where that is no open sand — the
+  // boulder, the helipad — the other shape; where neither, the other side, past the scrape)
+  const other: Pass = shape === 'l' ? 'r' : 'l';
+  const tries = [of(shape, away), of(other, away), of(shape, away, true), of(other, away, true), of(shape, -away), of(other, -away)];
+  const spots = NESTS[n].spots;
+  return tries.find((f) => openSand(f.land) && openSand(f.drag) && spots.every((q) => dist(q, f.land) >= 2.6 && dist(q, f.drag) >= 2.6)) ?? tries[0];
 }
 
 /* ------------------------------------------------------------ the guard ---- */
@@ -405,9 +427,18 @@ export const ZONES: Readonly<Record<'open' | 'hol', Spot & { r: number; h: numbe
 
 /** The anthill at the edge of the sand between the nests and the guard place (a find). */
 export const ANTHILL: Spot & { h: number } = { x: 28.0, z: 33.6, h: 0.5 };
-/** Where a woodlark may rise from the sand and sing (by the path's end and further on): a
- *  play draws one, or none. */
-export const LARK_SPOTS: readonly Spot[] = [{ x: 23.8, z: 31.4 }, { x: 36.6, z: 24.6 }, { x: 41.5, z: 35.8 }];
+/** Where a woodlark rises from the sand and sings, as he walks (`me`, facing `heading`): ~7 m
+ *  ahead of him and ~4 m to the side a play drew (`side`; the other where that is no open
+ *  sand), or null where neither is. */
+export function larkFrom(me: Spot, heading: number, side: Pass): Spot | null {
+  const fwd = { x: Math.sin(heading), z: Math.cos(heading) }, right = { x: -Math.cos(heading), z: Math.sin(heading) };
+  for (const s of [side, side === 'l' ? 'r' : 'l'] as Pass[]) {
+    const sg = s === 'r' ? 1 : -1;
+    const p = { x: me.x + fwd.x * 7 + right.x * sg * 4, z: me.z + fwd.z * 7 + right.z * sg * 4 };
+    if (clearOfSolids(p, 1) && offPath(p) > 0.5 && dist(p, PAD) > PAD.r + 2 && Math.hypot(p.x, p.z) < 62 && dist(p, BOAR_LOOP) - BOAR_LOOP.r > 4) return p;
+  }
+  return null;
+}
 
 /* ----------------------------------------------------------- the knobs ---- */
 
@@ -455,8 +486,8 @@ export interface ZandLaid {
   side: Pass;
   /** which way the flushed parent flutters (his left or right) */
   flutter: Pass;
-  /** where a woodlark rises (index into LARK_SPOTS), or none */
-  lark: number | null;
+  /** whether a woodlark rises and sings as he walks, and on which side of his way */
+  lark: Pass | null;
   /** compact: `2b-l-r` (nest, spot a/b, route side, flutter) */
   variant: string;
 }
@@ -499,7 +530,7 @@ export function zandLayout(play: Pick<Play, 'fork'>, last: readonly string[] = [
   const side: Pass = before ? (before.side === 'l' ? 'r' : 'l') : sf.pick(PASSES);
   const flutter: Pass = play.fork('sz-flush').pick(PASSES);
   const lf = play.fork('sz-leeuwerik');
-  const lark = lf.chance(0.6) ? lf.int(0, LARK_SPOTS.length - 1) : null;
+  const lark: Pass | null = lf.chance(0.6) ? lf.pick(PASSES) : null;
   const variant = `${nest}${spot ? 'b' : 'a'}-${side}-${flutter}`;
   return { nest, spot, side, flutter, lark, variant };
 }
@@ -538,10 +569,11 @@ export const ZAND_RESIDENTS: readonly ResidentSpec[] = [
   { key: 'man', animal: 'nachtzwaluw', height: ZWALUW_H, reach: 0.3,
     before: { ...maleAt(HOME_NEST), idle: 'stand', roam: 0 }, after: { ...maleAt(HOME_NEST), idle: 'stand', roam: 0 } },
   nobody('ree', 'ree'),
-  nobody('eekhoorn', 'eekhoorn'),
+  // (the squirrel drawn ×1.5: a 25 cm squirrel must read at the guard place's distance)
+  { ...nobody('eekhoorn', 'eekhoorn'), height: SIZE.eekhoorn.h * 1.5 },
   nobody('das', 'das'),
   nobody('zwijn', 'wildzwijn'),
-  nobody('gast', 'nachtzwaluw'),
+  { ...nobody('gast', 'nachtzwaluw'), height: ZWALUW_H },
 ];
 
 /** The places table (`__ranger.missionPlaces('stuifzand')`): the marker, the pair's home (the

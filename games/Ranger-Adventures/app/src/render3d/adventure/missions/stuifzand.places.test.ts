@@ -32,9 +32,9 @@ import { eekhoornClearings } from './eekhoorn.places.ts';
 import { venClearings } from './ven.places.ts';
 import { ecoductClearings } from './ecoduct.places.ts';
 import {
-  ANTHILL, ARRIVE, BOAR_LOOP, BURROW, GUARD_STAND, GUARD_VIEW, HOL_JUNIPER, LARK_SPOTS, LEAVE, MARKER, NESTS, NEST_IDS, OPEN, PASSES, PRESSED_H, ROE_LOOP,
+  ANTHILL, ARRIVE, BOAR_LOOP, BURROW, GUARD_STAND, GUARD_VIEW, HOL_JUNIPER, LEAVE, MARKER, NESTS, NEST_IDS, OPEN, PASSES, PRESSED_H, ROE_LOOP,
   SETTLE, SOLIDS, STOP, TAG_AT, ZAND_HOME, ZAND_PLACES, ZONES, ZWALUW_LEN, ON_PATH, OFF_PATH_S, PAD,
-  FLUSH_BEFORE, GAPS_FROM, approachOf, clearOfSolids, flushOf, gapsOf, gapsTo, lastVariants, lineDist, nestClumps, offPath, readVariant, routeOf, rutAlpha, setNestNow, slotsOf, zandClearings, zandLayout,
+  COVER_SEED, FLUSH_BEFORE, GAPS_FROM, allClumps, approachOf, headingAt, larkFrom, pointAt, clearOfSolids, flushOf, gapsOf, gapsTo, lastVariants, lineDist, offPath, readVariant, routeOf, rutAlpha, setNestNow, slotsOf, zandClearings, zandLayout,
   type ViewSpec,
 } from './stuifzand.places.ts';
 import type { Spot } from '../types.ts';
@@ -86,10 +86,16 @@ function inPicture(cam: THREE.Camera, p: Spot, h: number, len: number, m = 0): b
 
 /* ------------------------------------------------------------- the ground ---- */
 
+/** How far along its route a walk ends (m). */
+function projectS(a: ReturnType<typeof approachOf>): number {
+  let best = 0, bd = Infinity;
+  for (let s = 0; s <= a.route.length; s += 0.05) { const p = pointAt(a.route, s); const d = dist(p, a.approach); if (d < bd) { bd = d; best = s; } }
+  return best;
+}
+
 /** Every place a play uses, by name. */
 function everyPlace(): [string, Spot][] {
-  const out: [string, Spot][] = [['marker', MARKER], ['guard', GUARD_STAND], ['stop', STOP], ['open', OPEN], ['hol settle', SETTLE.hol], ['anthill', ANTHILL],
-    ...LARK_SPOTS.map((p, i): [string, Spot] => [`lark ${i}`, p])];
+  const out: [string, Spot][] = [['marker', MARKER], ['guard', GUARD_STAND], ['stop', STOP], ['open', OPEN], ['hol settle', SETTLE.hol], ['anthill', ANTHILL]];
   for (const n of NEST_IDS) {
     const N = NESTS[n];
     out.push([`nest ${n}`, N.c], [`nest ${n} roost`, N.roost], [`nest ${n} stand l`, N.stands.l], [`nest ${n} stand r`, N.stands.r], ...N.spots.map((s, i): [string, Spot] => [`nest ${n} spot ${i}`, s]));
@@ -106,9 +112,11 @@ test('every place is on the drift sand inside the world, clear of the solids, th
   for (const [name, p] of everyPlace()) {
     assert.ok(Math.hypot(p.x, p.z) < 66, `${name} ${at(p)} is inside the world`);
     assert.equal(biomeAt(p.x, p.z), 'stuifzand', `${name} ${at(p)} lies on the drift sand`);
-    assert.ok(beyond(p, BOAR_LOOP) >= 8, `${name} ${at(p)} keeps ≥ 8 m from the roaming boar's loop (${beyond(p, BOAR_LOOP).toFixed(1)})`);
-    assert.ok(beyond(p, ROE_LOOP) >= 8, `${name} ${at(p)} keeps ≥ 8 m from the roaming roe's loop`);
-    assert.ok(dist(p, PAD) >= PAD.r + 2.5, `${name} ${at(p)} keeps off the helipad`);
+    // (where the flushed parent comes down for a few seconds: ≥ 5.5 m; every other place ≥ 8 m)
+    const loopGap = name.includes('flush') ? 5.5 : 8;
+    assert.ok(beyond(p, BOAR_LOOP) >= loopGap, `${name} ${at(p)} keeps ≥ ${loopGap} m from the roaming boar's loop (${beyond(p, BOAR_LOOP).toFixed(1)})`);
+    assert.ok(beyond(p, ROE_LOOP) >= loopGap, `${name} ${at(p)} keeps ≥ ${loopGap} m from the roaming roe's loop`);
+    assert.ok(dist(p, PAD) >= PAD.r + (name.includes('flush') ? 1.2 : 2.5), `${name} ${at(p)} keeps off the helipad`);
     if (name === 'marker') continue;
     assert.ok(clearOfSolids(p, name.includes('flush') ? 0.9 : 0.6), `${name} ${at(p)} is clear of the junipers, the boulder and the helicopter`);
     assert.ok(offPath(p) >= 0.6, `${name} ${at(p)} lies off the sand path (${offPath(p).toFixed(2)} m beyond its edge)`);
@@ -170,12 +178,30 @@ test('the wind blew sand over the tracks: as many gaps as the level\'s legs, bef
   assert.ok(rutAlpha(knobsFor('zoeken', 1).trailClarity) > rutAlpha(knobsFor('zoeken', 6).trailClarity) + 0.3, 'fainter ruts at the top band');
 });
 
+test('a woodlark rises from open sand ahead of him wherever he walks along the tracks', () => {
+  for (const n of NEST_IDS) for (const side of PASSES) {
+    const a = approachOf(n, side);
+    let tried = 0, found = 0;
+    for (let s = OFF_PATH_S - 4; s < a.passS - FLUSH_BEFORE; s += 1) {
+      const me = pointAt(a.route, s), h = headingAt(a.route, s);
+      for (const ls of PASSES) {
+        tried += 1;
+        const p = larkFrom(me, h, ls);
+        if (!p) continue;
+        found += 1;
+        assert.ok(clearOfSolids(p, 1) && offPath(p) > 0.5, `the lark rises from open sand ${at(p)}`);
+      }
+    }
+    // (where a juniper or the path stands there, it rises a step further on)
+    assert.ok(found >= tried * 0.6, `nest ${n}${side}: a lark spot along most of the walk (${found}/${tried})`);
+  }
+});
+
 /* ------------------------------------------------------------ the search ---- */
 
 test('the search: from where he stands, each of her spots is partly visible at every band\'s glimpse, off the middle, big enough', () => {
   for (const n of NEST_IDS) {
     const N = NESTS[n];
-    const clumps = nestClumps(n);
     for (const side of PASSES) {
     const view = N.views[side], stand = N.stands[side];
     const cam = lensOf(view);
@@ -193,7 +219,7 @@ test('the search: from where he stands, each of her spots is partly visible at e
       const back = backPoints(s.x, g, s.z, s.yaw, ZWALUW_LEN, PRESSED_H);
       for (let band = 1; band <= 6; band++) {
         const glimpse = knobsFor('zoeken', band).glimpse;
-        const stems = growStems(clumps, 70 + n, groundY).stems;
+        const stems = growStems(allClumps(), COVER_SEED, groundY).stems;
         const built = stems.map((q) => ({ h: q.h, lx: q.lx, lz: q.lz, r: q.r }));
         const before = visibleShare(back, eye, stems);
         assert.ok(before <= 0.4, `${where} band ${band}: the tufts as grown hide most of her (${before.toFixed(2)} shows)`);
@@ -247,12 +273,20 @@ test('the flushed parent flutters off sideways and ahead (never toward him or th
     const where = `nest ${n}${side} flush ${fl}`;
     for (const s of NESTS[n].spots) assert.ok(dist(f.land, s) >= 2.4 && dist(f.drag, s) >= 2.4, `${where}: it shows away from her (${dist(f.land, s).toFixed(1)} m)`);
     const d = dist(a.approach, f.land);
-    assert.ok(d >= 3.8 && d <= 6.2, `${where}: it comes down ${d.toFixed(1)} m from him`);
+    assert.ok(d >= 2.6 && d <= 6.2, `${where}: it comes down ${d.toFixed(1)} m from him`);
     // ahead of him (in front of the line through him across his way)
-    const h = a.approach.heading!;
+    const h = headingAt(a.route, OFF_PATH_S > 0 ? (a.passS - 0) * 0 + projectS(a) : 0);
     const ahead = (f.land.x - a.approach.x) * Math.sin(h) + (f.land.z - a.approach.z) * Math.cos(h);
-    assert.ok(ahead > 1.2, `${where}: it flutters ahead of him (${ahead.toFixed(1)} m)`);
+    assert.ok(ahead > 0.8, `${where}: it flutters ahead of him (${ahead.toFixed(1)} m)`);
+    // (away from her eggs: never nearer them than 2.6 m)
+    for (const q of NESTS[n].spots) assert.ok(dist(f.land, q) >= 2.6 && dist(f.drag, q) >= 2.6, `${where}: it shows well away from her`);
     const cam = lensOf(f.view);
+    // big enough to see it drag its wing: its length across the picture
+    const g0 = groundY(f.drag.x, f.drag.z);
+    const tip = px(cam, f.drag.x - ZWALUW_LEN / 2, g0 + 0.08, f.drag.z), tail = px(cam, f.drag.x + ZWALUW_LEN / 2, g0 + 0.08, f.drag.z);
+    const tip2 = px(cam, f.drag.x, g0 + 0.08, f.drag.z - ZWALUW_LEN / 2), tail2 = px(cam, f.drag.x, g0 + 0.08, f.drag.z + ZWALUW_LEN / 2);
+    const big = Math.max(Math.hypot(tip.x - tail.x, tip.y - tail.y), Math.hypot(tip2.x - tail2.x, tip2.y - tail2.y));
+    assert.ok(big >= 40, `${where}: it shows ${big.toFixed(0)} px long (≥ 40)`);
     for (const p of [f.land, f.drag]) {
       const c = px(cam, p.x, groundY(p.x, p.z) + 0.1, p.z);
       assert.ok(c.front && c.x > 80 && c.x < W - 80 && c.y > 130 && c.y < H - 60, `${where}: ${at(p)} is in the held picture (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);

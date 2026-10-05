@@ -248,6 +248,9 @@ const CALLS: Record<string, CallSpec> = {
   // run 7 (ven-life): a mallard duck's soft "kwak kwak" — a short nasal note falling a
   // little, twice, through a soft band-pass: a duck chatting to her ducklings, never loud
   eend:          { freq: 360, dur: 0.15, type: 'sawtooth', notes: [370, 340], sweep: 0.8, peak: 0.07, quack: true },
+  // run 7 (stille-zand): a nightjar's wing clap in its display flight at dusk — a short,
+  // soft, dry clap (band-passed air, never sharp)
+  vleugelklap:   { freq: 1500, dur: 0.07, type: 'sine', peak: 0.09, hiss: true },
 };
 const DEFAULT_CALL: CallSpec = { freq: 440, dur: 0.3, type: 'sine', rep: 2 };
 

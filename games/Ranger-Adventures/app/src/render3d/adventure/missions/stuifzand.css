@@ -1,0 +1,30 @@
+/* stuifzand.css — the guard's card (run 7, stille-zand; beats/aim.ts `tag: 'beeld'`): the
+   animal's own picture on its own sky — a day animal on a soft sun-yellow disc with a small
+   sun, a night animal on a night-blue disc with a moon (the rule's chips carry the same
+   marks). No word tag on the card: the voice still says it, as the 2D floor does. */
+.aim3d .aim-pic.aim-sky {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.aim3d .aim-pic.aim-sky.dag { background: radial-gradient(circle at 50% 38%, #fff6d6, #f6d77a); color: #3b2a0c; }
+.aim3d .aim-pic.aim-sky.nacht { background: radial-gradient(circle at 50% 38%, #6a79b3, #3a467f); color: #f3f1ff; }
+.aim3d .aim-pic.aim-sky .ai-svg { width: 52px; height: 52px; }
+.aim3d .aim-sky-mark {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.92);
+}
+.aim3d .aim-sky.dag .aim-sky-mark { background: #f6d77a; }
+.aim3d .aim-sky.nacht .aim-sky-mark { background: #3f4f86; }
+.aim3d .aim-sky-mark .aim-ic { width: 20px; height: 20px; }
