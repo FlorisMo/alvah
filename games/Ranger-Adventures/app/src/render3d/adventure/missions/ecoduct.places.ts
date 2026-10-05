@@ -70,7 +70,7 @@ export const BED: Frame = { x: -57.6, z: 7.9, heading: -Math.PI / 2 };
 /** PRINT_SPOTS scaled UNIFORMLY (m per percent): the seven patches span ~4.1 × 2.9 m. */
 export const BED_SCALE = 0.06;
 /** The raked sand's half extents (m) round the frame: the patches with a margin. */
-export const BED_HALF = { u: 2.75, v: 2.0 } as const;
+export const BED_HALF = { u: 2.75, v: 2.15 } as const;
 /** One patch of tracks (m across). */
 export const PATCH_SIZE = 0.62;
 
@@ -123,7 +123,7 @@ export const SIDES: readonly Side[] = ['N', 'S'];
  */
 export const TRAILS: Readonly<Record<Side, readonly Spot[]>> = {
   N: [{ x: -70.4, z: 16.0 }, { x: -63.6, z: 15.6 }, { x: -60.6, z: 13.6 }, { x: -58.9, z: 11.4 }],
-  S: [{ x: -70.4, z: -4.0 }, { x: -63.8, z: -3.9 }, { x: -60.8, z: -1.5 }, { x: -59.0, z: 3.0 }],
+  S: [{ x: -70.4, z: -4.2 }, { x: -63.6, z: -4.4 }, { x: -60.6, z: -2.0 }, { x: -59.0, z: 3.0 }],
 };
 /** Where a group's way down meets the bed: its mouth (the trail's last point). */
 export function mouthOf(side: Side): Spot { const t = TRAILS[side]; return t[t.length - 1]; }
@@ -299,11 +299,13 @@ export const DECK_LOOK: Spot & { y: number } = { x: -66.4, z: 6.4, y: heightAt(-
 /** Where he stands on the bed to see the tracks up close (the bed visit): in its west half,
  *  right on the line every group takes over it. */
 export const BED_STAND: Place = { ...atLocal(BED, 0, 0.7), r: 0.8, heading: BED.heading };
-/** Where he steps aside to when a group wants over (`opzij`): back off their way, in front
- *  of the screen (≥ 4.5 m from where he stood, ≥ 2.5 m off any group's line over the bed). */
+/** Where he steps aside to when a group wants over (`opzij`), by the way they will leave:
+ *  off their way, beside the screen's far end from it (≥ 4.5 m from where he stood on the bed,
+ *  ≥ 2.5 m off any group's line over the bed; back behind the screen is two steps from there). */
 export const ASIDE: Readonly<Record<Side, Place>> = {
-  N: { ...atLocal(BED, 0.15, -4.05), r: 0.9 },
-  S: { ...atLocal(BED, 0.15, -4.05), r: 0.9 },
+  // (they leave north: he steps out to the screen's south end; they leave south: its north end)
+  N: { ...atLocal(BED, SCREEN.halfW + 1.1 + 0.15, -5.0), r: 0.9 },
+  S: { ...atLocal(BED, -SCREEN.halfW - 0.8 + 0.15, -5.0), r: 0.9 },
 };
 
 /** Where a young one comes up to look at him (`roep`): behind the screen, beside the

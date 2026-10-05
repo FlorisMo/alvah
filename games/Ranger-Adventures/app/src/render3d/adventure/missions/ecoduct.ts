@@ -447,10 +447,11 @@ async function roepAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group, 
   const c = k.copy;
   const settings = store.get().settings;
   k.beat = 'roep:komt';
-  // the group down to the mouth (round the corner from out of sight)
-  await g.walk(TRAILS[g.from].slice(1));
+  // the group round the corner from out of sight and down toward the bed; there the young
+  // one leaves it and comes up to him
+  await g.walk(TRAILS[g.from].slice(1, 3));
   g.stare(k.ranger(), 1.0);
-  await k.wait(0.5);
+  await k.wait(0.4);
   const y = g.young;
   const me0 = k.ranger();
   const spot = roepSpot(where === 'scherm' ? STAND : me0, g.from, where === 'scherm' ? 'scherm' : 'bed');
@@ -460,7 +461,7 @@ async function roepAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group, 
     // (on the open sand: one held picture of him and it, side on)
     await k.frame(roepView(me0, spot), { face: headingTo(me0, spot), dip: true });
   }
-  await y.go(spot.x, spot.z, { speed: g.kind === 'zwijn' ? 0.7 : 0.85 });
+  await y.go(spot.x, spot.z, { speed: g.kind === 'zwijn' ? 0.9 : 1.1 });
   const atHim = (): { x: number; z: number; speed: number } => { const r = k.ranger(); return { x: r.x, z: r.z, speed: 0 }; };
   void y.lookAt(atHim, 99);
   let pull = 0;
@@ -546,11 +547,12 @@ async function opzijAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group)
   const r0 = k.ranger();
   k.world.faceRanger(headingTo(r0, trail[2]));
   await k.behind();
-  await g.walk(trail.slice(1));
+  // (they come round the corner and stop at the bridge's foot: he is in their way)
+  await g.walk(trail.slice(1, 3));
   g.stare(k.ranger(), 99);
   // their way: down to the mouth, over the bed (through where he stands) and out
   const way = [...trail.slice(2), { x: BED.x, z: BED.z }, ...EXITS[g.out]];
-  const aside = ASIDE[g.from];
+  const aside = ASIDE[g.out];
   let why: 'stay' | 'closer' = 'stay';
   await rust.go(e.id, {
     line: c.opzij,
@@ -564,7 +566,7 @@ async function opzijAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group)
       g.lead.idle();
       await g.walk([trail[1], trail[0]]);
       await k.wait(1.2);
-      await g.walk(trail.slice(1));
+      await g.walk(trail.slice(1, 3));
       g.stare(k.ranger(), 99);
     },
     // he watches them come: from behind him, over the bed (one soft dip: he faces the other way)

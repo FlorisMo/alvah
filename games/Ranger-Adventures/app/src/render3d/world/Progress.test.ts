@@ -46,10 +46,10 @@ function box(h: number) {
 
 /** Run 6: the missions whose family LIVES at a home of its own (world/Residents.ts,
  *  render3d/adventure): their tableau is only the "klaar" flag at the marker. */
-const LIVES_AT_HOME = new Set(['frisling', 'ree-niet-aanraken', 'wildcamera', 'eekhoorn']);
+const LIVES_AT_HOME = new Set(['frisling', 'ree-niet-aanraken', 'wildcamera', 'eekhoorn', 'ecoduct']);
 /** A mission whose family still walks in to its marker (the classic tableau: a hind and
- *  her calf on the crossing). */
-const FAMILY = 'ecoduct';
+ *  her calf in the snow; run 7: the ecoduct's hind and calf live at its home now). */
+const FAMILY = 'herstel';
 
 function world(extra: Partial<ProgressEnv> = {}) {
   const scene = new THREE.Scene();
@@ -104,7 +104,11 @@ test('every mission ends in its own tableau, with the animal it is about at its 
   // animal) and its store stays at its glade: the marker gets only the flag
   assert.equal(heroOf('eekhoorn', 'eekhoorn'), '');
   assert.deepEqual(TABLEAUS.eekhoorn.pieces, []);
-  assert.equal(heroOf('ecoduct', 'edelhert'), 'edelhert');
+  // run 7: the hind and her calf live at the ecoduct (by the bridge before, on the heath
+  // after): its ring stays empty and gets only the flag
+  assert.equal(heroOf('ecoduct', 'edelhert'), '');
+  assert.deepEqual(TABLEAUS.ecoduct.pieces, []);
+  assert.equal(heroOf('herstel', 'edelhert'), 'edelhert');
 });
 
 test('the marker frame: + along = beyond the marker, + across = right of the way in', () => {
@@ -204,6 +208,7 @@ test('the reunion: the family walks calmly in and the flag rises; the promise re
     const t = target[i];
     assert.ok(Math.hypot(c.position.x - t.x, c.position.z - t.z) < 1e-6, `${t.id} reached its spot`);
     const d = Math.hypot(c.position.x - m.x, c.position.z - m.z);
+    if (!TABLEAUS[FAMILY].pieces[i].arrive) return; // (a prop fades up where it stands)
     assert.ok(starts[i] > d + 0.5, `${t.id} walked in (${starts[i].toFixed(2)} → ${d.toFixed(2)} m)`);
     assert.ok(mids[i] > d + 0.2 && mids[i] < starts[i] - 0.2, `${t.id} was on its way halfway (a calm walk, not a jump)`);
   });
@@ -316,9 +321,9 @@ test('finished at the missiebord under reduced motion: the family simply stands 
 
 test('a far family calmly fades out and rests (not drawn); the flag stays; coming back it fades in, solid', async () => {
   const w = world();
-  const m = w.markers.find((k) => k.missionId === 'ecoduct')!;
-  await w.progress.complete('ecoduct', false, false);
-  const g = w.scene.getObjectByName('progress-ecoduct')!;
+  const m = w.markers.find((k) => k.missionId === FAMILY)!;
+  await w.progress.complete(FAMILY, false, false);
+  const g = w.scene.getObjectByName(`progress-${FAMILY}`)!;
   const flag = g.getObjectByName('klaar-flag')!;
   const pieces = g.children.filter((c) => c !== flag);
   const opacity = (o: THREE.Object3D): number[] => {
