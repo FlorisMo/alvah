@@ -275,3 +275,39 @@ test('go: pushing on against a bush (a walk key held, going nowhere) is no stand
   assert.equal(r, 'wrong', 'let go and stood: the wait counts again');
   assert.ok(t - 9 > 4.9, `only the standing counted (${(t - 9).toFixed(2)} s)`);
 });
+
+test('go (run 7, the ecoduct): with `off` — he stands ON their way — going is a step off it, never a walk along it; standing is still the old rule', () => {
+  // their way runs along the z axis through where he stands (0, 0); the animals wait 6 m up it
+  const way = [{ x: 0, z: -10 }, { x: 0, z: 10 }];
+  const fam = { x: 0, z: 6 };
+  const mk = (): { core: GoCore; calls: boolean[] } => {
+    const calls: boolean[] = [];
+    return { core: new GoCore({ waitS: 30, off: way }, (goed) => { calls.push(goed); }), calls };
+  };
+  // along their way, away from them (−z): 5 m, still on it — no answer
+  const a = mk();
+  a.core.begin(0, { x: 0, z: 0 }, fam);
+  let r: string | null = null;
+  for (let i = 1; i <= 300 && !r; i++) r = a.core.tick(i / 60, { x: 0, z: -i / 60, speed: 1, running: false }, fam);
+  assert.equal(r, null, 'walking on along their way is not stepping aside');
+  // aside (+x): right once he is 4 m from where he stood and off their way
+  const b = mk();
+  b.core.begin(0, { x: 0, z: 0 }, fam);
+  let at = 0;
+  for (let i = 1; i <= 300 && !r; i++) { r = b.core.tick(i / 60, { x: i / 60, z: 0, speed: 1, running: false }, fam); at = i / 60; }
+  assert.equal(r, 'right');
+  assert.ok(Math.abs(at - GO_AWAY_M) < 0.05, `right at ${at.toFixed(2)} m aside`);
+  assert.deepEqual(b.calls, [true]);
+  // he walked aside before the line was read (begin comes late): still counted from where he
+  // stood the first time — off their way measured from there, not from where he is now
+  const c = mk();
+  c.core.begin(0, { x: 0, z: 0 }, fam);
+  assert.equal(c.core.tick(0.1, { x: 4.6, z: 0.5, speed: 0, running: false }, fam), 'right');
+  // standing still on their way: the old rule, as before
+  const d = new GoCore({ waitS: 5, off: way }, () => {});
+  d.begin(0, { x: 0, z: 0 }, fam);
+  let v: string | null = null;
+  for (let i = 1; i <= 400 && !v; i++) v = d.tick(i / 60, { x: 0, z: 0, speed: 0, running: false }, fam);
+  assert.equal(v, 'wrong');
+  assert.equal(d.why, 'stay');
+});

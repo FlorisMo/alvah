@@ -177,6 +177,23 @@ export interface GoRule {
   /** gone means at least this much (m) farther from the animals than he stood (default
    *  0.5: round them on a circle is not away) */
   farther: number;
+  /** run 7 (the ecoduct, additive): the way the animals want to take, when he stands ON it
+   *  ("Ze willen over. Ga maar opzij."): gone then means `away` m from where he stood AND
+   *  `farther` m further off this line than he stood — a step aside, not a walk along their
+   *  way; `closer` still counts to the animals. Default none: farther from the animals. */
+  off?: readonly GoSpot[];
+}
+
+/** The distance (m) from `p` to the polyline `line`. */
+export function offLine(p: GoSpot, line: readonly GoSpot[]): number {
+  let d = Infinity;
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1], b = line[i];
+    const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / L2));
+    d = Math.min(d, Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t)));
+  }
+  return line.length === 1 ? Math.hypot(p.x - line[0].x, p.z - line[0].z) : d;
 }
 
 export const GO_AWAY_M = 4;
@@ -233,13 +250,18 @@ export class GoCore {
   begin(now: number, at: GoSpot, family: GoSpot): void {
     if (this.phase !== 'read') return;
     const near = Math.hypot(at.x - family.x, at.z - family.z);
-    if (!this.begun) { this.from = { x: at.x, z: at.z }; this.near0 = near; this.begun = true; }
-    else this.near0 = Math.min(this.near0, near);
+    if (!this.begun) {
+      this.from = { x: at.x, z: at.z }; this.near0 = near; this.begun = true;
+      // (off their way: measured from where he first stood, never from where he is now)
+      if (this.rule.off) this.off0 = offLine(this.from, this.rule.off);
+    } else this.near0 = Math.min(this.near0, near);
     this.phase = 'go';
     this.idle = 0;
     this.last = now;
   }
   private begun = false;
+  /** (with `rule.off`) how far off their way he stood the first time */
+  private off0 = 0;
 
   /** Per frame: where he is and how he moves, where the animals are. 'right' once he has
    *  walked away (`choose(true)`), 'wrong' when he stood too long or came closer
@@ -252,7 +274,8 @@ export class GoCore {
     const near = Math.hypot(me.x - family.x, me.z - family.z);
     if (near <= this.near0 - this.rule.closer) return this.wrong('closer');
     const moved = Math.hypot(me.x - this.from.x, me.z - this.from.z);
-    if (moved >= this.rule.away && near >= this.near0 + this.rule.farther) {
+    const gone = this.rule.off ? offLine(me, this.rule.off) >= this.off0 + this.rule.farther : near >= this.near0 + this.rule.farther;
+    if (moved >= this.rule.away && gone) {
       this.phase = 'done';
       this.choose(true);
       return 'right';

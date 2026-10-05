@@ -50,7 +50,7 @@ import { SIZE } from '../../AnimalScale';
 import { EcoductHome } from './ecoduct.home';
 import {
   AFTER_HINDE, AFTER_KALF, ASIDE, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, HIDEAWAY, MISSION, STAND, TRAILS, VARIANT_KEY,
-  asideView, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, lastVariants, mouthOf, nearestOn, roepSpot,
+  asideView, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, lastVariants, mouthOf, roepSpot,
   type Crossing, type EcoductLaid, type Kind, type Side,
 } from './ecoduct.places';
 
@@ -582,7 +582,8 @@ async function opzijAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group)
   let back: Hold = { paused: false, stop: false };
   await rust.go(e.id, {
     line: c.opzij,
-    family: () => nearestOn(k.ranger(), way),
+    // (the animals at the bridge's foot; going is stepping OFF their way, not along it)
+    family: () => ({ x: g.lead.x, z: g.lead.z }), off: way,
     to: aside, doel: c.chipOpzij, glyph: 'footprints', hush: c.sst,
     // (walking up to them is no answer, nor is standing: the words fit what he did)
     get mis(): string | undefined { return why === 'closer' ? c.nietNaar : undefined; },
@@ -624,9 +625,10 @@ async function badger(k: AdventureKit, A: Readonly<Record<string, Actor>>, home:
   k.beat = 'das';
   g.enter();
   k.stats.das = 1;
-  await g.walk([TRAILS[from][1]]);
+  // (its words once it is near enough to see what it is: down at the bridge's foot)
+  await g.walk(TRAILS[from].slice(1, 3));
   k.say(c.das, { good: true });
-  await g.walk(TRAILS[from].slice(2));
+  await g.walk(TRAILS[from].slice(3));
   const a = g.lead;
   const p = atLocal(BED, from === 'N' ? -0.6 : 0.6, 0.3);
   await a.go(p.x, p.z, { speed: g.pace });

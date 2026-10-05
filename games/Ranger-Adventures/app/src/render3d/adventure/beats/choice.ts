@@ -124,6 +124,9 @@ export interface GoOpts {
   away?: number;
   waitS?: number;
   closer?: number;
+  /** run 7 (the ecoduct, additive): the way the animals take, when he stands on it: going
+   *  means stepping OFF it (GoCore `off`), not walking on along it. Default: away from them. */
+  off?: readonly Spot[];
   /** what the old rule did, said after the animals' reaction (default the encounter's gevolg) */
   mis?: string;
   /** he stood too long or came closer: what the animals do (awaited before the line comes back) */
@@ -373,7 +376,7 @@ export class ChoiceRun {
     k.check();
     clearPlayHint();
     const settings = store.get().settings;
-    const core = new GoCore({ waitS: o.waitS ?? this.knobs.goWaitS, ...(o.away ? { away: o.away } : {}), ...(o.closer ? { closer: o.closer } : {}) },
+    const core = new GoCore({ waitS: o.waitS ?? this.knobs.goWaitS, ...(o.away ? { away: o.away } : {}), ...(o.closer ? { closer: o.closer } : {}), ...(o.off ? { off: o.off } : {}) },
       (goed) => { this.run.choose(goed); });
     k.stats[`go_${id}_wait`] = core.rule.waitS;
     const here = (): Spot => { const m = k.ranger(); return { x: m.x, z: m.z }; };
