@@ -597,7 +597,14 @@ export class ZandHome implements HomeDressing {
       o.traverse((m) => {
         const mesh = m as THREE.Mesh;
         if (!mesh.isMesh) return;
-        const mats = [mesh.material].flat().map((mat) => { const c2 = (mat as THREE.MeshStandardMaterial).clone(); c2.color?.setRGB(1.05, 0.82, 0.62); return c2; });
+        // (its texture is a dark red: a heap of needles is warm grey-brown, its own shape shading it)
+        const mats = [mesh.material].flat().map((mat) => {
+          const c2 = (mat as THREE.MeshStandardMaterial).clone();
+          c2.map = null;
+          c2.color?.set('#8a6c4c');
+          c2.roughness = 1;
+          return c2;
+        });
         mesh.material = Array.isArray(mesh.material) ? mats : mats[0];
         for (const mm of mats) this.made.push({ geometry: new THREE.BufferGeometry(), material: mm });
       });
