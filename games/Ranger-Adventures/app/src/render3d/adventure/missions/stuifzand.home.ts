@@ -499,7 +499,7 @@ export class ZandHome implements HomeDressing {
       mound.computeVertexNormals();
       this.burrowMouth = keep(new THREE.Mesh(mound, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })));
       this.burrowMouth.name = 'stuifzand-burrow';
-      this.burrowMouth.position.set(BURROW.x, g(BURROW.x, BURROW.z) - 0.04, BURROW.z);
+      this.burrowMouth.position.set(BURROW.x, Math.min(g(BURROW.x, BURROW.z), ...[[-0.6, 0], [0.6, 0], [0, -0.5], [0, 0.5]].map(([dx, dz]) => g(BURROW.x + dx, BURROW.z + dz))) + 0.005, BURROW.z);
       this.burrowMouth.rotation.y = BURROW.yaw;
       // the hole itself: a dark disc sunk into the mound's face
       const mouth = keep(new THREE.Mesh(new THREE.CircleGeometry(0.17, 18).scale(1, 0.62, 1), new THREE.MeshStandardMaterial({ color: '#1e150d', roughness: 1 })), this.burrowMouth);

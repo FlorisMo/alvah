@@ -197,10 +197,10 @@ export const SEARCH = { halfW: 0.95, halfD: 0.66, tall: 0.4, pitchDeg: 44, inset
 const STAND_UV = { u: 1.15, v: -0.65 } as const;
 /** Her two spots in the frame (`u` across, `v` along: never its middle), the way she faces
  *  (rad off the frame's heading), and the look-alikes' eight slots (each by a tuft). */
-const SPOTS_UV: readonly { u: number; v: number; turn: number }[] = [{ u: -0.45, v: 0.1, turn: 1.15 }, { u: 0.45, v: -0.05, turn: -2.0 }];
+const SPOTS_UV: readonly { u: number; v: number; turn: number }[] = [{ u: -0.55, v: 0.26, turn: 1.15 }, { u: 0.5, v: -0.24, turn: -2.0 }];
 const SLOTS_UV: readonly { u: number; v: number }[] = [
-  { u: -0.8, v: 0.44 }, { u: -0.12, v: 0.5 }, { u: 0.42, v: 0.46 }, { u: 0.84, v: 0.24 },
-  { u: -0.84, v: -0.34 }, { u: -0.06, v: -0.4 }, { u: 0.0, v: 0.08 }, { u: 0.86, v: -0.42 },
+  { u: -0.88, v: 0.6 }, { u: -0.12, v: 0.5 }, { u: 0.42, v: 0.46 }, { u: 0.84, v: 0.24 },
+  { u: -0.84, v: -0.34 }, { u: -0.06, v: -0.4 }, { u: 0.0, v: 0.08 }, { u: 0.9, v: -0.5 },
 ];
 
 /** The three scrapes along the corridor, ~6.5 m apart, each ≥ 8 m beyond the path's end (his
@@ -324,7 +324,7 @@ export function nestClumps(n: NestId): Clump[] {
  *  big in the picture, him at its edge, never between the lens and her. */
 export function endSpot(n: NestId, side: Pass): Place {
   const N = NESTS[n];
-  const p = atLocal(N.frame, (side === 'l' ? 1 : -1) * 1.35, 0.35);
+  const p = atLocal(N.frame, (side === "l" ? 1 : -1) * 1.5, 0.35);
   return { ...p, r: 0.4, heading: headingTo(p, N.c) };
 }
 export function closeViewOf(n: NestId, spot: 0 | 1, side: Pass = 'l'): ViewSpec {

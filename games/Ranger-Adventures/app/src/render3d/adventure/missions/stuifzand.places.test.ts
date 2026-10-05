@@ -212,6 +212,7 @@ test('the search: from where he stands, each of her spots is partly visible at e
       const g = groundY(s.x, s.z);
       const c = px(cam, s.x, g + PRESSED_H * 0.6, s.z);
       assert.ok(c.front && c.x > 70 && c.x < W - 70 && c.y > (view.insetTop ?? 96) + 30 && c.y < H - 60, `${where}: in the picture's free band (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);
+      assert.ok(Math.hypot(c.x - W / 2, c.y - H / 2) >= 120, `${where}: well off the picture's middle (${Math.hypot(c.x - W / 2, c.y - H / 2).toFixed(0)} px)`);
       const fx = Math.sin(s.yaw) * ZWALUW_LEN / 2, fz = Math.cos(s.yaw) * ZWALUW_LEN / 2;
       const head = px(cam, s.x + fx, g + 0.05, s.z + fz), tail = px(cam, s.x - fx, g + 0.05, s.z - fz);
       const long = Math.hypot(head.x - tail.x, head.y - tail.y);
