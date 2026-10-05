@@ -1220,13 +1220,17 @@ const MISSIE_VEN = {
            seed); the dry path (the flip) is never the first */
         rustPlan: [{ slot: 'ven' }],
         encounters: [
-          { id: 'adder-ven', slot: 'ven', subject: 'adder', dier: 'adder', vraag: 'Een adder ligt in de zon.',
+          // (plain words by default, like the rule chip's 'Slang?' and the veldgids' 'De slang';
+          // 'adder' is the knap word)
+          { id: 'adder-ven', slot: 'ven', subject: 'adder', dier: 'adder', vraag: 'Een slang ligt in de zon.',
+            vraagKnap: 'Een adder ligt in de zon.',
             opties: [{ label: 'Aaien', goed: false }, { label: 'Hou afstand', goed: true }],
-            uitleg: 'Rustig zo. Je laat hem met rust.', gevolg: 'De adder schrikt. Hou afstand.', reactie: 'rear' },
+            uitleg: 'Rustig zo. Je laat hem met rust.', gevolg: 'De slang schrikt. Hou afstand.',
+            gevolgKnap: 'De adder schrikt. Hou afstand.', reactie: 'rear' },
           { id: 'modder-ven', slot: 'ven', subject: 'modderpoel', vraag: 'De rand van het ven is zacht.',
             opties: [{ label: 'Erdoor', goed: false }, { label: 'Eromheen', goed: true }],
-            uitleg: 'Goed. Je loopt om het natte stuk heen.', gevolg: 'Je zakt weg in de modder. Loop eromheen.', reactie: 'mud' },
-          { id: 'pad-ven', slot: 'ven', subject: 'pad-veilig', flip: true, vraag: 'Het droge pad is vrij.',
+            uitleg: 'Goed. Om het natte stuk heen.', gevolg: 'Je zakt in de modder. Loop eromheen.', reactie: 'mud' },
+          { id: 'pad-ven', slot: 'ven', subject: 'pad-veilig', flip: true, vraag: 'Het pad is vrij.',
             opties: [{ label: 'Wachten', goed: false }, { label: 'Loop door', goed: true }],
             uitleg: 'Precies. Hier mag je gewoon doorlopen.', gevolg: 'Dit pad is veilig. Loop maar door.', reactie: 'recede' },
         ],

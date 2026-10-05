@@ -100,6 +100,11 @@ export function butterflySpot(i: number): Spot { const th = BUTTERFLY_TH[i]; ret
 /** The sunny moods it flies in. */
 export const BUTTERFLY_MOODS: readonly MoodId[] = ['zonnig', 'gouden-uur'];
 
+/** The ven's light (Adventure.moods): any of the five (the frog reads the same in each),
+ *  a new one each play, never one of the last two plays' — so the bank's small things,
+ *  picked to fit the light, change with it (like the ecoduct and the drift sand). */
+export const VEN_MOODS = { perPlay: 2 } as const;
+
 /** Where a duck's blue feather may lie: on the bank just down from the path, on the same
  *  stretch (he walks past it whichever cove he goes to). */
 export const FEATHER_TH: readonly number[] = [116, 110, 104];
