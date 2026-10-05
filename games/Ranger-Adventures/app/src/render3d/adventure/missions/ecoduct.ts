@@ -66,7 +66,7 @@ const PACE: Readonly<Record<Kind | 'das', number>> = { hert: 1.35, zwijn: 1.0, r
  *  grazing at their spot while the reunion's line is still up. */
 const HOME_PACE = 1.5;
 /** A curious young one's trot up to him (m/s), before its last careful step. */
-const YOUNG_TROT = 2.3;
+const YOUNG_TROT = 2.5;
 /** How far each walks behind the one before it (m). */
 const GAP: Readonly<Record<Kind | 'das', number>> = { hert: 2.1, zwijn: 0.95, ree: 1.5, vos: 1.2, das: 1 };
 /** Its calls: a soft contact call (a temptation) and its alarm (a reach). */
@@ -514,10 +514,9 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
     k.stats.reunion_wait = Math.round((k.now - t0) * 10) / 10;
   }
   await k.reunion(async () => {
-    await k.guard(crossing);
-    await k.wait(0.8);
-    // (the line holds on until every new find's card waiting for it was seen, two at most)
-    await k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S);
+    // (while they walk home the line holds on for every new find's card still waiting, two
+    // at most — the cards show as they go, never after them)
+    await Promise.all([k.guard(crossing).then(() => k.wait(0.8)), k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S)]);
   }, { holdS: Math.max(2, Math.min(2, k.revealsWaiting()) * CARD_S) });
   /* 9 · the raaf: badgers and foxes use it too */
   await k.fact(1);
@@ -653,11 +652,11 @@ async function roepAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group, 
     // (on the open sand: one held picture of him and it, side on)
     await k.frame(roepView(me0, spot), { face: headingTo(me0, spot), dip: true });
   }
-  const near0 = toward(spot, y, 1.0);
+  const near0 = toward(spot, y, 0.8);
   await y.go(near0.x, near0.z, { speed: YOUNG_TROT });
-  await y.go(spot.x, spot.z, { speed: 0.6 });
   const atHim = (): { x: number; z: number; speed: number } => { const r = k.ranger(); return { x: r.x, z: r.z, speed: 0 }; };
-  void y.lookAt(atHim, 99);
+  // (its last careful step is part of the moment: the words come as it takes it)
+  void y.go(spot.x, spot.z, { speed: 0.6 }).then((ok) => { if (ok) void y.lookAt(atHim, 99); });
   let pull = 0;
   const near = (d: number): Spot => toward(y, k.ranger(), Math.max(0, Math.min(d, dist(y, k.ranger()) - 1.25)));
   await rust.still(e.id, {
@@ -719,7 +718,8 @@ async function toBed(k: AdventureKit): Promise<void> {
   const t0 = k.now;
   await k.behind();
   await k.wait(Math.max(0.4, 2.4 - (k.now - t0)));
-  await k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S);
+  // (one waiting card at most: the rest show on his next walk or at the reunion)
+  await k.until(() => k.revealsWaiting() === 0, CARD_S);
 }
 
 /** Back behind the screen (a group will come, and there he keeps still). */
