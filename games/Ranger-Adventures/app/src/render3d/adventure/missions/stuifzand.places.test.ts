@@ -34,7 +34,7 @@ import { ecoductClearings } from './ecoduct.places.ts';
 import {
   ANTHILL, ARRIVE, BOAR_LOOP, BURROW, GUARD_STAND, GUARD_VIEW, HOL_JUNIPER, LEAVE, MARKER, NESTS, NEST_IDS, OPEN, PASSES, PRESSED_H, ROE_LOOP,
   SETTLE, SOLIDS, STOP, TAG_AT, ZAND_HOME, ZAND_PLACES, ZONES, ZWALUW_LEN, ON_PATH, OFF_PATH_S, PAD,
-  COVER_SEED, FLUSH_BEFORE, GAPS_FROM, allClumps, approachOf, headingAt, larkFrom, pointAt, clearOfSolids, flushOf, gapsOf, gapsTo, lastVariants, lineDist, offPath, readVariant, routeOf, rutAlpha, setNestNow, slotsOf, zandClearings, zandLayout,
+  COVER_SEED, DISPLAY_UP, FLUSH_BEFORE, GAPS_FROM, allClumps, approachOf, closeViewOf, displayOf, endViewOf, headingAt, larkFrom, pointAt, clearOfSolids, flushOf, gapsOf, gapsTo, lastVariants, lineDist, offPath, readVariant, routeOf, rutAlpha, setNestNow, slotsOf, zandClearings, zandLayout,
   type ViewSpec,
 } from './stuifzand.places.ts';
 import type { Spot } from '../types.ts';
@@ -289,11 +289,39 @@ test('the flushed parent flutters off sideways and ahead (never toward him or th
     assert.ok(big >= 40, `${where}: it shows ${big.toFixed(0)} px long (≥ 40)`);
     for (const p of [f.land, f.drag]) {
       const c = px(cam, p.x, groundY(p.x, p.z) + 0.1, p.z);
-      assert.ok(c.front && c.x > 80 && c.x < W - 80 && c.y > 130 && c.y < H - 60, `${where}: ${at(p)} is in the held picture (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);
+      assert.ok(c.front && c.x > 50 && c.x < W - 50 && c.y > 130 && c.y < H - 60, `${where}: ${at(p)} is in the held picture (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);
     }
     // it flies off out of the picture at last
     assert.ok(!inPicture(cam, f.away, 0.6, 0.6, 20) || dist(cam.position, { x: f.away.x, z: f.away.z } as Spot) > 15, `${where}: it flies off out of the picture`);
     assert.ok(Math.hypot(f.away.x, f.away.z) < 70, `${where}: it flies off inside the world`);
+  }
+});
+
+test('back at the scrape: a close look shows her (and her eggs) big; the reunion\'s picture holds her, his branch and the air where he claps', () => {
+  for (const n of NEST_IDS) {
+    const N = NESTS[n];
+    N.spots.forEach((s, j) => {
+      const cam = lensOf(closeViewOf(n, j as 0 | 1));
+      const g = groundY(s.x, s.z);
+      const a = px(cam, s.x + Math.sin(s.yaw) * ZWALUW_LEN / 2, g + 0.06, s.z + Math.cos(s.yaw) * ZWALUW_LEN / 2);
+      const b = px(cam, s.x - Math.sin(s.yaw) * ZWALUW_LEN / 2, g + 0.06, s.z - Math.cos(s.yaw) * ZWALUW_LEN / 2);
+      const long = Math.hypot(a.x - b.x, a.y - b.y);
+      assert.ok(long >= 110, `nest ${n} spot ${j}: close up she shows ${long.toFixed(0)} px long`);
+      const c = px(cam, s.x, g + 0.08, s.z);
+      assert.ok(c.front && c.x > 200 && c.x < W - 200 && c.y > 200 && c.y < H - 120, `nest ${n} spot ${j}: she is in the middle of the close look (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);
+    });
+    for (const side of PASSES) {
+      const cam = lensOf(endViewOf(n, side));
+      for (const s of N.spots) {
+        const c = px(cam, s.x, groundY(s.x, s.z) + 0.08, s.z);
+        assert.ok(c.front && c.x > 60 && c.x < W - 60 && c.y > 130 && c.y < H - 40, `nest ${n}${side}: her spot in the reunion's picture`);
+      }
+      const r = px(cam, N.roost.x, groundY(N.roost.x, N.roost.z) + 0.1, N.roost.z);
+      assert.ok(r.front && r.x > 60 && r.x < W - 60 && r.y > 130 && r.y < H - 40, `nest ${n}${side}: the male's branch in it (${r.x.toFixed(0)}, ${r.y.toFixed(0)})`);
+      const d = displayOf(n);
+      const up = px(cam, d.x, groundY(d.x, d.z) + DISPLAY_UP + 0.25, d.z);
+      assert.ok(up.front && up.x > 60 && up.x < W - 60 && up.y > 120, `nest ${n}${side}: the air where he claps is in it (${up.x.toFixed(0)}, ${up.y.toFixed(0)})`);
+    }
   }
 });
 
@@ -315,7 +343,10 @@ test('the guard place: both places, the stop and their names in one held view; h
   assert.ok(o.x > b.x, 'the open sand on the right, the burrow on the left');
   // his head at the bottom, never over a place or the stop
   const head = px(cam, GUARD_STAND.x, groundY(GUARD_STAND.x, GUARD_STAND.z) + RANGER_STAND_HEIGHT, GUARD_STAND.z);
+  const feet = px(cam, GUARD_STAND.x, groundY(GUARD_STAND.x, GUARD_STAND.z), GUARD_STAND.z);
   assert.ok(head.y > s.y + 60, `his head (${head.y.toFixed(0)} px) below the stop (${s.y.toFixed(0)})`);
+  // (he stands above the card at the bottom of the screen, never under it)
+  assert.ok(feet.y < H - 150, `his feet (${feet.y.toFixed(0)} px) above the card`);
   // a visitor waits outside the picture before it comes, and leaves out of it
   for (const e of ['L', 'R'] as const) {
     assert.ok(!inPicture(cam, ARRIVE[e][0], 1.2, 1.3, 30), `the ${e} way in starts outside the picture ${at(ARRIVE[e][0])}`);
@@ -331,6 +362,13 @@ test('the guard place: both places, the stop and their names in one held view; h
   assert.ok(dist(ZONES.open, ZONES.hol) > ZONES.open.r + ZONES.hol.r + 0.4, 'the two places\' zones lie apart');
   assert.ok(dist(STOP, ZONES.open) > ZONES.open.r + 0.3 && dist(STOP, ZONES.hol) > ZONES.hol.r + 0.3, 'the stop lies outside both zones');
   assert.ok(dist(GUARD_STAND, ANTHILL) > 2.5, 'the anthill is not where he stands');
+  assert.ok(!inPicture(cam, ANTHILL, 0.5, 0.9, 10), 'the anthill is out of the guard\'s picture');
+  // (never in the foreground of a search or a flush: at most a small thing far behind it)
+  const near = (cam: THREE.Camera): boolean => inPicture(cam, ANTHILL, 0.5, 0.9) && Math.hypot(cam.position.x - ANTHILL.x, cam.position.z - ANTHILL.z) < 10;
+  for (const n of NEST_IDS) for (const side of PASSES) {
+    assert.ok(!near(lensOf(NESTS[n].views[side])), `the anthill is out of scrape ${n}${side}'s search picture`);
+    for (const fl of PASSES) assert.ok(!near(lensOf(flushOf(n, side, fl).view)), `the anthill is out of the flush picture ${n}${side}${fl}`);
+  }
 });
 
 /* ------------------------------------------------------------- a play ---- */
@@ -348,10 +386,9 @@ test('a play is drawn from its seed: never his last play\'s scrape, three plays 
     const c = zandLayout(newPlay('stuifzand', seed + 2000, 3), [a.variant, b.variant]);
     assert.notEqual(b.nest, a.nest, `seed ${seed}: the second play another scrape`);
     assert.equal(new Set([a.nest, b.nest, c.nest]).size, 3, `seed ${seed}: three plays, three scrapes`);
-    // with the same scrape again later, the car passed it on the other side
-    const d = zandLayout(newPlay('stuifzand', seed + 3000, 4), [a.variant, b.variant, c.variant]);
-    const lastSame = [a, b, c].filter((x) => x.nest === d.nest).pop();
-    if (lastSame) assert.notEqual(d.side, lastSame.side, `seed ${seed}: scrape ${d.nest} again, the other route`);
+    // the car's route: never the last play's (the tracks and his walk another way each time)
+    assert.notEqual(b.side, a.side, `seed ${seed}: the second play the other route`);
+    assert.notEqual(c.side, b.side, `seed ${seed}: the third play the other route`);
   }
   assert.ok(seen.size >= 10, `the plays draw many variants (${seen.size})`);
   // the history's key round-trips

@@ -71,9 +71,9 @@ const FREE: readonly [number, LookKind][] = [[0, 'schors'], [3, 'stomp'], [5, 'k
 
 /* ------------------------------------------------------------ colours ---- */
 
-const SAND = { crest: '#f1e7c9', trough: '#bba97f', open: '#eadcb3', openMid: '#efe4c3' } as const;
+const SAND = { crest: '#f1e7c9', trough: '#bba97f', open: '#f2dca6', openMid: '#f5e3b5' } as const;
 /** Her mottled grey-brown (the model's own) — the look-alikes are made of the same browns. */
-const LOOK = { bark: ['#7b6650', '#5e4c3a', '#9a8569'], wood: ['#8e826f', '#6f6454', '#b0a48c'], cone: ['#6e4f33', '#4f3826', '#8a6a48'] } as const;
+const LOOK = { bark: ['#7d6a52', '#4f3f30', '#a8916f'], wood: ['#8a7d68', '#5b5040', '#b3a588'], cone: ['#6f5238', '#4a3626', '#937155'] } as const;
 
 /* ------------------------------------------------------- small geometry ---- */
 
@@ -571,10 +571,10 @@ export class ZandHome implements HomeDressing {
     /* -- her eggs (two, speckled; shown when she shifts on them) -- */
     const egg = (dx: number, rot: number): THREE.BufferGeometry => {
       const e = new THREE.SphereGeometry(0.5, 10, 8);
-      e.scale(0.05, 0.036, 0.036).rotateY(rot).translate(dx, 0.033, 0);
+      e.scale(0.06, 0.044, 0.044).rotateY(rot).translate(dx, 0.04, 0);
       return e.toNonIndexed();
     };
-    const eggGeo = paint(mergeGeometries([egg(-0.04, 0.3), egg(0.04, -0.2)])!, ['#efe7d4', '#ddd0b6', '#efe7d4', '#8c7c66'], 61, 0.4);
+    const eggGeo = paint(mergeGeometries([egg(-0.045, 1.8), egg(0.045, 1.4)])!, ['#f1ead8', '#e2d6bd', '#f1ead8', '#8c7c66'], 61, 0.4);
     this.eggs = keep(new THREE.Mesh(eggGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 })), scrapes);
     this.eggs.name = 'stuifzand-eggs';
     this.eggs.visible = false;
@@ -594,6 +594,14 @@ export class ZandHome implements HomeDressing {
     void env.spawnPlant('prop-anthill', ANTHILL.h).then((sp) => {
       if (!sp || this.disposed) { sp?.dispose(); return; }
       const o = sp.root as THREE.Object3D;
+      // (a wood ants' heap of brown pine needles: the model's own dark red toned to it)
+      o.traverse((m) => {
+        const mesh = m as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mats = [mesh.material].flat().map((mat) => { const c2 = (mat as THREE.MeshStandardMaterial).clone(); c2.color?.setRGB(1.05, 0.82, 0.62); return c2; });
+        mesh.material = Array.isArray(mesh.material) ? mats : mats[0];
+        for (const mm of mats) this.made.push({ geometry: new THREE.BufferGeometry(), material: mm });
+      });
       o.position.set(ANTHILL.x, g(ANTHILL.x, ANTHILL.z) - 0.05, ANTHILL.z);
       o.rotation.y = 0.8;
       o.name = 'stuifzand-anthill';
@@ -678,7 +686,7 @@ export class ZandHome implements HomeDressing {
       this.route = p.laid.side;
       this.layTracks(p.laid.side, p.gaps, p.clarity);
       // (just under her breast: she steps back off them and they show in front of her)
-      this.eggs.position.set(spot.x + Math.sin(spot.yaw) * 0.06, this.g(spot.x, spot.z), spot.z + Math.cos(spot.yaw) * 0.06);
+      this.eggs.position.set(spot.x + Math.sin(spot.yaw) * 0.09, this.g(spot.x, spot.z), spot.z + Math.cos(spot.yaw) * 0.09);
       this.eggs.rotation.y = spot.yaw;
     }
     this.cover.refresh();
@@ -1011,6 +1019,7 @@ export class Nightjar extends Actor {
     this.idle();
     this.flop?.done?.(false); this.flop = null;
     this.posed.rotation.set(0, 0, 0);
+    this.pressTo = 0; // (it flies sitting up, its body its own size)
     const from = new THREE.Vector3(this.x, this.lift, this.z);
     const end = new THREE.Vector3(to.x, to.lift ?? 0, to.z);
     return new Promise((done) => {
@@ -1041,15 +1050,14 @@ export class Nightjar extends Actor {
    *  them again. */
   shift(off: boolean): void { this.shiftTo = off ? 1 : 0; }
 
-  /** The male's display at dusk: up from where he sits in a slow arc, three wing claps over
-   *  the sand (`onClap` each), a glide back down to his spot. */
-  async display(reduced: boolean): Promise<void> {
+  /** The male's display at dusk: up from where he sits in a slow arc to `at`, `up` m over the
+   *  sand, three wing claps there (`onClap` each), a glide back down to his spot. */
+  async display(at: Spot, up: number, reduced: boolean): Promise<void> {
     const home = { x: this.x, z: this.z };
     const yaw = this.yaw;
-    const out = { x: this.x + Math.sin(yaw) * 1.6, z: this.z + Math.cos(yaw) * 1.6 };
-    if (!(await this.fly({ ...out, lift: 2.4 }, { secs: 1.8, arc: 0.8 }))) return;
+    if (!(await this.fly({ ...at, lift: up }, { secs: 1.6, arc: 0.5 }))) return;
     if (!reduced) await new Promise<void>((done) => { this.clapping?.done(); this.clapping = { t: 0, claps: 0, done }; });
-    await this.fly({ ...home, lift: 0 }, { secs: 1.9, arc: 0.4, yaw });
+    if (await this.fly({ ...home, lift: 0 }, { secs: 1.9, arc: 0.4, yaw })) this.pressFlat(true);
   }
 
   /** It lies down? (A nightjar presses flat instead.) */
@@ -1078,7 +1086,7 @@ export class Nightjar extends Actor {
     this.shiftK += (this.shiftTo - this.shiftK) * Math.min(1, reduced ? 1 : dt * 3);
     const lowK = this.press * (1 - this.shiftK * 0.8);
     this.posed.scale.set(1 + lowK * 0.08, 1 - lowK * 0.3, 1);
-    this.posed.position.set(0, this.shiftK * 0.035, -this.shiftK * 0.14 * (this.height / ZWALUW_H));
+    this.posed.position.set(0, this.shiftK * 0.03, -this.shiftK * 0.22 * (this.height / ZWALUW_H));
     // the wings: beating in flight (quick and shallow low down, slower and deeper up high),
     // a clap's high snap, folded away once it sits on the sand
     const f = this.flight;

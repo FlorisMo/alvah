@@ -319,6 +319,32 @@ export function nestClumps(n: NestId): Clump[] {
   return out;
 }
 
+/** At dusk, back at the scrape: a close look at her on her eggs (the lens comes down near her,
+ *  him at its edge or just out of it), and the wider picture the reunion stands in — her, the
+ *  branch where the male rests, the air over it where he may clap his wings, and him. */
+export function closeViewOf(n: NestId, spot: 0 | 1): ViewSpec {
+  const N = NESTS[n], s = N.spots[spot];
+  return {
+    at: { x: s.x + Math.sin(s.yaw) * 0.1, z: s.z + Math.cos(s.yaw) * 0.1 }, heading: N.frame.heading,
+    halfW: 0.62, halfD: 0.42, tall: 0.35, pitchDeg: 40, insetTop: 112, insetBottom: 24, near: 1.3,
+  };
+}
+/** Where the male claps his wings over the sand at dusk (the rare): a little up from his
+ *  branch toward the scrape. */
+export const DISPLAY_UP = 1.5;
+export function displayOf(n: NestId): Spot {
+  const N = NESTS[n];
+  return { x: N.roost.x + (N.c.x - N.roost.x) * 0.35, z: N.roost.z + (N.c.z - N.roost.z) * 0.35 };
+}
+export function endViewOf(n: NestId, side: Pass): ViewSpec {
+  const N = NESTS[n];
+  const v = N.views[side];
+  return {
+    at: atLocal(N.frame, 0, 0.75), heading: N.frame.heading, halfW: 1.25, halfD: 1.3, tall: DISPLAY_UP + 0.5, pitchDeg: 24,
+    insetTop: 112, insetBottom: 24, include: v.include,
+  };
+}
+
 /** The tufts of all three scrapes, in the order the home grows them (one CoverField), and
  *  its seed: the places test measures the glimpse of this very field. */
 export const COVER_SEED = 71;
@@ -361,7 +387,7 @@ export function flushOf(n: NestId, side: Pass, shape: Pass): Flush {
     // the held picture: him and it side by side, the lens behind him turned a little to it
     const at = { x: (from.x + land.x) / 2 + fwd.x * 0.3, z: (from.z + land.z) / 2 + fwd.z * 0.3 };
     const view: ViewSpec = {
-      at, heading: h + sg * 0.3, halfW: 2.0, halfD: 1.1, tall: 0.8, pitchDeg: 26, insetTop: 110, insetBottom: 18,
+      at, heading: h + sg * 0.3, halfW: 1.8, halfD: 0.9, tall: 0.7, pitchDeg: 24, insetTop: 110, insetBottom: 18,
       include: [{ x: from.x, z: from.z, h: RANGER_STAND_HEIGHT, r: 0.3 }, { x: drag.x, z: drag.z, h: 0.3 }],
     };
     return { land, drag, away, view, side: sg > 0 ? 'r' : 'l', shape: sh };
@@ -399,17 +425,17 @@ export const SETTLE: Readonly<Record<'open' | 'hol', Spot>> = {
  *  its far half; each walks in to the stop. Pinned out of the guard's picture. */
 export type Edge = 'L' | 'R';
 export const ARRIVE: Readonly<Record<Edge, readonly Spot[]>> = {
-  L: [{ x: 41.2, z: 41.8 }, { x: 37.8, z: 40.6 }, STOP],
-  R: [{ x: 22.6, z: 42.6 }, { x: 26.4, z: 41.6 }, STOP],
+  L: [{ x: 41.0, z: 40.8 }, { x: 37.4, z: 40.5 }, STOP],
+  R: [{ x: 23.1, z: 41.3 }, { x: 26.6, z: 41.1 }, STOP],
 };
 /** Where one leaves a place by: out past the picture's edge on that place's side, behind it. */
 export const LEAVE: Readonly<Record<'open' | 'hol', readonly Spot[]>> = {
   open: [{ x: 26.8, z: 41.6 }, { x: 24.4, z: 38.6 }],
-  hol: [{ x: 37.4, z: 43.4 }, { x: 41.6, z: 43.4 }],
+  hol: [{ x: 37.6, z: 43.0 }, { x: 42.8, z: 42.4 }],
 };
 /** The guard's held view: both places, the stop and him at the bottom of the picture. */
 export const GUARD_VIEW: ViewSpec = {
-  at: { x: 31.9, z: 40.3 }, heading: 0, halfW: 3.9, halfD: 1.5, tall: 1.9, pitchDeg: 30, insetTop: 110, insetBottom: 18,
+  at: { x: 31.9, z: 40.3 }, heading: 0, halfW: 3.9, halfD: 1.5, tall: 1.9, pitchDeg: 30, insetTop: 110, insetBottom: 150,
   include: [{ x: GUARD_STAND.x, z: GUARD_STAND.z, h: RANGER_STAND_HEIGHT, r: 0.3 }],
 };
 /** Where the places' names hang over them (m over the ground). */
@@ -425,8 +451,9 @@ export const ZONES: Readonly<Record<'open' | 'hol', Spot & { r: number; h: numbe
 
 /* ------------------------------------------------------------ small things ---- */
 
-/** The anthill at the edge of the sand between the nests and the guard place (a find). */
-export const ANTHILL: Spot & { h: number } = { x: 28.0, z: 33.6, h: 0.5 };
+/** The anthill at the edge of the sand between the scrapes and the guard place (a find),
+ *  out of every search's, flush's and guard's picture (pinned). */
+export const ANTHILL: Spot & { h: number } = { x: 38.0, z: 35.2, h: 0.5 };
 /** Where a woodlark rises from the sand and sings, as he walks (`me`, facing `heading`): ~7 m
  *  ahead of him and ~4 m to the side a play drew (`side`; the other where that is no open
  *  sand), or null where neither is. */
@@ -525,9 +552,10 @@ export function zandLayout(play: Pick<Play, 'fork'>, last: readonly string[] = [
   if (!nests.length) nests = NEST_IDS.filter((n) => n !== prev[prev.length - 1]?.nest);
   const nest = nf.pick(nests);
   const spot = (nf.int(0, 1)) as 0 | 1;
+  // (the car's route: never his last play's — the tracks and his walk are another way each time)
   const sf = play.fork('sz-route');
-  const before = prev.filter((p) => p.nest === nest).pop();
-  const side: Pass = before ? (before.side === 'l' ? 'r' : 'l') : sf.pick(PASSES);
+  const lastSide = prev[prev.length - 1]?.side;
+  const side: Pass = lastSide ? (lastSide === 'l' ? 'r' : 'l') : sf.pick(PASSES);
   const flutter: Pass = play.fork('sz-flush').pick(PASSES);
   const lf = play.fork('sz-leeuwerik');
   const lark: Pass | null = lf.chance(0.6) ? lf.pick(PASSES) : null;
@@ -565,9 +593,9 @@ const nobody = (key: string, animal: string): ResidentSpec => ({ key, animal, be
  */
 export const ZAND_RESIDENTS: readonly ResidentSpec[] = [
   { key: 'zwaluw', animal: 'nachtzwaluw', height: ZWALUW_H, reach: 0.3,
-    before: { ...femaleAt(HOME_NEST, 0), idle: 'stand', roam: 0 }, after: { ...femaleAt(HOME_NEST, 0), idle: 'stand', roam: 0 } },
+    before: { ...femaleAt(HOME_NEST, 0), idle: 'lie', roam: 0 }, after: { ...femaleAt(HOME_NEST, 0), idle: 'lie', roam: 0 } },
   { key: 'man', animal: 'nachtzwaluw', height: ZWALUW_H, reach: 0.3,
-    before: { ...maleAt(HOME_NEST), idle: 'stand', roam: 0 }, after: { ...maleAt(HOME_NEST), idle: 'stand', roam: 0 } },
+    before: { ...maleAt(HOME_NEST), idle: 'lie', roam: 0 }, after: { ...maleAt(HOME_NEST), idle: 'lie', roam: 0 } },
   nobody('ree', 'ree'),
   // (the squirrel drawn ×1.5: a 25 cm squirrel must read at the guard place's distance)
   { ...nobody('eekhoorn', 'eekhoorn'), height: SIZE.eekhoorn.h * 1.5 },
