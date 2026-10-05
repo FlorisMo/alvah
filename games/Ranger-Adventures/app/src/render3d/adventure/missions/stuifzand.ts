@@ -218,7 +218,7 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
 
   /* 6-7 · he guards the place by the juniper as the evening falls (wisselen) */
   await k.walk({ name: 'struik', to: GUARD_STAND, r: GUARD_STAND.r, line: c.naarStruik, doel: c.chipStruik, glyph: 'boot', quiet: { line: c.rustig } });
-  k.say(c.wacht);
+  await guardLook(k, home);
   await guard(k, home, A, laid);
 
   /* 8 · back to the scrape at dusk */
@@ -289,6 +289,26 @@ async function flush(k: AdventureKit, laid: ZandLaid, he: Nightjar): Promise<voi
 
 /* ---------------------------------------------------------- the guard ---- */
 
+/** At the juniper, before the first visitor: one calm look at the guard place — its two places
+ *  named, the burrow under the juniper in his picture (a find: its card shows now, while he
+ *  stands there and nothing comes yet, never later over the eggs). */
+async function guardLook(k: AdventureKit, home: ZandHome): Promise<void> {
+  k.beat = 'look:struik';
+  const unhint = k.hint(() => null); // (a perfect player looks)
+  try {
+    await k.walkRanger(GUARD_STAND.x, GUARD_STAND.z, 0.04);
+    await k.frame(GUARD_VIEW, { face: GUARD_STAND.heading });
+    home.showTags(true);
+    k.say(k.copy.wacht);
+    k.discover('stuifzand.konijnenhol', { first: true });
+    const t0 = k.now;
+    await k.wait(1.6);
+    // (its card, and any other new find's still waiting: shown here, two at most)
+    await k.until(() => k.revealsWaiting() === 0, 2 * CARD_S);
+    k.stats.guard_look_s = Math.round((k.now - t0) * 10) / 10;
+  } finally { unhint(); }
+}
+
 /** The guard place: one by one an animal comes by and stops, and he points where it goes now
  *  (aimBeat over the same WisselRun the 2D floor plays); the evening falls when the rule turns. */
 async function guard(k: AdventureKit, home: ZandHome, A: Readonly<Record<string, Actor>>, laid: ZandLaid): Promise<void> {
@@ -322,11 +342,7 @@ async function guard(k: AdventureKit, home: ZandHome, A: Readonly<Record<string,
       open: { pick: home.zones.open, hint: home.hints.open },
       hol: { pick: home.zones.hol, hint: home.hints.hol },
     },
-    begin: () => {
-      home.showTags(true);
-      // (the burrow under the juniper, named in his picture: a find)
-      k.discover('stuifzand.konijnenhol');
-    },
+    begin: () => { home.showTags(true); },
     end: () => { home.showTags(false); home.showVisitor(null); },
     // he points: he turns to the place (the lens holds still)
     look: async (bin) => {
@@ -488,21 +504,21 @@ function sink(k: AdventureKit, a: Lifted, by: number, secs: number): Promise<boo
 
 /* ----------------------------------------------------- back at the nest ---- */
 
-/** At dusk by the scrape: a close look at her — the tufts lean aside, she shifts off her two
- *  speckled eggs and settles on them again; then the lens draws back over the scrape, his
- *  branch and the male beside it; now and then he rises and claps his wings over the sand
- *  (k.rare); the reunion: she stays calmly on her nest while he churrs in the dusk. */
+/** At dusk by the scrape: he steps back and gives her room, and the lens comes close to her —
+ *  the tufts lean aside, she shifts off her two speckled eggs and settles on them again (the
+ *  eggs' card shows here, with its moment). Now and then (k.rare) the male rises from his branch
+ *  and claps his wings over the sand: one calm move back to the dusk picture, held through the
+ *  reunion. The reunion: she stays calmly on her nest while he churrs in the dusk. */
 async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nightjar, he: Nightjar): Promise<void> {
   const c = k.copy;
   const settings = store.get().settings;
-  // (he steps to her side, level with her: the lens comes close to her from behind the scrape)
-  const side = endSpot(laid.nest, laid.side);
-  await k.walkRanger(side.x, side.z, 0.04);
+  // (he steps back beside the lens's way in: out of its picture, he gives her room)
+  const back = endSpot(laid.nest, laid.side);
+  await k.walkRanger(back.x, back.z, 0.04);
   k.beat = 'look:nest';
   const unhint = k.hint(() => null); // (a perfect player looks)
-  const close = closeViewOf(laid.nest, laid.spot, laid.side);
   try {
-    await k.frame(close, { face: side.heading });
+    await k.frame(closeViewOf(laid.nest, laid.spot), { face: back.heading });
     // the tufts in front of her lean aside (she is in plain view now), and she shifts off her
     // eggs: two speckled eggs on the sand
     home.cover.partAt(she.x, she.z, 0.55, 0.6, 30);
@@ -520,23 +536,30 @@ async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nig
     home.showEggs(false);
     she.pressFlat(true);
     k.say(null);
+    // (the eggs' card, when they are new, is seen here, with them: never over what comes next)
+    await k.until(() => k.revealsWaiting() === 0, CARD_S);
     await k.until(() => he.grounded, 3);
     he.idle();
-    // now and then the male rises and claps his wings over the sand: the lens draws back over
-    // the scrape and his branch to see it, then comes close to her again
+    // now and then the male rises from his branch and claps his wings over the sand: the lens
+    // draws back once, low over the sand, and holds there through the reunion
     if (k.rare()?.id === 'stuifzand.vlucht') {
-      await k.frame(endViewOf(laid.nest, laid.side), { face: side.heading });
+      await k.frame(endViewOf(laid.nest, laid.spot), { face: back.heading });
       k.say(c.vlucht);
       he.onClap = () => { if (settings.geluid) Sound.call('vleugelklap'); };
       let seenClap = 0;
-      const off = k.onTick((dt) => { if (he.group.visible && inPicture(k.world.camera, he) && he.lift > 0.6) seenClap += dt; });
-      await k.guard(he.display(displayOf(laid.nest), DISPLAY_UP, k.reduced));
+      const off = k.onTick((dt) => {
+        if (!he.group.visible || he.lift < 0.6 || !inPicture(k.world.camera, he)) return;
+        seenClap += dt;
+        // (dev read: how big he shows with his wings open, px across the picture)
+        const span = he.spanPx(k.world.camera, k.ctx.canvas.clientWidth || 1280, k.ctx.canvas.clientHeight || 800);
+        if (span > (k.stats.display_px ?? 0)) k.stats.display_px = Math.round(span);
+      });
+      await k.guard(he.display(displayOf(laid.nest), DISPLAY_UP, NESTS[laid.nest].frame.heading + Math.PI));
       off();
       k.stats.display_seen = Math.round(seenClap * 10) / 10;
-      if (seenClap > 0.6 || k.reduced) k.discover('stuifzand.vlucht', { first: true });
+      if (seenClap > 0.6) k.discover('stuifzand.vlucht', { first: true });
       await k.wait(0.6);
       k.say(null);
-      await k.frame(close, { face: side.heading });
     }
   } finally { unhint(); }
   // she stays calmly on her nest (the reunion's line over her), the male churring nearby

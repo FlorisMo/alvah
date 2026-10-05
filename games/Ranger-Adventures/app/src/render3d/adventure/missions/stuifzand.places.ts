@@ -319,35 +319,42 @@ export function nestClumps(n: NestId): Clump[] {
   return out;
 }
 
-/** At dusk, back at the scrape: he steps to her side (`endSpot`: beside the scrape on the side
- *  he searched it from, level with her) and the lens comes close to her from behind it — her
- *  big in the picture, him at its edge, never between the lens and her. */
+/** At dusk, back at the scrape: he steps back and aside (`endSpot`: behind the spot he searched
+ *  from, on its side of the scrape) and gives her room, and the lens comes close to her from
+ *  the path's side — her big in the picture, his whole body out of it (pinned: feet to head,
+ *  for every nest, spot and side). */
+export const STEP_BACK = { u: 1.7, v: -1.5 } as const;
 export function endSpot(n: NestId, side: Pass): Place {
   const N = NESTS[n];
-  const p = atLocal(N.frame, (side === "l" ? 1 : -1) * 1.5, 0.35);
+  const p = atLocal(N.frame, (side === 'l' ? 1 : -1) * STEP_BACK.u, STEP_BACK.v);
   return { ...p, r: 0.4, heading: headingTo(p, N.c) };
 }
-export function closeViewOf(n: NestId, spot: 0 | 1, side: Pass = 'l'): ViewSpec {
+export function closeViewOf(n: NestId, spot: 0 | 1): ViewSpec {
   const N = NESTS[n], s = N.spots[spot];
-  void side;
   return {
     at: { x: s.x + Math.sin(s.yaw) * 0.1, z: s.z + Math.cos(s.yaw) * 0.1 }, heading: N.frame.heading,
     halfW: 0.55, halfD: 0.42, tall: 0.35, pitchDeg: 38, insetTop: 112, insetBottom: 24, near: 1.4,
   };
 }
-/** Where the male claps his wings over the sand at dusk (the rare): a little up from his
- *  branch toward the scrape. */
-export const DISPLAY_UP = 1.5;
+/** Where the male claps his wings at dusk (the rare): he rises from his branch to a point
+ *  over the sand just beyond her (`DISPLAY`: m along the scrape's frame), `DISPLAY_UP` m up,
+ *  facing back the way the lens looks (his wings open across its picture). */
+export const DISPLAY = { u: 0, v: 1.0 } as const;
+export const DISPLAY_UP = 1.6;
 export function displayOf(n: NestId): Spot {
-  const N = NESTS[n];
-  return { x: N.roost.x + (N.c.x - N.roost.x) * 0.35, z: N.roost.z + (N.c.z - N.roost.z) * 0.35 };
+  return atLocal(NESTS[n].frame, DISPLAY.u, DISPLAY.v);
 }
-export function endViewOf(n: NestId, side: Pass): ViewSpec {
-  const N = NESTS[n];
-  const me = endSpot(n, side);
+/** The dusk picture the rare is seen in, and the reunion after it (one calm move from the
+ *  close look, then held): low over the sand from the path's side — her on her nest at the
+ *  bottom, his branch beyond her, and the air where he claps at the height of the far trees,
+ *  near enough that he shows big with his wings open, his shadow on the sand below him. */
+export function endViewOf(n: NestId, spot: 0 | 1): ViewSpec {
+  const N = NESTS[n], s = N.spots[spot];
+  const d = displayOf(n);
   return {
-    at: atLocal(N.frame, 0, 0.75), heading: N.frame.heading, halfW: 1.25, halfD: 1.3, tall: DISPLAY_UP + 0.5, pitchDeg: 24,
-    insetTop: 112, insetBottom: 24, include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT, r: 0.3 }],
+    at: { x: (s.x + d.x) / 2, z: (s.z + d.z) / 2 }, heading: N.frame.heading, halfW: 0.45, halfD: 0.5, tall: 0.3, pitchDeg: 10,
+    insetTop: 130, insetBottom: 30, near: 1.8,
+    include: [{ x: d.x, z: d.z, h: DISPLAY_UP + 0.3, r: 0.45 }, { x: s.x, z: s.z, h: 0.2 }],
   };
 }
 
@@ -419,8 +426,10 @@ export const HOL_JUNIPER: Spot & { r: number; h: number; yaw: number } = { x: 35
 export const BURROW: Spot & { yaw: number } = { x: 34.55, z: 40.35, yaw: headingTo({ x: 34.55, z: 40.35 }, { x: 32.0, z: 36.0 }) };
 /** The open sand: its middle and how far it reaches (a bright patch, ripples). */
 export const OPEN: Spot & { r: number } = { x: 28.7, z: 40.6, r: 1.5 };
-/** Where an animal stops while he decides (a few steps in front of him, between the two). */
-export const STOP: Spot = { x: 32.0, z: 40.0 };
+/** Where an animal stops while he decides (a few steps in front of him, between the two, a
+ *  step nearer him than the places: near enough the lens that the smallest visitor shows
+ *  ≥ 50 px — pinned). */
+export const STOP: Spot = { x: 32.0, z: 39.2 };
 /** Where an animal that goes to a place settles there (its middle; the burrow's mouth for
  *  the hol: one lies at the juniper's foot beside it). */
 export const SETTLE: Readonly<Record<'open' | 'hol', Spot>> = {
@@ -584,10 +593,13 @@ export function femaleAt(n: NestId, spot: 0 | 1): Spot & { yaw: number } { retur
 export function maleAt(n: NestId): Spot & { yaw: number } { return NESTS[n].roost; }
 
 /** The guard place's visitors (resident keys) per animal of the wisselen queue: out of sight
- *  until a play brings them (`before`/`after` null). */
+ *  until a play brings them (`before`/`after` null). The two small ones are drawn bigger than
+ *  their table size there (`GUARD_SCALE`, × the table's height), so he decides by watching the
+ *  animal at the stop, not by its card: each visitor shows ≥ 50 px long there (pinned). */
 export const GUESTS: Readonly<Record<string, string>> = {
   ree: 'ree', eekhoorn: 'eekhoorn', das: 'das', wildzwijn: 'zwijn', nachtzwaluw: 'gast',
 };
+export const GUARD_SCALE: Readonly<Record<'eekhoorn' | 'gast', number>> = { eekhoorn: 1.9, gast: 2.1 };
 
 const nobody = (key: string, animal: string): ResidentSpec => ({ key, animal, before: null, after: null, reach: 0.5 });
 
@@ -603,11 +615,11 @@ export const ZAND_RESIDENTS: readonly ResidentSpec[] = [
   { key: 'man', animal: 'nachtzwaluw', height: ZWALUW_H, reach: 0.3,
     before: { ...maleAt(HOME_NEST), idle: 'lie', roam: 0 }, after: { ...maleAt(HOME_NEST), idle: 'lie', roam: 0 } },
   nobody('ree', 'ree'),
-  // (the squirrel drawn ×1.5: a 25 cm squirrel must read at the guard place's distance)
-  { ...nobody('eekhoorn', 'eekhoorn'), height: SIZE.eekhoorn.h * 1.5 },
+  // (the squirrel and the visiting nightjar drawn bigger: they must read at the stop)
+  { ...nobody('eekhoorn', 'eekhoorn'), height: SIZE.eekhoorn.h * GUARD_SCALE.eekhoorn },
   nobody('das', 'das'),
   nobody('zwijn', 'wildzwijn'),
-  { ...nobody('gast', 'nachtzwaluw'), height: ZWALUW_H },
+  { ...nobody('gast', 'nachtzwaluw'), height: SIZE.nachtzwaluw.h * GUARD_SCALE.gast },
 ];
 
 /** The places table (`__ranger.missionPlaces('stuifzand')`): the marker, the pair's home (the

@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
 import { heightAt as groundY, biomeAt } from '../../Biomes.ts';
-import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
+import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import { fitFrame } from '../../play/frame-fit.ts';
 import { dist, offCentre } from '../places.ts';
 import { backPoints, growStems, visibleShare } from '../cover-math.ts';
@@ -32,7 +32,7 @@ import { eekhoornClearings } from './eekhoorn.places.ts';
 import { venClearings } from './ven.places.ts';
 import { ecoductClearings } from './ecoduct.places.ts';
 import {
-  ANTHILL, ARRIVE, BOAR_LOOP, BURROW, GUARD_STAND, GUARD_VIEW, HOL_JUNIPER, LEAVE, MARKER, NESTS, NEST_IDS, OPEN, PASSES, PRESSED_H, ROE_LOOP,
+  ANTHILL, ARRIVE, BOAR_LOOP, BURROW, GUARD_STAND, GUARD_VIEW, GUESTS, HOL_JUNIPER, ZAND_RESIDENTS, headingTo, LEAVE, MARKER, NESTS, NEST_IDS, OPEN, PASSES, PRESSED_H, ROE_LOOP,
   SETTLE, SOLIDS, STOP, TAG_AT, ZAND_HOME, ZAND_PLACES, ZONES, ZWALUW_LEN, ON_PATH, OFF_PATH_S, PAD,
   COVER_SEED, DISPLAY_UP, FLUSH_BEFORE, GAPS_FROM, allClumps, approachOf, closeViewOf, displayOf, endSpot, endViewOf, headingAt, larkFrom, pointAt, clearOfSolids, flushOf, gapsOf, gapsTo, lastVariants, lineDist, offPath, readVariant, routeOf, rutAlpha, setNestNow, slotsOf, zandClearings, zandLayout,
   type ViewSpec,
@@ -298,44 +298,78 @@ test('the flushed parent flutters off sideways and ahead (never toward him or th
   }
 });
 
-test('back at the scrape: a close look shows her (and her eggs) big; the reunion\'s picture holds her, his branch and the air where he claps', () => {
+/** How far (px) his body (feet to head, ±0.25 m round his middle) lies OUTSIDE the picture at
+ *  its nearest point (negative: some of it shows), and how far INSIDE it at its deepest. */
+function bodyOut(cam: THREE.Camera, me: Spot): { out: number; deepest: number } {
+  const g = groundY(me.x, me.z);
+  let out = Infinity, deepest = -Infinity;
+  for (let h = 0; h <= 1.0001; h += 0.05) for (const dx of [-0.25, 0, 0.25]) for (const dz of [-0.25, 0, 0.25]) {
+    const q = px(cam, me.x + dx, g + h * RANGER_STAND_HEIGHT, me.z + dz);
+    if (!q.front) continue; // (behind the lens: not in its picture)
+    const beyond = Math.max(-q.x, q.x - W, -q.y, q.y - H); // > 0: outside by that many px
+    out = Math.min(out, beyond); deepest = Math.max(deepest, -beyond);
+  }
+  return { out, deepest };
+}
+
+test('back at the scrape: the close look shows her (and her eggs) big, his whole body out of its picture', () => {
   for (const n of NEST_IDS) {
     const N = NESTS[n];
     N.spots.forEach((s, j) => {
+      const cam = lensOf(closeViewOf(n, j as 0 | 1));
+      const g = groundY(s.x, s.z);
+      const a = px(cam, s.x + Math.sin(s.yaw) * ZWALUW_LEN / 2, g + 0.06, s.z + Math.cos(s.yaw) * ZWALUW_LEN / 2);
+      const b = px(cam, s.x - Math.sin(s.yaw) * ZWALUW_LEN / 2, g + 0.06, s.z - Math.cos(s.yaw) * ZWALUW_LEN / 2);
+      const long = Math.hypot(a.x - b.x, a.y - b.y);
+      const c = px(cam, s.x, g + 0.08, s.z);
       for (const side of PASSES) {
         const where = `nest ${n}${side} spot ${j}`;
-        const cam = lensOf(closeViewOf(n, j as 0 | 1, side));
-        const g = groundY(s.x, s.z);
-        const a = px(cam, s.x + Math.sin(s.yaw) * ZWALUW_LEN / 2, g + 0.06, s.z + Math.cos(s.yaw) * ZWALUW_LEN / 2);
-        const b = px(cam, s.x - Math.sin(s.yaw) * ZWALUW_LEN / 2, g + 0.06, s.z - Math.cos(s.yaw) * ZWALUW_LEN / 2);
-        const long = Math.hypot(a.x - b.x, a.y - b.y);
         assert.ok(long >= 90, `${where}: close up she shows ${long.toFixed(0)} px long`);
-        const c = px(cam, s.x, g + 0.08, s.z);
         assert.ok(c.front && c.x > 160 && c.x < W - 160 && c.y > 180 && c.y < H - 100, `${where}: she is well in the close look (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);
-        // he stands beside her, never between the lens and her (his body's band clear of her)
+        // he stepped back beside the lens's way in: feet to head, none of him in its picture
         const me = endSpot(n, side);
-        const gm = groundY(me.x, me.z);
-        const head = px(cam, me.x, gm + RANGER_STAND_HEIGHT, me.z), feet = px(cam, me.x, gm, me.z);
-        assert.ok(Math.hypot(cam.position.x - me.x, cam.position.z - me.z) > 1.0, `${where}: the lens stands clear of him`);
-        // (beside her: at the picture's side or just out of it, never in front of the lens)
-        const inFront = head.front && head.x > 0 && head.x < W && head.y < H && Math.abs(head.x - c.x) < 220;
-        assert.ok(!inFront, `${where}: he stands beside her, never over her in the picture (head ${head.x.toFixed(0)},${head.y.toFixed(0)}; her ${c.x.toFixed(0)})`);
-        void feet;
-        for (const q of N.spots) assert.ok(dist(me, q) > 0.9, `${where}: he stands off her spot`);
+        const body = bodyOut(cam, me);
+        assert.ok(body.out >= 30, `${where}: his whole body is out of the close look (nearest ${body.out.toFixed(0)} px beyond its edge)`);
+        assert.ok(Math.hypot(cam.position.x - me.x, cam.position.z - me.z) > 0.9, `${where}: the lens stands clear of him`);
+        for (const q of N.spots) assert.ok(dist(me, q) > 1.2, `${where}: he stands off her spot`);
+        assert.ok(dist(me, N.stands[side]) < 1.3, `${where}: one step back from where he searched (${dist(me, N.stands[side]).toFixed(2)} m)`);
       }
     });
-    for (const side of PASSES) {
-      const cam = lensOf(endViewOf(n, side));
-      for (const s of N.spots) {
-        const c = px(cam, s.x, groundY(s.x, s.z) + 0.08, s.z);
-        assert.ok(c.front && c.x > 60 && c.x < W - 60 && c.y > 130 && c.y < H - 40, `nest ${n}${side}: her spot in the reunion's picture`);
+  }
+});
+
+test('the rare: in the dusk picture the male claps big and in the air, over her on her nest, his branch beyond her', () => {
+  for (const n of NEST_IDS) {
+    const N = NESTS[n];
+    const d = displayOf(n);
+    const gd = groundY(d.x, d.z);
+    // he faces back the way the lens looks: his open wings lie across the picture
+    const across = { x: -Math.cos(N.frame.heading), z: Math.sin(N.frame.heading) };
+    N.spots.forEach((s, j) => {
+      const view = endViewOf(n, j as 0 | 1);
+      const cam = lensOf(view);
+      const tipA = px(cam, d.x + across.x * 0.36, gd + DISPLAY_UP, d.z + across.z * 0.36);
+      const tipB = px(cam, d.x - across.x * 0.36, gd + DISPLAY_UP, d.z - across.z * 0.36);
+      const span = Math.hypot(tipA.x - tipB.x, tipA.y - tipB.y);
+      const him = px(cam, d.x, gd + DISPLAY_UP, d.z);
+      const shadow = px(cam, d.x, gd, d.z);
+      const g = groundY(s.x, s.z);
+      const her = px(cam, s.x, g + 0.08, s.z);
+      const roost = px(cam, N.roost.x, groundY(N.roost.x, N.roost.z) + 0.1, N.roost.z);
+      for (const side of PASSES) {
+        const where = `nest ${n}${side} spot ${j}`;
+        assert.ok(span >= 150, `${where}: his open wings show ${span.toFixed(0)} px across (≥ 150)`);
+        assert.ok(him.front && Math.min(tipA.x, tipB.x) > 60 && Math.max(tipA.x, tipB.x) < W - 60 && him.y > (view.insetTop ?? 96) + 60 && him.y < H / 2,
+          `${where}: he claps in the picture's free band, in its upper half (${him.x.toFixed(0)}, ${him.y.toFixed(0)})`);
+        assert.ok(shadow.front && shadow.y > him.y + 250 && shadow.y < H - 40, `${where}: his shadow on the sand far below him (${shadow.y.toFixed(0)} px; he ${him.y.toFixed(0)})`);
+        assert.ok(her.front && her.x > 120 && her.x < W - 120 && her.y > shadow.y && her.y < H - 50, `${where}: she sits on her nest at the picture's bottom (${her.x.toFixed(0)}, ${her.y.toFixed(0)})`);
+        assert.ok(roost.front && roost.x > 120 && roost.x < W - 120 && roost.y > him.y + 150 && roost.y < her.y, `${where}: his branch between them, where he rises from (${roost.x.toFixed(0)}, ${roost.y.toFixed(0)})`);
+        // (and the boy, a step back beside the way in: out of this picture too)
+        const body = bodyOut(cam, endSpot(n, side));
+        assert.ok(body.out >= 30, `${where}: his whole body is out of the dusk picture (nearest ${body.out.toFixed(0)} px beyond its edge)`);
       }
-      const r = px(cam, N.roost.x, groundY(N.roost.x, N.roost.z) + 0.1, N.roost.z);
-      assert.ok(r.front && r.x > 60 && r.x < W - 60 && r.y > 130 && r.y < H - 40, `nest ${n}${side}: the male's branch in it (${r.x.toFixed(0)}, ${r.y.toFixed(0)})`);
-      const d = displayOf(n);
-      const up = px(cam, d.x, groundY(d.x, d.z) + DISPLAY_UP + 0.25, d.z);
-      assert.ok(up.front && up.x > 60 && up.x < W - 60 && up.y > 120, `nest ${n}${side}: the air where he claps is in it (${up.x.toFixed(0)}, ${up.y.toFixed(0)})`);
-    }
+    });
+    assert.ok(DISPLAY_UP >= 1.2, 'he claps well up in the air');
   }
 });
 
@@ -359,6 +393,23 @@ test('the guard place: both places, the stop and their names in one held view; h
   const head = px(cam, GUARD_STAND.x, groundY(GUARD_STAND.x, GUARD_STAND.z) + RANGER_STAND_HEIGHT, GUARD_STAND.z);
   const feet = px(cam, GUARD_STAND.x, groundY(GUARD_STAND.x, GUARD_STAND.z), GUARD_STAND.z);
   assert.ok(head.y > s.y + 60, `his head (${head.y.toFixed(0)} px) below the stop (${s.y.toFixed(0)})`);
+  // every visitor big enough to watch at the stop (he decides by the animal, not its card):
+  // ≥ 50 px on its longest side as it stands there, turned side-on to him
+  for (const [id, key] of Object.entries(GUESTS)) {
+    const r = ZAND_RESIDENTS.find((q) => q.key === key)!;
+    const z = SIZE[r.animal as keyof typeof SIZE] as { h: number; len?: number };
+    const h = r.height ?? z.h, len = (z.len ?? 0.5) * (h / z.h);
+    const g = groundY(STOP.x, STOP.z);
+    let longest = 0;
+    for (const turn of [-1.3, 1.3, 1.4]) {
+      const yaw = headingTo(STOP, GUARD_STAND) + turn;
+      const fx = Math.sin(yaw) * len / 2, fz = Math.cos(yaw) * len / 2;
+      const a = px(cam, STOP.x + fx, g + h * 0.5, STOP.z + fz), b = px(cam, STOP.x - fx, g + h * 0.5, STOP.z - fz);
+      const top = px(cam, STOP.x, g + h, STOP.z), foot = px(cam, STOP.x, g, STOP.z);
+      longest = Math.max(longest, Math.hypot(a.x - b.x, a.y - b.y), Math.hypot(top.x - foot.x, top.y - foot.y));
+    }
+    assert.ok(longest >= 50, `the ${id} shows ${longest.toFixed(0)} px at the stop (≥ 50)`);
+  }
   // (he stands above the card at the bottom of the screen, never under it)
   assert.ok(feet.y < H - 150, `his feet (${feet.y.toFixed(0)} px) above the card`);
   // a visitor waits outside the picture before it comes, and leaves out of it

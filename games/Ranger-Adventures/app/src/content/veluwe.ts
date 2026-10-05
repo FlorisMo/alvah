@@ -1294,7 +1294,7 @@ const MISSIE_STUIFZAND = {
       hint: 'Kijk goed bij het gras.',
       naarStruik: 'Loop naar de grote struik.',
       chipStruik: 'De grote struik',
-      wacht: 'Wie komt er langs het nest?',
+      wacht: 'Wie komt er langs?',
       vraag: 'Waar hoort hij nu?',
       kijk_ree: 'Kijk, een ree.',
       kijk_eekhoorn: 'Kijk, een eekhoorn.',

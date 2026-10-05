@@ -1086,13 +1086,26 @@ export class Nightjar extends Actor {
   shift(off: boolean): void { this.shiftTo = off ? 1 : 0; }
 
   /** The male's display at dusk: up from where he sits in a slow arc to `at`, `up` m over the
-   *  sand, three wing claps there (`onClap` each), a glide back down to his spot. */
-  async display(at: Spot, up: number, reduced: boolean): Promise<void> {
+   *  sand, facing back toward his branch's far side (`face`: his wings open across the lens's
+   *  picture), three wing claps there (`onClap` each), a glide back down to his spot. Under
+   *  reduced motion the flights are cuts and the claps still play (his wings, not the lens). */
+  async display(at: Spot, up: number, face: number): Promise<void> {
     const home = { x: this.x, z: this.z };
     const yaw = this.yaw;
-    if (!(await this.fly({ ...at, lift: up }, { secs: 1.6, arc: 0.5 }))) return;
-    if (!reduced) await new Promise<void>((done) => { this.clapping?.done(); this.clapping = { t: 0, claps: 0, done }; });
+    if (!(await this.fly({ ...at, lift: up }, { secs: 1.6, arc: 0.5, yaw: face }))) return;
+    super.place(this.x, this.z, face);
+    await new Promise<void>((done) => { this.clapping?.done(); this.clapping = { t: 0, claps: 0, done }; });
     if (await this.fly({ ...home, lift: 0 }, { secs: 1.9, arc: 0.4, yaw })) this.pressFlat(true);
+  }
+
+  /** How wide (px) its open wings show on a `w`×`h` screen through `cam`: tip to tip, as
+   *  they are now (a dev read). */
+  spanPx(cam: THREE.Camera, w: number, h: number): number {
+    if (!this.wings.visible) return 0;
+    this.group.updateMatrixWorld(true);
+    const a = this.wingR.localToWorld(new THREE.Vector3(0.36, 0, 0)).project(cam);
+    const b = this.wingL.localToWorld(new THREE.Vector3(0.36, 0, 0)).project(cam);
+    return Math.hypot(((a.x - b.x) / 2) * w, ((a.y - b.y) / 2) * h);
   }
 
   /** It lies down? (A nightjar presses flat instead.) */
@@ -1116,6 +1129,8 @@ export class Nightjar extends Actor {
     if (this.flight) this.stepFlight(dt);
     else if (this.flop) this.stepFlop(dt, reduced);
     super.update(dt, t);
+    // (its contact shadow stays on the sand below it while it flies: it is in the air)
+    this.shadow.position.y = 0.02 - this.lift;
     // pressed flat: lower and a touch wider; shifted off the eggs: up and back a little
     this.press += (this.pressTo - this.press) * Math.min(1, reduced ? 1 : dt * 4);
     this.shiftK += (this.shiftTo - this.shiftK) * Math.min(1, reduced ? 1 : dt * 3);
