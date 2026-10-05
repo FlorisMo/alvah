@@ -46,7 +46,7 @@ import { ARRIVE_RADIUS, bearing, cue as cueAt } from '../../Wayfinding';
 import { VEN_CENTER, WATER_LEVEL } from '../../Biomes';
 import { VenHome, venBody, type Frog } from './ven.home';
 import { ListenCore, StillFor, chorusCalls, listensOf, ringSize } from './ven.listen';
-import { BLUE_ID, LIFE_KEY, SEEN, blueOf, lastLifeOf, lifeTag, venLife } from './ven.life';
+import { BLUE_ID, LIFE_KEY, SEEN, VEN_MOODS, blueOf, lastLifeOf, lifeTag, venLife } from './ven.life';
 import { Seen, boxOf } from './ven.finds';
 import type { MoodId } from '../../Moods';
 import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
@@ -136,6 +136,9 @@ export const venAdventure: Adventure = {
   clearings: venClearings(),
   dressing: (env) => new VenHome(env),
   actor: venBody,
+  // every play in its own light, never one of the last two plays' (the frog reads the same
+  // in all five: ven-life's search check; the bank's life is picked to fit the light)
+  moods: VEN_MOODS,
   /** Under the briefing card: this play's bank is laid. */
   prepare(world, mission, play) { lay(world, mission, play); },
   unprepare(world) { (world.residents.dressing(MISSION) as VenHome | null)?.lay(null); drawn = null; },

@@ -18,14 +18,14 @@ import { fitFrame } from '../../play/frame-fit.ts';
 import { dist } from '../places.ts';
 import { compactVariant, newPlay } from '../../../core/play.ts';
 import { ONTDEKKINGEN } from '../../../content/ontdekkingen.ts';
-import { MOOD_IDS, type MoodId } from '../../Moods.ts';
+import { MOOD_IDS, playMood, type MoodId } from '../../Moods.ts';
 import {
   BAYS, BAY_IDS, PATH, PATH_HALF, SIDES, above, answerView, edgeOf, pathR, polarOf, pointAt, project, singOf, underBoy,
   type ViewSpec,
 } from './ven.places.ts';
 import {
   BLUE_AWAY, BUTTERFLY_MOODS, BUTTERFLY_TH, DRAGONFLY_MOODS, DRAGONFLY_RANGE, DRAGONFLY_TH, DUCK_LOOPS, DUCKLINGS, FEATHER_TH, PLOP_NEAR, PLOP_PASS,
-  BLUE_ID, SEEN, SEEN_SWEEP, blueOf, butterflySpot, clearOfStations, seenStep, dragonflyHome, dragonflyHomesFor, featherSpot, lastLifeOf, lifeTag, onEveryWay, onLoop, plopSpot, trailLength, venLife,
+  BLUE_ID, SEEN, SEEN_SWEEP, VEN_MOODS, blueOf, butterflySpot, clearOfStations, seenStep, dragonflyHome, dragonflyHomesFor, featherSpot, lastLifeOf, lifeTag, onEveryWay, onLoop, plopSpot, trailLength, venLife,
 } from './ven.life.ts';
 import type { Spot } from '../types.ts';
 
@@ -215,6 +215,29 @@ test('a play\'s life: drawn from its own forks, deterministic, never the last pl
   assert.deepEqual(lastLifeOf('B1-apm+0.2/e5nf2'), { loop: 0, count: 5, veer: 2 });
   assert.equal(lastLifeOf('B1-apm+0.2'), null);
   void pointAt;
+});
+
+test('every ven play stands in its own light: three plays in a row, three moods, and the small things change with it', () => {
+  // (the session's light alone kept a misty visit's plays all misty, the feather the only
+  // small thing in each: the close's story run, three plays in ochtendnevel)
+  const laid = { bay: 'B' as const, side: 1 as const };
+  for (const session of MOOD_IDS) {
+    for (let base = 1; base <= 60; base += 3) {
+      const lasts: MoodId[] = [];
+      const rows = [base, base + 1, base + 2].map((s) => {
+        const m = playMood(session, VEN_MOODS, newPlay('ven', s, 1), [...lasts]);
+        lasts.unshift(m);
+        return m;
+      });
+      assert.equal(new Set(rows).size, 3, `${session} seeds ${base}…: ${rows.join(' | ')}`);
+    }
+  }
+  // over many plays all five lights come, and each brings its own small things
+  const seen = new Set<MoodId>();
+  for (let s = 1; s <= 60; s++) seen.add(playMood('ochtendnevel', VEN_MOODS, newPlay('ven', s, 1), ['ochtendnevel']));
+  assert.equal(seen.size, MOOD_IDS.length - 1, 'every light but the last play\'s');
+  const kinds = new Set(MOOD_IDS.map((m) => { const l = venLife(newPlay('ven', 7, 1), m, laid); return `${l.libellen.length > 0}${l.vlinder !== null}`; }));
+  assert.ok(kinds.size >= 2, 'the light changes what lives on the bank');
 });
 
 test('the play\'s noted variant keeps the cove and the ducks in the history in every mood, with the rare too', () => {
