@@ -46,6 +46,18 @@ export function ductGap(p: Spot): number {
   return obstacleGap(DUCT, p.x, p.z);
 }
 
+/** Does the ecoduct stand between `a` and `b` (the straight sight line on the ground plan
+ *  passes through its solid: the model stands 6 m tall over its whole footprint)? */
+export function ductHides(a: Spot, b: Spot): boolean {
+  const L = Math.hypot(b.x - a.x, b.z - a.z);
+  const n = Math.max(8, Math.ceil(L / 0.1));
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    if (obstacleGap(DUCT, a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, -DUCT.box!.pad) < -0.05) return true;
+  }
+  return false;
+}
+
 /** A corner of the ecoduct's footprint (its own x/z signs), in the world. */
 function ductCorner(sx: number, sz: number): Spot {
   const b = DUCT.box!;
@@ -260,6 +272,10 @@ export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: r
   // most groups leave on the far side of the bed from where they came down (they cross it);
   // now and then one turns back the way it came; the hind and her calf onto the heath (north)
   const outs: Side[] = froms.map((f, i) => (i === n - 1 ? 'N' : sf.chance(0.75) ? (f === 'N' ? 'S' : 'N') : f));
+  // he steps aside by the screen's end away from where a group leaves; from its north end
+  // (they leave south) the north corner's wait lies in his picture: the next group (the
+  // last, while he still stands there) comes round the south end
+  if (order.indexOf('opzij') === 1 && outs[n - 2] === 'S') froms[n - 1] = 'S';
   const gf = play.fork('ec-grootte');
   const sizes = kinds.map((k, i) => {
     const g = GROUPS[k];

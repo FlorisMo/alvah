@@ -49,8 +49,8 @@ import { Seen } from './ven.finds';
 import { SIZE } from '../../AnimalScale';
 import { EcoductHome } from './ecoduct.home';
 import {
-  AFTER_HINDE, AFTER_KALF, ASIDE, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, HIDEAWAY, MISSION, STAND, TRAILS, VARIANT_KEY,
-  asideView, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, lastVariants, mouthOf, roepSpot,
+  AFTER_HINDE, AFTER_KALF, ASIDE, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, MISSION, STAND, TRAILS, VARIANT_KEY,
+  asideView, crossingLine, ductHides, ecoductClearings, ecoductLayout, ecoductTreeClearings, lastVariants, mouthOf, roepSpot,
   type Crossing, type EcoductLaid, type Kind, type Side,
 } from './ecoduct.places';
 
@@ -236,6 +236,16 @@ class Group {
   away(): void { for (const m of this.members) if (OWNER.get(m) === this) { m.idle(); m.group.visible = false; } this.leaving = false; }
 }
 
+/** Is the animal in his picture now: in the lens's view and not behind the ecoduct? */
+function inPicture(cam: THREE.Camera, a: Actor): boolean {
+  const y = a.group.position.y + a.height * 0.5;
+  const v = new THREE.Vector3(a.x, y, a.z).applyMatrix4(cam.matrixWorldInverse);
+  if (v.z > -0.3) return false;
+  const p = new THREE.Vector3(a.x, y, a.z).project(cam);
+  if (Math.abs(p.x) > 1.08 || Math.abs(p.y) > 1.08) return false;
+  return !ductHides({ x: cam.position.x, z: cam.position.z }, a);
+}
+
 /* ------------------------------------------------------------- the story ---- */
 
 async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
@@ -258,13 +268,19 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   const order = rust.trial.encounters.map((e) => e.id);
   k.stats.order = order.map((id) => ['stil', 'roep', 'opzij'].indexOf(id) + 1).reduce((a, b) => a * 10 + b, 0);
 
-  /* 0 · the hind and her calf that grazed by the bridge's north foot go back behind it (they
-     noticed him at the marker): the play brings whoever comes */
-  for (const key of ['hinde', 'kalf']) {
-    const a = A[key];
-    if (!a.group.visible) continue;
-    void a.go(HIDEAWAY.x - (key === 'kalf' ? 1.6 : 0), HIDEAWAY.z, { speed: 'walk' }).then((ok) => { if (ok) { a.group.visible = false; a.idle(); } });
-  }
+  /* 0 · the hind and her calf that grazed by the bridge's north foot go back along it, round
+     behind its end (they noticed him at the marker): the play brings whoever comes. They are
+     gone only once he cannot see them there (never a vanishing in his picture) */
+  const homeDeer = ['hinde', 'kalf'].map((key) => A[key]).filter((a) => a.group.visible);
+  const wait = TRAILS.N[0];
+  homeDeer.forEach((a, i) => { void a.go(wait.x - i * 1.8, wait.z + i * 0.2, { speed: 'walk' }); });
+  const offDeer = k.onTick(() => {
+    for (const a of homeDeer) {
+      if (!a.group.visible || OWNER.get(a)) continue;
+      if (Math.hypot(a.x - wait.x, a.z - wait.z) < 2.4 && !inPicture(k.world.camera, a)) { a.idle(); a.group.visible = false; }
+    }
+    if (homeDeer.every((a) => !a.group.visible || OWNER.get(a))) offDeer();
+  });
 
   /* 1 · one calm look at the green bridge for animals; he ends facing it (the look glides
      toward a point on the line to its deck, so the lens stops ~17 m short of it: the whole
@@ -273,11 +289,10 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   const toDeck = Math.hypot(DECK_LOOK.x - cam0.x, DECK_LOOK.z - cam0.z);
   const f = Math.min(1, LOOK_AIM_M / Math.max(1, toDeck));
   const aim = { x: cam0.x + (DECK_LOOK.x - cam0.x) * f, z: cam0.z + (DECK_LOOK.z - cam0.z) * f, y: cam0.y + (DECK_LOOK.y - cam0.y) * f - 0.45 };
-  await k.look(aim, c.kijk, 2.6, { turn: true, seconds: 2.4 });
+  await k.look(aim, c.kijk, 2.2, { turn: true, seconds: 2.2 });
 
   /* 2 · a quiet walk to the screen */
   await k.walk({ name: 'scherm', to: STAND, r: 0.6, line: c.naarScherm, doel: c.chipScherm, glyph: 'boot', quiet: { line: c.sst } });
-  for (const key of ['hinde', 'kalf']) { A[key].idle(); A[key].group.visible = false; } // (behind the bridge by now)
 
   /* 3 · behind the screen: the held view over the bed, the bridge's mouth and its corners */
   await k.walkRanger(STAND.x, STAND.z, 0.04);

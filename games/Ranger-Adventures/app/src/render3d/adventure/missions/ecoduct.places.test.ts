@@ -34,7 +34,7 @@ import { venClearings } from './ven.places.ts';
 import {
   ASIDE, BED, BED_HALF, BED_STAND, BED_VIEW, BEFORE_HINDE, BEFORE_KALF, DUCT, ECODUCT_HOME, ECODUCT_PLACES, ECODUCT_RESIDENTS, EXITS, FERN, FOX_LOOP, GROUPS,
   GROVE, HIDEAWAY, HOME, MARKER, PATCH_SIZE, SCREEN, SIDES, STAND, TRAILS, AFTER_HINDE, AFTER_KALF,
-  asideView, bedSpots, crossingLine, crossingsFor, ductGap, ecoductClearings, ecoductLayout, lastVariants, lineDist, mouthOf, onBed, readVariant, roepSpot,
+  asideView, bedSpots, crossingLine, crossingsFor, ductGap, ductHides, ecoductClearings, ecoductLayout, lastVariants, lineDist, mouthOf, onBed, readVariant, roepSpot,
   screenObstacle, type Side, type ViewSpec,
 } from './ecoduct.places.ts';
 import type { Spot } from '../types.ts';
@@ -77,14 +77,7 @@ function px(cam: THREE.Camera, x: number, y: number, z: number): { x: number; y:
   const behind = new THREE.Vector3(x, y, z).applyMatrix4(cam.matrixWorldInverse).z > 0;
   return { x: ((v.x + 1) / 2) * W, y: ((1 - v.y) / 2) * H, front: !behind };
 }
-/** Does the straight sight line from `a` to `b` pass through the ecoduct's solid (on the
- *  ground plan: the model stands 6 m tall over its whole footprint)? */
-function ductHides(a: Spot, b: Spot): boolean {
-  for (let t = 0.02; t < 0.98; t += 0.01) {
-    if (obstacleGap(DUCT, a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, -DUCT.box!.pad) < -0.05) return true;
-  }
-  return false;
-}
+
 /** The bend points of a polyline sampled every `step` m. */
 function samples(line: readonly Spot[], step = 0.25): Spot[] {
   const out: Spot[] = [];
@@ -192,7 +185,14 @@ test('the trails: round the ecoduct\'s ends, never through its solid, clear of t
     }
     // the wait (the trail's start): hidden by the ecoduct from the screen's lens, from his eyes
     // there and on the bed; the corner: in view from the screen's lens
-    for (const [name, eye] of [['lens', lens], ['stand', STAND], ['bed', BED_STAND]] as const) {
+    // (and from wherever he waits for a group: aside by the screen, its held picture's lens,
+    // and the walk camera behind him on the bed as he turns to the bridge's foot)
+    const behindOnBed = (s2: Side): Spot => { const t2 = TRAILS[s2][2]; const h = headingTo(BED_STAND, t2); return { x: BED_STAND.x - Math.sin(h) * 4.6, z: BED_STAND.z - Math.cos(h) * 4.6 }; };
+    // (aside by the screen's north end — they left south — the next group comes round the
+    // south end: ecoductLayout)
+    const asides: [string, Spot][] = [['asideN', ASIDE.N], ['asideN lens', lensOf(asideView(ASIDE.N)).position],
+      ...(s === 'S' ? [['asideS', ASIDE.S], ['asideS lens', lensOf(asideView(ASIDE.S)).position]] as [string, Spot][] : [])];
+    for (const [name, eye] of [['lens', lens], ['stand', STAND], ['bed', BED_STAND], ...asides, ['the walk camera on the bed', behindOnBed(s)]] as [string, Spot][]) {
       assert.ok(ductHides(eye, t[0]), `${s}: its wait ${at(t[0])} is hidden from the ${name}`);
       // (and the file behind the wait, back along the deck's foot)
       const back = { x: t[0].x + (t[0].x - t[1].x) * 0.6, z: t[0].z + (t[0].z - t[1].z) * 0.6 };
@@ -303,6 +303,7 @@ test('a play\'s crossings: drawn from its seed, the deer always, never two alike
         const oi = order.indexOf('opzij');
         assert.notEqual(kinds[crossingsFor(rounds) - 3 + oi], 'vos', `seed ${seed} ${order.join()}: the group that waits for him is a group`);
         for (const c of l.crossings) assert.ok(c.n >= GROUPS[c.kind].min && c.n <= GROUPS[c.kind].members.length);
+        if (order[1] === 'opzij' && l.crossings[kinds.length - 2].out === 'S') assert.equal(l.crossings[kinds.length - 1].from, 'S', 'aside by the north end: the last group comes round the south end');
         assert.ok(l.variant.length <= 20, l.variant);
         assert.deepEqual(readVariant(l.variant)?.kinds, kinds);
         firsts.add(kinds[0]); corners.add(l.crossings[0].from);
