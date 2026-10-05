@@ -92,6 +92,11 @@ const PATHS = {
     '<path d="M15.6 19.6c-2.3 0-3.9-1.8-3.9-4.2 0-2.9 1.8-5.9 3.9-5.9s3.9 3 3.9 5.9c0 2.4-1.6 4.2-3.9 4.2z" fill="currentColor" fill-opacity=".16"/>' +
     '<path d="M3 21h18"/><circle cx="7.4" cy="13.6" r=".55" fill="currentColor"/><circle cx="9.6" cy="16.2" r=".55" fill="currentColor"/>' +
     '<circle cx="16.4" cy="14.4" r=".55" fill="currentColor"/>',
+  // run 7 (stille-zand): an anthill — a heap of pine needles on the sand, ants on its flank
+  mound:
+    '<path d="M2.8 19.5C4.6 13.2 8 8.6 12 8.6s7.4 4.6 9.2 10.9z" fill="currentColor" fill-opacity=".16"/>' +
+    '<path d="M2.5 19.6h19"/><path d="M8.6 15.6l1.6-1.2M12.6 12.6l1.4 1.4M14.8 16.6l1.7-.9M10.6 17.9l1.2.6"/>' +
+    '<circle cx="17.9" cy="13.6" r=".7" fill="currentColor"/><circle cx="6.4" cy="17.1" r=".7" fill="currentColor"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

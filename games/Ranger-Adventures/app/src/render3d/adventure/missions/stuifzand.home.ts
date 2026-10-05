@@ -373,7 +373,7 @@ export class ZandHome implements HomeDressing {
       ground.push(m.geometry);
       (m.material as THREE.Material).dispose();
     };
-    const ripples = (c: Spot, rad: number, n: number, seed: number, wind = 0.35): void => {
+    const ripples = (c: Spot, rad: number, n: number, seed: number, wind = 0.35, clear = 1): void => {
       // crests across the wind (from the west-south-west): wavy lines ~0.4 m apart
       const rr = rng(seed);
       const across = { x: Math.cos(wind), z: -Math.sin(wind) }; // (along a crest)
@@ -389,14 +389,38 @@ export class ZandHome implements HomeDressing {
           const wob = Math.sin(t * 2.3 + i * 0.9 + seed) * 0.07 + Math.sin(t * 5.1 + seed) * 0.025;
           pts.push({ x: c.x + across.x * t + down.x * (off + wob), z: c.z + across.z * t + down.z * (off + wob) });
         }
-        lay(groundStrip(g, pts, 0.032, SAND.trough, { layer: 1, wobble: 0.4, seed: seed + i, ends: len * 0.35 }), 0.5);
-        lay(groundStrip(g, pts.map((p) => ({ x: p.x - down.x * 0.05, z: p.z - down.z * 0.05 })), 0.026, SAND.crest, { layer: 1, wobble: 0.45, seed: seed + i + 50, ends: len * 0.35 }), 0.55);
+        lay(groundStrip(g, pts, 0.032, SAND.trough, { layer: 1, wobble: 0.4, seed: seed + i, ends: len * 0.35 }), Math.min(1, 0.5 * clear));
+        lay(groundStrip(g, pts.map((p) => ({ x: p.x - down.x * 0.05, z: p.z - down.z * 0.05 })), 0.026, SAND.crest, { layer: 1, wobble: 0.45, seed: seed + i + 50, ends: len * 0.35 }), Math.min(1, 0.55 * clear));
       }
     };
+    // low dunes: long soft swells across the wind, a pale windward slope and a shaded lee
+    // beside it (the terrain is the one truth and stays as it is: the light says "dune")
+    {
+      const wind = 0.35;
+      const along = { x: Math.cos(wind), z: -Math.sin(wind) }, down = { x: Math.sin(wind), z: Math.cos(wind) };
+      const dr = rng(77);
+      const centres: Spot[] = [];
+      for (let i = 0; i < 9; i++) centres.push({ x: 15 + dr() * 28, z: 21 + dr() * 20 });
+      centres.forEach((c, i) => {
+        const len = 7 + dr() * 6;
+        const line = (off: number): Spot[] => {
+          const pts: Spot[] = [];
+          for (let k = 0; k <= 8; k++) {
+            const t = (k / 8 - 0.5) * len;
+            const bend = Math.sin(t * 0.45 + i) * 0.6;
+            pts.push({ x: c.x + along.x * t + down.x * (off + bend), z: c.z + along.z * t + down.z * (off + bend) });
+          }
+          return pts;
+        };
+        lay(groundStrip(g, line(0), 1.1, '#efe2bb', { layer: 0, wobble: 0.35, seed: 200 + i, ends: len * 0.4 }), 0.28);
+        lay(groundStrip(g, line(1.5), 0.9, '#b9a679', { layer: 0, wobble: 0.35, seed: 220 + i, ends: len * 0.4 }), 0.22);
+      });
+    }
     NEST_IDS.forEach((n, i) => ripples(NESTS[n].c, 2.6, 11, 10 + i * 20));
     ripples(OPEN, 2.0, 8, 81);
     ripples(STOP, 1.6, 5, 91, 0.3);
-    for (let s = 3; s < 26; s += 5.5) ripples(pointAt(lineOf([{ x: 19.6, z: 23.5 }, { x: 45, z: 31 }]), s), 1.7, 5, 120 + s);
+    for (let s = 3; s < 26; s += 5.5) ripples(pointAt(lineOf([{ x: 19.6, z: 23.5 }, { x: 45, z: 31 }]), s), 1.7, 5, 120 + s, 0.35, 1.3);
+    for (const c of [{ x: 13.5, z: 24.5 }, { x: 22, z: 33 }, { x: 33, z: 22.5 }, { x: 41, z: 37 }]) ripples(c, 2.2, 7, 160 + c.x, 0.35, 1.3);
     // the open sand: a bright, wind-swept patch (the sun's place)
     lay(groundDecal(g, OPEN.x, OPEN.z, OPEN.r + 0.3, OPEN.r * 0.85, 0.4, SAND.open, { layer: 2, wobble: 0.25, seed: 5, feather: true }));
     // the fan of sand a rabbit dug out before its burrow

@@ -214,7 +214,7 @@ const STUIFZAND: Ontdekking[] = [
   { id: 'stuifzand.konijnenhol', home: 'stuifzand', soort: 'spoor', naam: 'het konijnenhol',
     hint: 'Wie woont er onder de struik?', model: 'prop-badger-sett' },
   { id: 'stuifzand.mierenhoop', home: 'stuifzand', soort: 'spoor', naam: 'de mierenhoop',
-    hint: 'Wie bouwt een berg van naaldjes?', model: 'prop-anthill' },
+    hint: 'Wie bouwt een berg van naaldjes?', icon: 'mound' },
   { id: 'stuifzand.eieren', home: 'stuifzand', soort: 'vondst', naam: 'de eitjes',
     hint: 'Wat ligt er onder de vogel?', icon: 'egg' },
   { id: 'stuifzand.vlucht', home: 'stuifzand', soort: 'zeldzaam', naam: 'de klappende nachtzwaluw',
