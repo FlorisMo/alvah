@@ -194,9 +194,12 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          search, a hold or a listening stop); run 7 (oversteek): ecoduct
                          (the real ecoduct on the west rim: a raked sand bed before its
                          mouth, a wildlife screen to watch from; ecoduct.places.ts the bed's
-                         seven patches (PRINT_SPOTS, uniform), the trails round the bridge's
-                         two ends (a group waits unseen behind its end and comes into view at
-                         its corner: nothing walks on the deck or through it), the ways out,
+                         seven patches (PRINT_SPOTS, uniform), the trails past the bridge's
+                         two ends (the arch is open and its ends are low: nothing hides behind
+                         it, so a group waits OUTSIDE every picture he watches from, pinned
+                         through the kit's own lenses, and walks in at the picture's edge;
+                         `Group.enter` never moves an animal he can see and, should the lens he
+                         has now see a wait, lets the file wait further back), the ways out,
                          where he steps aside, and `ecoductLayout` — this play's groups (red
                          deer, a sow with piglets, a roe with her calf, a fox; the hind and
                          her calf always last, they graze by the screen after), their corners

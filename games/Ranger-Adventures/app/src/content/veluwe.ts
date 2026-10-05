@@ -792,7 +792,7 @@ const MISSIE_ECODUCT = {
       naarScherm: 'Loop stil naar het scherm.',
       chipScherm: 'Het scherm',
       sst: 'Sst. Loop stil.',
-      wacht: 'Wacht stil. Kijk naar de brug.',
+      wacht: 'Wacht stil. Wie steekt er over?',
       // the first moment (feet still) as a group comes: the encounter's words follow
       komt: 'Er komt iets aan. Sta stil.',
       // the route over the sand (corsi)
@@ -861,7 +861,7 @@ const MISSIE_ECODUCT = {
             opties: [{ label: 'Roep hem', goed: false }, { label: 'Stil blijven', goed: true }],
             uitleg: 'Mooi. Je laat hem gewoon gaan.', gevolg: 'Hij schrikt. Hij rent een stukje weg.', reactie: 'flee',
             vraagKnap: 'Een reekalf kijkt naar je.' },
-          { id: 'opzij', slot: 'ecoduct', subject: 'pad-veilig', dier: 'hinde', flip: true, vraag: 'Je staat in hun weg.',
+          { id: 'opzij', slot: 'ecoduct', subject: 'edelhert', dier: 'hinde', flip: true, vraag: 'Je staat in hun weg.',
             opties: [{ label: 'Blijf staan', goed: false }, { label: 'Ga opzij', goed: true }],
             uitleg: 'Precies. Nu kunnen ze veilig over.', gevolg: 'Je wacht te lang. Ze lopen terug.', reactie: 'recede' },
         ],

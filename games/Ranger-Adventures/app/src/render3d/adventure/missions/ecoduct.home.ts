@@ -7,10 +7,12 @@
  * stretch of the ways out, and the TRACKS the crossings leave in the sand.
  *
  * It stands before the mission and after it (a place, not a prop that vanishes): before, the
- * bed lies raked smooth with a few old slots from last night; after, it holds the tracks of
- * the groups that crossed (a reload too). A play rakes it smooth under the briefing card
- * (`rake`) and treads it as the groups cross (`tread`) — never along a route he must still
- * point back (the script treads a route's crossings once the route is done).
+ * bed lies raked smooth with a few old slots from last night; after a play it keeps the
+ * tracks that play's groups left (a finish or a stop in front of him changes nothing in the
+ * sand); a reload (or a home laid while he is away) shows a fixed after set — a deer family,
+ * a sow with her piglets, a fox. A play rakes it smooth under the briefing card (`rake`) and
+ * treads it as the groups cross (`tread`) — never along a route he must still point back
+ * (the script treads a route's crossings once the route is done).
  *
  * Draw calls: the sand, the screen, the trails, the tracks (two kinds) and the patches (one
  * at rest): ~6 when near. The patches rest by their own spot (`env.detail`).
@@ -279,8 +281,10 @@ export class EcoductHome implements HomeDressing {
   private readonly slots: Prints;
   private readonly paws: Prints;
   private readonly made: { geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[] }[] = [];
-  /** a play's own tracks (a stop or a win lays the state's own) */
+  /** a play raked the bed (under its briefing card) */
   private laid = false;
+  /** …and its groups left tracks in it since */
+  private trodden = false;
 
   constructor(env: DressingEnv) {
     this.group.name = 'ecoduct-home';
@@ -337,6 +341,7 @@ export class EcoductHome implements HomeDressing {
     this.paws.clear();
     this.field.clear();
     this.laid = true;
+    this.trodden = false;
   }
 
   /** A group crossed along `line` (its trail, its way over the bed, its way out): the tracks
@@ -344,6 +349,7 @@ export class EcoductHome implements HomeDressing {
   tread(line: readonly Spot[], kind: Kind | 'das', n = 1, seed = 1): void {
     const pr = PRINT[kind];
     const into = pr.paw ? this.paws : this.slots;
+    if (this.laid) this.trodden = true;
     const rnd = stream(seed * 131 + n * 7);
     for (let a = 0; a < n; a++) {
       // each animal a little to the side of the one before (a family walks in file, loosely)
@@ -374,14 +380,16 @@ export class EcoductHome implements HomeDressing {
     list.forEach((c, i) => this.tread(crossingLine(c.from, c.out), c.kind, c.n, 50 + i));
   }
 
-  setState(state: HomeState): void {
+  /** The home's state: a finish or a stop in front of him (`fresh`) after a play whose groups
+   *  trod the bed keeps the tracks they left — nothing in the sand changes while he stands
+   *  by it; a reload, a cut, or a play left before anything crossed lays the state's set. */
+  setState(state: HomeState, fresh = false): void {
+    const keep = fresh && this.laid && this.trodden;
     this.laid = false;
+    this.trodden = false;
     this.field.clear();
-    this.layTracks(state === 'after' ? AFTER_TRACKS : BEFORE_TRACKS);
+    if (!keep) this.layTracks(state === 'after' ? AFTER_TRACKS : BEFORE_TRACKS);
   }
-
-  /** (the play laid its own tracks: a stop lays the state's own back through setState) */
-  get playing(): boolean { return this.laid; }
 
   update(dt: number, _t: number, reduced: boolean): void {
     this.field.update(dt, reduced);

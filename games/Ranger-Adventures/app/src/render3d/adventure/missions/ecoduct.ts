@@ -49,8 +49,8 @@ import { Seen } from './ven.finds';
 import { SIZE } from '../../AnimalScale';
 import { EcoductHome } from './ecoduct.home';
 import {
-  AFTER_HINDE, AFTER_KALF, ASIDE, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, MISSION, STAND, TRAILS, VARIANT_KEY,
-  asideView, backOff, backWay, crossingLine, ductHides, ecoductClearings, ecoductLayout, ecoductTreeClearings, lastVariants, mouthOf, roepSpot,
+  AFTER_HINDE, AFTER_KALF, ASIDE, BACK_MAX, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, MISSION, STAND, TRAILS, VARIANT_KEY,
+  asideView, backCorner, backOff, backWay, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, fileBack, haltOf, lastVariants, leaveWay, mouthOf, onBed, roepSpot, waitOf,
   type Crossing, type EcoductLaid, type Kind, type Side,
 } from './ecoduct.places';
 
@@ -63,8 +63,8 @@ const PACE: Readonly<Record<Kind | 'das', number>> = { hert: 1.35, zwijn: 1.0, r
 /** The hind and her calf's walk over the sand and home at the end (m/s): brisk, so they are
  *  grazing at their spot while the reunion's line is still up. */
 const HOME_PACE = 1.5;
-/** A curious young one's trot up to him (m/s), before its last careful steps. */
-const YOUNG_TROT = 1.8;
+/** A curious young one's trot up to him (m/s), before its last careful step. */
+const YOUNG_TROT = 2.3;
 /** How far each walks behind the one before it (m). */
 const GAP: Readonly<Record<Kind | 'das', number>> = { hert: 2.1, zwijn: 0.95, ree: 1.5, vos: 1.2, das: 1 };
 /** Its calls: a soft contact call (a temptation) and its alarm (a reach). */
@@ -74,10 +74,11 @@ const CALL: Readonly<Record<Kind | 'das', { soft: string; alarm: string }>> = {
 };
 /** How far (m) the opening look's aim lies from the lens: it glides ~5 m toward the bridge. */
 const LOOK_AIM_M = 11;
-/** The lead's breath on each patch of the route (s): its head down to the sand. */
-const VISIT_DWELL = 0.55;
-/** …and its pace between the patches (× its walk): brisk, it knows the way. */
-const VISIT_PACE = 1.15;
+/** The route's show: the lead trots from patch to patch (it knows the way) — each hop takes
+ *  about `hop` s (`min`-`max` m/s); the patch glows from the moment it steps onto it (`on` m
+ *  from its middle) and its nose goes to the sand for `dwell` s. About 1.2-1.9 s a patch (the
+ *  2D floor lights one every 1.15 s; the squirrel's visits ≤ 2 s): `visit_s` measures it. */
+const VISIT = { hop: 0.7, min: 2.5, max: 3.2, dwell: 0.4, on: 0.5 } as const;
 /** How big (px) an animal shows in his picture, steady for a second, before it is his. */
 const SEEN_PX = 40;
 
@@ -131,8 +132,9 @@ export const ecoductAdventure: Adventure = {
 interface Hold { paused: boolean; stop: boolean }
 
 /** Which group an animal walks with now (a kind may cross twice in a play: the later group
- *  takes its animals over, and the earlier one, still walking off, lets them be). */
-const OWNER = new WeakMap<Actor, Group>();
+ *  takes its animals over, and the earlier one, still walking off, lets them be). A play's
+ *  own: every play begins with nobody taken (the last play's finale owned the home's deer). */
+let OWNER = new WeakMap<Actor, Group>();
 
 /** One group crossing: its animals (the lead first), its way down, over and out. */
 class Group {
@@ -140,7 +142,8 @@ class Group {
   readonly members: Actor[];
   readonly lead: Actor;
   readonly young: Actor;
-  readonly from: Side;
+  /** the corner it comes round (a play's guard may send it round the other: `enter`) */
+  from: Side;
   readonly out: Side;
   /** walking off: hide each one once it is out of his picture */
   private leaving = false;
@@ -159,17 +162,42 @@ class Group {
   get gap(): number { return GAP[this.kind]; }
   get pace(): number { return PACE[this.kind]; }
 
-  /** In file at its trail's start (back the way it came along the deck's foot), unseen
-   *  behind the ecoduct's end, facing down the trail. */
-  enter(): void {
-    const t = TRAILS[this.from];
-    const p = t[0], q = t[1];
-    const back = { x: (p.x - q.x) / dist(p, q), z: (p.z - q.z) / dist(p, q) };
-    const face = headingTo(p, q);
-    this.members.forEach((m, i) => {
+  /**
+   * In file at its wait (its trail's start, outside every picture he watches from: the
+   * places test pins it through the kit's own lenses), facing down the trail. Nothing pops:
+   * an animal of it still in his picture (walking off with an earlier group, the home's deer
+   * leaving) is never moved — it walks out of the picture first; and when the lens he has
+   * NOW sees the wait (a child who stepped aside somewhere of his own), the file waits
+   * further back along its way, or round the other corner if that one is out of sight.
+   */
+  async enter(): Promise<void> {
+    const k = this.k, cam = k.world.camera;
+    const shown = (): Actor[] => this.members.filter((m) => m.group.visible && inPicture(cam, m, 0.04));
+    if (shown().length) {
+      // (one standing about in his picture walks calmly off out of it first)
+      for (const m of shown()) if (m.doing !== 'go' && m.doing !== 'follow') { OWNER.delete(m); void walkOff(m, leaveWay(m)); }
+      k.stats.enter_waited = (k.stats.enter_waited ?? 0) + 1;
+      if (!(await k.until(() => !shown().length, 14))) k.stats.enter_seen = (k.stats.enter_seen ?? 0) + 1;
+    }
+    const fileAt = (side: Side, back: number): Spot[] => this.members.map((_, i) => fileBack(side, back + this.gap * i));
+    const seen = (spots: Spot[]): boolean => spots.some((p, i) => inView(cam, p, this.members[i].height, lenOf(this.members[i])));
+    let side = this.from, back = 0;
+    if (seen(fileAt(side, 0))) {
+      const other: Side = side === 'N' ? 'S' : 'N';
+      let found = false;
+      for (back = 1; back <= BACK_MAX && !found; back += 1) found = !seen(fileAt(side, back));
+      back -= 1;
+      if (!found && !seen(fileAt(other, 0))) { side = other; back = 0; found = true; k.stats.enter_swapped = (k.stats.enter_swapped ?? 0) + 1; }
+      if (!found) k.stats.enter_seen = (k.stats.enter_seen ?? 0) + 1;
+      else k.stats.enter_back = Math.max(k.stats.enter_back ?? 0, back);
+    }
+    this.from = side;
+    const face = headingTo(waitOf(side), TRAILS[side][1]);
+    fileAt(side, back).forEach((p, i) => {
+      const m = this.members[i];
       OWNER.set(m, this);
       if (m.lies) void m.lie(false);
-      m.place(p.x + back.x * this.gap * i, p.z + back.z * this.gap * i, face);
+      m.place(p.x, p.z, face);
       m.idle();
       m.group.visible = true;
     });
@@ -202,6 +230,13 @@ class Group {
     return !hold.stop && !this.gone;
   }
 
+  /** `rest` (the group but its young one) walk `pts`, the first of them leading, the others
+   *  in file after it. */
+  async walkRest(rest: readonly Actor[], pts: readonly Spot[]): Promise<void> {
+    rest.slice(1).forEach((m, i) => { const ahead = rest[i]; m.follow(() => ({ x: ahead.x, z: ahead.z, speed: ahead.speed }), this.gap); });
+    for (const p of pts) if (!(await this.k.guard(rest[0].go(p.x, p.z, { speed: this.pace })))) return;
+  }
+
   /** All stop and look at `at` (heads up), for `secs`. */
   stare(at: Spot, secs: number): void {
     for (const m of this.members) void m.lookAt(() => ({ x: at.x, z: at.z, speed: 0 }), secs);
@@ -226,26 +261,24 @@ class Group {
     return true;
   }
 
-  /** After a route's show (the lead already stepped off behind the sand): the others step to
-   *  the bed's back from where they waited (never over it), then all leave along its back and
-   *  side — nothing stands in front of a patch while he points them back. */
+  /** After a route's show (the lead already stepped off behind the sand): the others step
+   *  round the bed's near back corner from where they waited (never over it), then all leave
+   *  along its back and side — nothing stands in front of a patch while he points them back,
+   *  and nobody stands waiting there (a step that cannot be made is let go of). */
   async leaveBehind(): Promise<boolean> {
     this.leaving = true;
-    await Promise.all(this.members.slice(1).map((m) => { const b = backOff(m); return m.go(b.x, b.z, { speed: this.pace }); }));
+    const k = this.k;
+    const steps = this.members.slice(1).map((m, i) => { const b = backCorner(m, i); return m.go(b.x, b.z, { speed: this.pace }); });
+    if (steps.length) await k.guard(Promise.race([Promise.all(steps), k.wait(4)]));
     return this.leave(backWay(this.out));
   }
 
-  /** Per frame while leaving: once every one of them is out of his picture (behind the lens,
-   *  past its side edge, or far out on the heath), the group is gone. */
+  /** Per frame while leaving: once every one of them is wholly out of his picture (behind
+   *  the lens or past its edge), the group is gone. */
   tick(cam: THREE.Camera): void {
     if (!this.leaving || this.gone) return;
-    const out = this.members.every((m) => {
-      if (!m.group.visible || OWNER.get(m) !== this) return true;
-      const v = new THREE.Vector3(m.x, m.group.position.y + 0.5, m.z).applyMatrix4(cam.matrixWorldInverse);
-      const p = new THREE.Vector3(m.x, m.group.position.y + 0.5, m.z).project(cam);
-      return (v.z > -0.5 || Math.abs(p.x) > 1.12 || Math.abs(p.y) > 1.15 || Math.hypot(m.x - cam.position.x, m.z - cam.position.z) > 34)
-        && Math.hypot(m.x - BED.x, m.z - BED.z) > 6;
-    });
+    const out = this.members.every((m) => !m.group.visible || OWNER.get(m) !== this
+      || (!inPicture(cam, m, 0.03) && Math.hypot(m.x - BED.x, m.z - BED.z) > 6));
     if (out) this.away();
   }
 
@@ -256,20 +289,40 @@ class Group {
   away(): void { for (const m of this.members) if (OWNER.get(m) === this) { m.idle(); m.group.visible = false; } this.leaving = false; }
 }
 
-/** Is the animal in his picture now: in the lens's view and not behind the ecoduct? */
-function inPicture(cam: THREE.Camera, a: Actor): boolean {
-  const y = a.group.position.y + a.height * 0.5;
-  const v = new THREE.Vector3(a.x, y, a.z).applyMatrix4(cam.matrixWorldInverse);
-  if (v.z > -0.3) return false;
-  const p = new THREE.Vector3(a.x, y, a.z).project(cam);
-  if (Math.abs(p.x) > 1.08 || Math.abs(p.y) > 1.08) return false;
-  return !ductHides({ x: cam.position.x, z: cam.position.z }, a);
+/** Would an animal (`h` m tall, `len` m long) standing at `p` show in the lens's picture
+ *  (any of its body: its feet, its back, either end, with a margin `m` in the picture's
+ *  half-widths)? Nothing in the world counts as cover: the ecoduct is an open arch. */
+function inView(cam: THREE.Camera, p: Spot, h: number, len: number, m = 0.06): boolean {
+  const y = groundAt(p);
+  const r = len / 2;
+  for (const [dx, dz, dy] of [[0, 0, 0.1], [0, 0, h], [r, 0, h * 0.6], [-r, 0, h * 0.6], [0, r, h * 0.6], [0, -r, h * 0.6]] as const) {
+    V.set(p.x + dx, y + dy, p.z + dz);
+    if (V.clone().applyMatrix4(cam.matrixWorldInverse).z > -0.2) continue; // (behind the lens)
+    V.project(cam);
+    if (Math.abs(V.x) < 1 + m && Math.abs(V.y) < 1 + m) return true;
+  }
+  return false;
+}
+const V = new THREE.Vector3();
+/** The rendered ground under a spot (the script's, set when a play begins). */
+let groundAt: (p: Spot) => number = () => 0;
+
+/** Is the animal in his picture now (any of it, `m` beyond the frame's edge counts)? */
+function inPicture(cam: THREE.Camera, a: Actor, m = 0): boolean {
+  return inView(cam, a, a.height, lenOf(a), m);
+}
+/** An animal's length (m) as drawn (the scale table's, at its height). */
+function lenOf(a: Actor): number {
+  const sz = (SIZE as Record<string, { h: number; len?: number }>)[a.animal];
+  return (sz?.len ?? a.height) * (a.height / (sz?.h ?? a.height));
 }
 
 /* ------------------------------------------------------------- the story ---- */
 
 async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   const c = k.copy;
+  groundAt = (p) => k.ctx.groundY(p.x, p.z);
+  OWNER = new WeakMap();
   const fam = k.borrow();
   const home = fam.dressing as EcoductHome;
   const A = fam.actors;
@@ -288,16 +341,17 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   const order = rust.trial.encounters.map((e) => e.id);
   k.stats.order = order.map((id) => ['stil', 'roep', 'opzij'].indexOf(id) + 1).reduce((a, b) => a * 10 + b, 0);
 
-  /* 0 · the hind and her calf that grazed by the bridge's north foot go back along it, round
-     behind its end (they noticed him at the marker): the play brings whoever comes. They are
-     gone only once he cannot see them there (never a vanishing in his picture) */
+  /* 0 · the hind and her calf (grazing by the bridge before his first crossing, on the heath
+     by the screen after one) walk calmly off, away from where he will watch: the play brings
+     whoever comes. Each is hidden only once it is out of his picture — never a vanishing in
+     it, never one left standing in it */
   const homeDeer = ['hinde', 'kalf'].map((key) => A[key]).filter((a) => a.group.visible);
-  const wait = TRAILS.N[0];
-  homeDeer.forEach((a, i) => { void a.go(wait.x - i * 1.8, wait.z + i * 0.2, { speed: 'walk' }); });
+  const way = leaveWay({ x: homeDeer[0]?.x ?? 0, z: homeDeer[0]?.z ?? 0 });
+  homeDeer.forEach((a, i) => { void walkOff(a, way.map((p) => ({ x: p.x + i * 1.4, z: p.z - i * 0.6 }))).catch(() => {}); });
   const offDeer = k.onTick(() => {
     for (const a of homeDeer) {
       if (!a.group.visible || OWNER.get(a)) continue;
-      if (Math.hypot(a.x - wait.x, a.z - wait.z) < 2.4 && !inPicture(k.world.camera, a)) { a.idle(); a.group.visible = false; }
+      if (!inPicture(k.world.camera, a, 0.03)) { a.idle(); a.group.visible = false; }
     }
     if (homeDeer.every((a) => !a.group.visible || OWNER.get(a))) offDeer();
   });
@@ -332,17 +386,21 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   k.say(c.wacht);
   const g1 = groupOf(0);
   live.add(g1);
-  g1.enter();
+  await g1.enter();
   // the first calm moment, as the first group comes (never the flip)
   const first = rust.next()!;
   if (first.id === 'roep') await roepAt(k, rust, first, g1, 'scherm');
   else await stilAt(k, rust, first, g1);
+  // (its lead waits at the bed's edge when the route's show begins)
+  if (dist(g1.lead, mouthOf(g1.from)) > 1.2) await g1.walk([mouthOf(g1.from)]);
 
   /* 4 · the route over the sand (corsi): the lead treads it patch by patch; one group a round */
   let round = 0;
   let shownBy: Group = g1;
   /** patches the lead has trodden in this round's show (the last one: it steps off the bed) */
   let trodden = 0;
+  /** the show's time per patch, measured (s) */
+  let visitT = 0, visits = 0;
   await routeBeat(k, 0, {
     view: BED_VIEW, stand: STAND, field: home.field,
     lines: { kijk: c.routeKijk, wijs: c.routeWijs, mis: c.routeMis, goed: k.steps[0].skin.copy?.goed ?? c.routeWijs, nogEen: c.nogEenWeg },
@@ -351,18 +409,26 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
     // wait at the mouth, heads up, until it is over
     visit: async (s, light) => {
       const g = shownBy;
+      const t0 = k.now;
       for (const m of g.members.slice(1)) { m.idle(); void m.lookAt(() => ({ x: g.lead.x, z: g.lead.z, speed: 0 }), 99); }
-      if (!(await g.lead.go(s.x, s.z, { speed: g.pace * VISIT_PACE }))) return;
+      const hop = Math.max(VISIT.min, Math.min(VISIT.max, dist(g.lead, s) / VISIT.hop));
+      // (the trot onto the patch: it glows as the lead steps onto it, and its nose goes down
+      // there without the slow last stride of a walk that ends)
+      void g.lead.go(s.x, s.z, { speed: hop });
+      await k.until(() => dist(g.lead, s) < VISIT.on || g.lead.doing !== 'go', 4);
       light(true);
       const fwd = { x: Math.sin(g.lead.yaw), z: Math.cos(g.lead.yaw) };
-      await g.lead.sniff(s.x + fwd.x * 0.5, s.z + fwd.z * 0.5, VISIT_DWELL, 0.6);
+      await g.lead.sniff(s.x + fwd.x * 0.5, s.z + fwd.z * 0.5, VISIT.dwell, 0.6);
       light(false);
+      visitT += k.now - t0; visits += 1;
+      k.stats.visit_s = Math.round((visitT / visits) * 100) / 100;
+      k.stats.visit_max = Math.max(k.stats.visit_max ?? 0, Math.round((k.now - t0) * 100) / 100);
       // the route's last patch: the lead steps straight back off the sand, behind the
       // patches, so nothing stands in front of one while he points them back
       if (++trodden >= (k.stats.route_length ?? 99)) {
         trodden = 0;
         const off = backOff(s);
-        await g.lead.go(off.x, off.z, { speed: g.pace });
+        await g.lead.go(off.x, off.z, { speed: VISIT.min });
       }
     },
     // the show over: the others come after the lead, along the bed's back and side (never
@@ -379,7 +445,7 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
       trodden = 0;
       const g = groupOf(round);
       live.add(g);
-      g.enter();
+      await g.enter();
       k.say(c.nogMeer);
       await g.walk(TRAILS[g.from].slice(1));
       g.stare(STAND, 0.7);
@@ -389,7 +455,7 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   });
   // the route's groups leave their tracks in the sand once it is pointed back (never before:
   // the tracks would show the way)
-  for (let i = 0; i <= round; i++) home.tread(crossingLine(crossings[i].from, crossings[i].out), crossings[i].kind, crossings[i].n, 11 + i);
+  for (let i = 0; i <= round; i++) home.tread(crossingLine(groups[i].from, groups[i].out), groups[i].kind, groups[i].members.length, 11 + i);
 
   /* 5 · the raaf: thousands of animals cross here */
   await k.fact(0);
@@ -411,10 +477,10 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
       where = 'opzij';
     } else if (e.id === 'stil') {
       if (where !== 'scherm') { await backToScreen(k); where = 'scherm'; }
-      g.enter();
+      await g.enter();
       await stilAt(k, rust, e, g);
     } else {
-      g.enter();
+      await g.enter();
       await roepAt(k, rust, e, g, where);
     }
     if (isLast) { finale = g; break; }
@@ -429,10 +495,18 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   /* 8 · the reunion: the hind and her calf cross into the heath by the screen, where they
      graze from now on: "De dieren staken veilig over." */
   const homeWalk: Hold = { paused: false, stop: false };
-  // (the line stays while they walk over the sand and onto the heath to their spot: a calm
-  // ending he sees whole, and nothing left for the home to walk after it)
+  // they come on over the sand now; the line comes WITH them, once the hind steps onto the
+  // sand in his picture (never over an empty bed while they are still round the corner),
+  // and it stays while they walk over it and onto the heath to their spot: a calm ending he
+  // sees whole, and nothing left for the home to walk after it
+  const crossing = finale ? Promise.race([crossHome(home, finale, homeWalk), k.wait(16)]).catch(() => {}) : Promise.resolve();
+  if (finale) {
+    const t0 = k.now, f = finale;
+    await k.until(() => onBed(f.lead, 0.3) && inPicture(k.world.camera, f.lead, -0.12), 10);
+    k.stats.reunion_wait = Math.round((k.now - t0) * 10) / 10;
+  }
   await k.reunion(async () => {
-    if (finale) await k.guard(Promise.race([crossHome(home, finale, homeWalk), k.wait(12)]));
+    await k.guard(crossing);
     await k.wait(0.8);
   }, { holdS: 2 });
   /* 9 · the raaf: badgers and foxes use it too */
@@ -473,6 +547,20 @@ async function crossHome(home: EcoductHome, g: Group, hold: Hold): Promise<void>
 }
 /** (a promise whose result is not needed) */
 const k0 = (p: Promise<unknown>): Promise<void> => p.then(() => {}, () => {});
+
+/** One of the home's deer walks calmly off along `way` (and on along its last stretch while
+ *  it is still in his picture: the play hides it once it is out of it). */
+async function walkOff(a: Actor, way: readonly Spot[]): Promise<void> {
+  for (const p of way) { if (!a.group.visible || OWNER.get(a)) return; await a.go(p.x, p.z, { speed: 'walk' }); }
+  let [p, q] = [way[way.length - 2], way[way.length - 1]];
+  for (let i = 0; i < 3 && a.group.visible && !OWNER.get(a); i++) {
+    const L = dist(p, q) || 1;
+    const on = { x: q.x + ((q.x - p.x) / L) * 6, z: q.z + ((q.z - p.z) / L) * 6 };
+    if (Math.hypot(on.x, on.z) > 71) break;
+    await a.go(on.x, on.z, { speed: 'walk' });
+    [p, q] = [q, on];
+  }
+}
 
 /* --------------------------------------------------------- the moments ---- */
 
@@ -539,20 +627,23 @@ async function roepAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group, 
   const c = k.copy;
   const settings = store.get().settings;
   k.beat = 'roep:komt';
-  // the group round the corner from out of sight and down toward the bed; there the young
-  // one leaves it and comes up to him, a quick trot and then a careful last few steps
-  await g.walk(TRAILS[g.from].slice(1, 3));
-  g.stare(k.ranger(), 0.8);
+  // the group comes round the corner into his picture; there its young one breaks away and
+  // trots up to him (a quick trot, then a careful last step), while the others walk on down
+  // to the bridge's foot and stand there watching it
+  const trail = TRAILS[g.from];
+  await g.walk([trail[1]]);
   const y = g.young;
   const me0 = k.ranger();
   const spot = roepSpot(where === 'scherm' ? STAND : me0, g.from, where === 'scherm' ? 'scherm' : 'bed');
-  // it comes up to him (the others watch from the bridge's foot)
-  for (const m of g.members) if (m !== y) { m.idle(); void m.lookAt(() => ({ x: y.x, z: y.z, speed: 0 }), 99); }
+  const rest = g.members.filter((m) => m !== y);
+  if (rest.length) {
+    void g.walkRest(rest, [trail[2]]).then(() => { for (const m of rest) { m.idle(); void m.lookAt(() => ({ x: y.x, z: y.z, speed: 0 }), 99); } }).catch(() => {});
+  }
   if (where !== 'scherm') {
     // (on the open sand: one held picture of him and it, side on)
     await k.frame(roepView(me0, spot), { face: headingTo(me0, spot), dip: true });
   }
-  const near0 = toward(spot, y, 1.4);
+  const near0 = toward(spot, y, 1.0);
   await y.go(near0.x, near0.z, { speed: YOUNG_TROT });
   await y.go(spot.x, spot.z, { speed: 0.6 });
   const atHim = (): { x: number; z: number; speed: number } => { const r = k.ranger(); return { x: r.x, z: r.z, speed: 0 }; };
@@ -633,17 +724,20 @@ async function backToScreen(k: AdventureKit): Promise<void> {
 async function opzijAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group): Promise<void> {
   const c = k.copy;
   k.beat = 'opzij:komt';
+  await g.enter();
   const trail = TRAILS[g.from];
-  g.enter();
-  // he turns to where they will come from (the lens behind him)
+  const halt = haltOf(g.from);
+  // he turns to where they will come from (the lens behind him); they come round the corner
+  // and down toward the bed, and stop a few steps above it, looking at him: he is in their
+  // way (they are already walking in as the lens turns with him)
+  const coming = g.walk([...trail.slice(1, 3), halt]);
   const r0 = k.ranger();
-  k.world.faceRanger(headingTo(r0, trail[2]));
+  k.world.faceRanger(headingTo(r0, halt));
   await k.behind();
-  // (they come round the corner and stop at the bridge's foot: he is in their way)
-  await g.walk(trail.slice(1, 3));
+  await coming;
   g.stare(k.ranger(), 99);
   // their way: down to the mouth, over the bed (through where he stands) and out
-  const way = [...trail.slice(2), { x: BED.x, z: BED.z }, ...EXITS[g.out]];
+  const way = [halt, mouthOf(g.from), { x: BED.x, z: BED.z }, ...EXITS[g.out]];
   const aside = ASIDE[g.out];
   let why: 'stay' | 'closer' = 'stay';
   /** their walk back and down again after he waited too long (a newer one stops the last) */
@@ -666,7 +760,7 @@ async function opzijAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group)
       await k.guard(Promise.race([g.walk([trail[1]], turn), k.wait(2.4)]));
       void k.wait(2.6).then(async () => {
         if (turn.stop) return;
-        await g.walk([trail[2]], turn);
+        await g.walk([trail[2], halt], turn);
         if (!turn.stop) g.stare(k.ranger(), 99);
       }).catch(() => {});
     },
@@ -691,17 +785,17 @@ async function badger(k: AdventureKit, A: Readonly<Record<string, Actor>>, home:
   const g = new Group(k, { kind: 'das', from, out: from === 'N' ? 'S' : 'N', n: 1 }, A);
   live.add(g);
   k.beat = 'das';
-  g.enter();
+  await g.enter();
   k.stats.das = 1;
   // (its words once it is near enough to see what it is: down at the bridge's foot)
-  await g.walk(TRAILS[from].slice(1, 3));
+  await g.walk(TRAILS[g.from].slice(1, 3));
   k.say(c.das, { good: true });
-  await g.walk(TRAILS[from].slice(3));
+  await g.walk(TRAILS[g.from].slice(3));
   const a = g.lead;
-  const p = atLocal(BED, from === 'N' ? -0.6 : 0.6, 0.3);
+  const p = atLocal(BED, g.from === 'N' ? -0.6 : 0.6, 0.3);
   await a.go(p.x, p.z, { speed: g.pace });
   await a.sniff(p.x + 0.4, p.z, 0.9, 0.5);
-  home.tread(crossingLine(from, g.out), 'das', 1, 77);
+  home.tread(crossingLine(g.from, g.out), 'das', 1, 77);
   void g.leave().catch(() => {});
   await k.wait(1.6);
 }
@@ -711,8 +805,7 @@ async function badger(k: AdventureKit, A: Readonly<Record<string, Actor>>, home:
 /** An animal's box as he sees it (its own size from the scale table, round where it stands:
  *  a rigged model's bones say nothing about its drawn size). */
 function boxFor(a: Actor): THREE.Box3 {
-  const sz = (SIZE as Record<string, { h: number; len?: number }>)[a.animal];
-  const len = (sz?.len ?? a.height) * (a.height / (sz?.h ?? a.height));
+  const len = lenOf(a);
   const y = a.group.position.y;
   return new THREE.Box3(new THREE.Vector3(a.x - len / 2, y, a.z - len / 2), new THREE.Vector3(a.x + len / 2, y + a.height, a.z + len / 2));
 }

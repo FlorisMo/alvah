@@ -41,22 +41,15 @@ export const DUCT_AT: Spot = { x: -70, z: 6 };
 export const DUCT_H = 6;
 export const DUCT: Obstacle = boxObstacle(DUCT_AT.x, DUCT_AT.z, 1.29 * DUCT_H, 1.3 * DUCT_H, Math.atan2(-DUCT_AT.x, -DUCT_AT.z), 0.3);
 
-/** How far (m) `p` stands outside the ecoduct's solid keep-out shape (< 0: inside it). */
+/** How far (m) `p` stands outside the ecoduct's solid keep-out shape (< 0: inside it). The
+ *  world keeps the ranger and the animals out of its whole footprint, ramps included. */
 export function ductGap(p: Spot): number {
   return obstacleGap(DUCT, p.x, p.z);
 }
-
-/** Does the ecoduct stand between `a` and `b` (the straight sight line on the ground plan
- *  passes through its solid: the model stands 6 m tall over its whole footprint)? */
-export function ductHides(a: Spot, b: Spot): boolean {
-  const L = Math.hypot(b.x - a.x, b.z - a.z);
-  const n = Math.max(8, Math.ceil(L / 0.1));
-  for (let i = 1; i < n; i++) {
-    const t = i / n;
-    if (obstacleGap(DUCT, a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t, -DUCT.box!.pad) < -0.05) return true;
-  }
-  return false;
-}
+/* (Its footprint is NOT a wall to hide behind: the model is an arch ~7 m deep over a tunnel
+   that is open from the heath to the forest, its ends are low ramps, and the flat pads round
+   it are ground. Nothing waits behind it: a group waits outside every picture he watches
+   from — pinned by ecoduct.places.test.ts through the very lenses the kit fits.) */
 
 /** A corner of the ecoduct's footprint (its own x/z signs), in the world. */
 function ductCorner(sx: number, sz: number): Spot {
@@ -127,22 +120,45 @@ export type Side = 'N' | 'S';
 export const SIDES: readonly Side[] = ['N', 'S'];
 
 /**
- * A group's way down to the bed: from where it waits unseen behind the ecoduct's end (the
- * first point: the deck comes down to the ground behind it; from the screen's view the end
- * hides it), along the deck's foot to its corner (the second point: where it comes into his
- * picture), down a trodden trail (the third) to the bed's edge (the last point: the MOUTH,
- * where a group stops when he stands in its way).
+ * A group's way to the bed: from where it waits (the first point: OUTSIDE every picture he
+ * watches from — past the held view's side edge, off the heath beside the bridge's end),
+ * past the bridge's corner into his picture (the second point: at the picture's edge, so a
+ * group walks in from the side, never appears in it), down a trodden trail to the bridge's
+ * foot (the third: where a group stops to look at him) and on to the bed's edge (the last
+ * point: the MOUTH, where a group stops when he stands in its way).
  */
 export const TRAILS: Readonly<Record<Side, readonly Spot[]>> = {
-  N: [{ x: -70.4, z: 16.0 }, { x: -63.6, z: 15.6 }, { x: -60.6, z: 13.6 }, { x: -58.9, z: 11.4 }],
-  S: [{ x: -70.4, z: -4.2 }, { x: -63.6, z: -4.4 }, { x: -60.6, z: -2.0 }, { x: -59.0, z: 3.0 }],
+  N: [{ x: -62.0, z: 23.0 }, { x: -61.2, z: 18.2 }, { x: -60.4, z: 14.7 }, { x: -58.9, z: 11.4 }],
+  S: [{ x: -62.8, z: -7.4 }, { x: -61.8, z: -3.1 }, { x: -60.5, z: 0.3 }, { x: -59.0, z: 3.0 }],
 };
 /** Where a group's way down meets the bed: its mouth (the trail's last point). */
 export function mouthOf(side: Side): Spot { const t = TRAILS[side]; return t[t.length - 1]; }
-/** Where a group waits unseen before it comes (the trail's first point). */
+/** Where a group waits before it comes (the trail's first point), out of his picture. */
 export function waitOf(side: Side): Spot { return TRAILS[side][0]; }
-/** Where it comes round the corner into his picture (the trail's second point). */
+/** Where it comes into his picture (the trail's second point: the held view's edge). */
 export function cornerOf(side: Side): Spot { return TRAILS[side][1]; }
+/** Where a group stops when he stands on the bed in its way (the flip): on its trail a few
+ *  steps above the bed's mouth, ~5-6 m from him — close enough to see them look at him. */
+export function haltOf(side: Side): Spot {
+  const t = TRAILS[side], a = t[2], b = t[3];
+  return { x: a.x + (b.x - a.x) * 0.6, z: a.z + (b.z - a.z) * 0.6 };
+}
+/** The way back from a wait (a unit vector, away from the bed): a group stands in file
+ *  along it, and a play may wait further back along it (`fileBack`). */
+export function backOf(side: Side): Spot {
+  const [p, q] = TRAILS[side];
+  const L = dist(p, q) || 1;
+  return { x: (p.x - q.x) / L, z: (p.z - q.z) / L };
+}
+/** The spot `d` m back from a side's wait, along its way back. */
+export function fileBack(side: Side, d: number): Spot {
+  const p = waitOf(side), b = backOf(side);
+  return { x: p.x + b.x * d, z: p.z + b.z * d };
+}
+/** How far back (m) a wait may move along its way back when the lens he has now sees it
+ *  (the play's guard, for a child who stepped aside somewhere else): the longest file
+ *  still stands inside the world there. */
+export const BACK_MAX = 6;
 
 /** A way out: from the bed's edge onto the heath (north-north-east) or along the sand track
  *  (south-south-east), sideways in the picture from the screen. The last point is far enough
@@ -166,6 +182,14 @@ export function backOff(p: Spot): Spot {
 export function backWay(out: Side): Spot[] {
   const su = out === 'N' ? -1 : 1;
   return [atLocal(BED, su * (BED_HALF.u + 0.8), BED_HALF.v + BACK_OFF), ...EXITS[out]];
+}
+
+/** Where the `i`-th of a group's others steps after a route's show, from the bed's edge where
+ *  it waited (`at`): round the bed's near back corner, never over the sand (each a little
+ *  further along than the one before, so no two make for one spot). */
+export function backCorner(at: Spot, i: number): Spot {
+  const su = toLocal(BED, at).u < 0 ? -1 : 1;
+  return atLocal(BED, su * (BED_HALF.u + 0.8 + 0.7 * i), BED_HALF.v + BACK_OFF - 0.15 * i);
 }
 
 /** A group's whole way: down its trail, over the bed to the other side, and out. */
@@ -242,40 +266,40 @@ export interface EcoductLaid {
  * The last group over is always the hind and her calf (the ecoduct's own animals, the ones
  * the mission helps: they cross into the heath by the screen and graze there after). Before
  * them the kinds come in shuffled rounds of all four, never two alike in a row, the first
- * never one of his last two plays' first. The group that must wait for him to step aside (`opzij`) is a
- * group, never the fox alone (their words say "ze"). The corner each comes round and the
- * way it leaves: seeded, never three groups in a row round the same corner (the hind and her
- * calf leave onto the heath, north). How many piglets come: seeded.
+ * never one of his last two plays' first. A group whose coming is a calm moment for his FEET
+ * (`stil`: they stop and stare at a step) or that must wait for him to step aside (`opzij`)
+ * is a group, never the fox alone (their words say "ze", and a lone fox at the picture's
+ * edge is too small to see what his step did). The corner each comes round and the way it
+ * leaves: seeded, never three groups in a row round the same corner (the hind and her calf
+ * leave onto the heath, north). How many piglets come: seeded.
  */
 export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: readonly string[], last: readonly string[] = []): EcoductLaid {
   const n = crossingsFor(rounds);
   const prev = last.length ? readVariant(last[last.length - 1]) : null;
   // (the first group never one of his last two plays' first groups)
   const before = last.slice(-2).map((v) => readVariant(v)?.kinds[0]).filter((k): k is Kind => !!k);
+  // which crossing holds which calm moment: the first as the first group comes, the other
+  // two one group each after the route's
+  const at = (id: string): number => { const j = order.indexOf(id); return j < 0 ? -1 : j === 0 ? 0 : n - 3 + j; };
+  const groupOnly = new Set([at('stil'), at('opzij')].filter((i) => i >= 0));
   const kf = play.fork('ec-groepen');
   // the kinds before the last: shuffled rounds of all four, never two alike in a row (nor the
-  // deer right before the deer), the first never his last play's first
+  // deer right before the deer), the first never his last play's first, never the fox alone
+  // where a moment needs a group
   const kinds: Kind[] = [];
   for (let guard = 0; kinds.length < n - 1 && guard < 40; guard++) {
     const deck = kf.shuffle(KINDS);
     for (const k of deck) {
       if (kinds.length >= n - 1) break;
-      if (kinds.length && kinds[kinds.length - 1] === k) continue;
-      if (!kinds.length && before.includes(k)) continue;
-      if (kinds.length === n - 2 && k === 'hert') continue;
+      const i = kinds.length;
+      if (i && kinds[i - 1] === k) continue;
+      if (!i && before.includes(k)) continue;
+      if (i === n - 2 && k === 'hert') continue;
+      if (k === 'vos' && groupOnly.has(i)) continue;
       kinds.push(k);
     }
   }
   kinds.push('hert');
-  // the group that waits for him to step aside is never the fox alone: it changes places with
-  // the other post-route group, or another kind takes its place
-  const post = (id: string): number => { const j = order.indexOf(id); return j >= 1 ? n - 3 + j : -1; };
-  const oi = post('opzij');
-  if (oi >= 0 && kinds[oi] === 'vos') {
-    const other = oi === n - 1 ? n - 2 : n - 1;
-    if (kinds[other] !== 'vos' && kinds[other - 1] !== 'vos' && other !== n - 1) [kinds[oi], kinds[other]] = [kinds[other], kinds[oi]];
-    else kinds[oi] = (['zwijn', 'ree'] as Kind[]).find((k) => k !== kinds[oi - 1] && k !== kinds[oi + 1]) ?? 'zwijn';
-  }
   // the corners and the ways out
   const sf = play.fork('ec-paden');
   const froms: Side[] = [];
@@ -288,10 +312,11 @@ export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: r
   // most groups leave on the far side of the bed from where they came down (they cross it);
   // now and then one turns back the way it came; the hind and her calf onto the heath (north)
   const outs: Side[] = froms.map((f, i) => (i === n - 1 ? 'N' : sf.chance(0.75) ? (f === 'N' ? 'S' : 'N') : f));
-  // he steps aside by the screen's end away from where a group leaves; from its north end
-  // (they leave south) the north corner's wait lies in his picture: the next group (the
-  // last, while he still stands there) comes round the south end
-  if (order.indexOf('opzij') === 1 && outs[n - 2] === 'S') froms[n - 1] = 'S';
+  // he steps aside by the screen's end away from where a group leaves (ASIDE): from there he
+  // looks over the bed toward the corner they leave by, so the next group (the last, while
+  // he still stands there) comes round the other corner, whose wait lies out of that picture
+  const oi = at('opzij');
+  if (oi >= 0 && oi < n - 1) froms[oi + 1] = outs[oi] === 'N' ? 'S' : 'N';
   const gf = play.fork('ec-grootte');
   const sizes = kinds.map((k, i) => {
     const g = GROUPS[k];
@@ -368,8 +393,21 @@ export const BEFORE_KALF: Spot & { yaw: number } = { x: -64.6, z: 16.5, yaw: 2.3
 export const HOME: Spot = { x: -50.6, z: 15.4 };
 export const AFTER_HINDE: Spot & { yaw: number } = { x: HOME.x, z: HOME.z, yaw: -2.3 };
 export const AFTER_KALF: Spot & { yaw: number } = { x: HOME.x + 1.3, z: HOME.z - 0.9, yaw: -2.0 };
-/** Where the before-deer slip to when he comes near (behind the north end, out of sight). */
+/** Where the before-deer slip to when he comes near (round the bridge's north end). */
 export const HIDEAWAY: Spot & { yaw: number } = { x: -71.5, z: 16.1, yaw: -1.5 };
+
+/**
+ * When a play begins the hind and her calf (grazing by the bridge before, or on the heath by
+ * the screen after his last crossing) walk calmly off, away from where he will watch — the
+ * play brings whoever comes. Each way leads away from the screen's picture; they are hidden
+ * only once out of his picture (and walk on along it until they are).
+ */
+export function leaveWay(from: Spot): Spot[] {
+  // from the heath by the screen: north-east onto the open heath, away from the bed
+  if (from.x > -58) return [{ x: from.x + 2.5, z: from.z + 7 }, { x: from.x + 5, z: from.z + 15 }];
+  // from by the bridge (or round its end): north along the forest's edge
+  return [{ x: -65.4, z: 23.5 }, { x: -63.6, z: 31.5 }];
+}
 
 const nobody = (key: string, animal: string): ResidentSpec => ({ key, animal, before: null, after: null, reach: 30 });
 
@@ -427,10 +465,10 @@ export function ecoductClearings(): { x: number; z: number; r: number }[] {
   return out;
 }
 
-/** The ground the forest's scattered trees keep clear of: the trails along the ecoduct's
- *  two ends, where the groups wait and come down. */
+/** The ground the forest's scattered trees keep clear of: where the groups wait in file and
+ *  come in beside the ecoduct's two ends. */
 export function ecoductTreeClearings(): { x: number; z: number; r: number }[] {
-  return SIDES.flatMap((s) => [...TRAILS[s].slice(0, 2), { x: TRAILS[s][0].x - 3, z: TRAILS[s][0].z }].map((p) => ({ x: p.x, z: p.z, r: 2.2 })));
+  return SIDES.flatMap((s) => [...TRAILS[s].slice(0, 2), fileBack(s, 3), fileBack(s, 6)].map((p) => ({ x: p.x, z: p.z, r: 2.2 })));
 }
 
 /** The ecoduct's home in the world. */

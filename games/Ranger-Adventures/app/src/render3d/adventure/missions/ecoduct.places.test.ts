@@ -19,7 +19,7 @@ import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import { fitFrame } from '../../play/frame-fit.ts';
 import { obstacleGap } from '../../CharacterController.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
-import { dist, headingTo, segDist, toLocal } from '../places.ts';
+import { dist, toLocal } from '../places.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { newPlay } from '../../../core/play.ts';
 import { playDagnachtTrial } from '../../../engines/dagnacht.ts';
@@ -32,10 +32,10 @@ import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import { venClearings } from './ven.places.ts';
 import {
-  ASIDE, BED, BED_HALF, BED_STAND, BED_VIEW, BEFORE_HINDE, BEFORE_KALF, DUCT, ECODUCT_HOME, ECODUCT_PLACES, ECODUCT_RESIDENTS, EXITS, FERN, FOX_LOOP, GROUPS,
+  ASIDE, BACK_MAX, BED, BED_HALF, BED_STAND, BED_VIEW, BEFORE_HINDE, BEFORE_KALF, ECODUCT_HOME, ECODUCT_PLACES, ECODUCT_RESIDENTS, EXITS, FERN, FOX_LOOP, GROUPS,
   GROVE, HIDEAWAY, HOME, MARKER, PATCH_SIZE, SCREEN, SIDES, STAND, TRAILS, AFTER_HINDE, AFTER_KALF,
-  asideView, backOff, backWay, bedSpots, crossingLine, crossingsFor, ductGap, ductHides, ecoductClearings, ecoductLayout, lastVariants, lineDist, mouthOf, onBed, readVariant, roepSpot,
-  screenObstacle, type Side, type ViewSpec,
+  asideView, backCorner, backOff, backWay, bedSpots, crossingLine, crossingsFor, ductGap, ecoductClearings, ecoductLayout, fileBack, haltOf, lastVariants, leaveWay, lineDist, mouthOf, onBed, readVariant, roepSpot,
+  screenObstacle, type ViewSpec,
 } from './ecoduct.places.ts';
 import type { Spot } from '../types.ts';
 
@@ -102,11 +102,7 @@ test('every place is inside the world, clear of the ecoduct, its grove and the r
     assert.ok(ductGap(p) > 0.6, `${name} ${at(p)} is clear of the ecoduct (${ductGap(p).toFixed(2)} m)`);
     for (const t of GROVE) assert.ok(dist(p, t) > 1.6, `${name} ${at(p)} is clear of the grove's trunk ${at(t)}`);
   }
-  // the bed's sand lies clear of the fern at the mouth, on ground the sand path only touches
-  for (const u of [-BED_HALF.u, BED_HALF.u]) for (const v of [-BED_HALF.v, BED_HALF.v]) {
-    const c = { x: BED.x + (u === -BED_HALF.u ? 1 : -1) * 0, z: BED.z };
-    void c;
-  }
+  // the bed's sand lies clear of the fern at the mouth
   assert.ok(!onBed(FERN, 0.6), 'the fern at the mouth stands off the raked sand');
   for (const s of bedSpots()) assert.ok(distanceToNetwork(s.x, s.z) > LANE_HALF + PATCH_SIZE / 2, `patch ${s.id} lies off the sand path`);
 });
@@ -175,33 +171,88 @@ test('from behind the screen he sees every patch through its slit (his eyes at a
 
 /* ------------------------------------------------------------ the ways ---- */
 
-test('the trails: round the ecoduct\'s ends, never through its solid, clear of the trees; a group waits unseen and comes into view at the corner', () => {
-  const lens = lensOf(BED_VIEW).position;
+/** Is an animal (`h` m tall, `len` m long) standing at `p` wholly out of the lens's picture,
+ *  by `m` of the picture's half-width beyond its edge (its feet, its back, both ends)? */
+function outOf(cam: THREE.Camera, p: Spot, h = 1.45, len = 2.2, m = 0.04): boolean {
+  const y = groundY(p.x, p.z);
+  for (const [dx, dz, dy] of [[0, 0, 0.1], [0, 0, h], [len / 2, 0, h * 0.6], [-len / 2, 0, h * 0.6], [0, len / 2, h * 0.6], [0, -len / 2, h * 0.6]]) {
+    const v = new THREE.Vector3(p.x + dx, y + dy, p.z + dz);
+    if (v.clone().applyMatrix4(cam.matrixWorldInverse).z > -0.2) continue;
+    v.project(cam);
+    if (Math.abs(v.x) < 1 + m && Math.abs(v.y) < 1 + m) return false;
+  }
+  return true;
+}
+/** The kit's `behind()` lens: 4.6 m behind him, 2.4 m up, on a spot 1.6 m ahead of him. */
+function behindLens(me: Spot, heading: number): THREE.PerspectiveCamera {
+  const f = { x: Math.sin(heading), z: Math.cos(heading) };
+  const g = groundY(me.x, me.z);
+  const at = { x: me.x - f.x * 4.6, z: me.z - f.z * 4.6 };
+  const cam = new THREE.PerspectiveCamera(FOV, W / H, 0.1, 400);
+  cam.position.set(at.x, Math.max(g + 2.4, groundY(at.x, at.z) + 1.4), at.z);
+  cam.lookAt(me.x + f.x * 1.6, g + 0.9, me.z + f.z * 1.6);
+  cam.updateMatrixWorld(true);
+  return cam;
+}
+/** The longest file a group stands in at its wait (m: three deer, 2.1 m apart). */
+const FILE_M = 4.2;
+
+test('the trails: clear of the ecoduct and the trees; a group waits OUT of every picture he watches from and walks in at its edge', () => {
+  const bed = lensOf(BED_VIEW);
   for (const s of SIDES) {
     const t = TRAILS[s];
     for (const p of samples(t)) {
       assert.ok(ductGap(p) > 0.7, `${s} trail ${at(p)} keeps off the ecoduct (${ductGap(p).toFixed(2)} m)`);
       for (const tr of TREES) assert.ok(dist(p, tr) > 0.6 * tr.s + 0.8, `${s} trail ${at(p)} keeps off the tree ${at(tr)}`);
     }
-    // the wait (the trail's start): hidden by the ecoduct from the screen's lens, from his eyes
-    // there and on the bed; the corner: in view from the screen's lens
-    // (and from wherever he waits for a group: aside by the screen, its held picture's lens,
-    // and the walk camera behind him on the bed as he turns to the bridge's foot)
-    const behindOnBed = (s2: Side): Spot => { const t2 = TRAILS[s2][2]; const h = headingTo(BED_STAND, t2); return { x: BED_STAND.x - Math.sin(h) * 4.6, z: BED_STAND.z - Math.cos(h) * 4.6 }; };
-    // (aside by the screen's north end — they left south — the next group comes round the
-    // south end: ecoductLayout)
-    const asides: [string, Spot][] = [['asideN', ASIDE.N], ['asideN lens', lensOf(asideView(ASIDE.N)).position],
-      ...(s === 'S' ? [['asideS', ASIDE.S], ['asideS lens', lensOf(asideView(ASIDE.S)).position]] as [string, Spot][] : [])];
-    for (const [name, eye] of [['lens', lens], ['stand', STAND], ['bed', BED_STAND], ...asides, ['the walk camera on the bed', behindOnBed(s)]] as [string, Spot][]) {
-      assert.ok(ductHides(eye, t[0]), `${s}: its wait ${at(t[0])} is hidden from the ${name}`);
-      // (and the file behind the wait, back along the deck's foot)
-      const back = { x: t[0].x + (t[0].x - t[1].x) * 0.6, z: t[0].z + (t[0].z - t[1].z) * 0.6 };
-      assert.ok(ductHides(eye, back), `${s}: the file behind its wait is hidden from the ${name}`);
+    // where he watches a group come from: behind the screen (the held view), on the bed (the
+    // walk lens behind him, looking at the bridge's mouth), and aside by the screen's far end
+    // (by the layout he stands at the end whose picture holds the OTHER corner)
+    const watch: [string, THREE.Camera][] = [
+      ['the screen\'s held view', bed],
+      ['the walk lens on the bed', behindLens(BED_STAND, BED.heading)],
+      [s === 'N' ? 'aside by the north end' : 'aside by the south end', lensOf(asideView(s === 'N' ? ASIDE.S : ASIDE.N))],
+    ];
+    for (const [name, cam] of watch) {
+      for (let d = 0; d <= FILE_M + 1e-6; d += 0.7) {
+        const p = fileBack(s, d);
+        assert.ok(outOf(cam, p), `${s}: the file ${d.toFixed(1)} m back from its wait ${at(p)} stands out of ${name}`);
+      }
     }
-    assert.ok(!ductHides(lens, t[1]), `${s}: its corner ${at(t[1])} is in view of the screen's lens`);
+    // it comes into the held view at its edge (walks in from the side), and stands in it at
+    // the bridge's foot and the bed's mouth
+    const edge = new THREE.Vector3(t[1].x, groundY(t[1].x, t[1].z) + 0.7, t[1].z).project(bed);
+    assert.ok(Math.abs(edge.x) > 0.86 && Math.abs(edge.x) < 1.12, `${s}: it comes into the picture at its ${s === 'N' ? 'left' : 'right'} edge (x ${edge.x.toFixed(2)})`);
+    for (const p of t.slice(2)) {
+      const c = px(bed, p.x, groundY(p.x, p.z) + 0.7, p.z);
+      assert.ok(c.front && c.x > 60 && c.x < W - 60 && c.y > 110 && c.y < H - 60, `${s}: ${at(p)} in the held picture (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);
+    }
     // its mouth at the bed's edge
     const m = toLocal(BED, mouthOf(s));
     assert.ok(Math.abs(m.u) > BED_HALF.u - 1.2 && Math.abs(m.u) < BED_HALF.u + 2.6, `${s}: its mouth is at the bed's ${s === 'N' ? 'north' : 'south'} edge`);
+    // a play's guard may let a file wait further back (a child who stepped aside elsewhere):
+    // still inside the world, off the ecoduct, clear of the trees
+    for (let d = 0; d <= BACK_MAX + FILE_M + 1e-6; d += 0.5) {
+      const p = fileBack(s, d);
+      assert.ok(Math.hypot(p.x, p.z) < 72, `${s}: ${d} m back ${at(p)} is inside the world`);
+      assert.ok(ductGap(p) > 0.7, `${s}: ${d} m back ${at(p)} keeps off the ecoduct`);
+      for (const tr of TREES) assert.ok(dist(p, tr) > 0.6 * tr.s + 0.6, `${s}: ${d} m back ${at(p)} keeps off the tree ${at(tr)}`);
+    }
+  }
+});
+
+test('the home\'s deer walk off out of his picture when a play begins (by the bridge, round its end, or on the heath)', () => {
+  const bed = lensOf(BED_VIEW);
+  for (const [name, from] of [['before', BEFORE_HINDE], ['hideaway', HIDEAWAY], ['after', AFTER_HINDE]] as [string, Spot][]) {
+    const way = leaveWay(from);
+    for (const p of samples([from, ...way])) {
+      assert.ok(Math.hypot(p.x, p.z) < 73.5, `${name}: ${at(p)} inside the world`);
+      assert.ok(ductGap(p) > 0.5, `${name}: ${at(p)} off the ecoduct`);
+      assert.ok(lineDist(p, [STAND, { x: BED.x, z: BED.z }]) > 3, `${name}: ${at(p)} away from the screen and the bed`);
+    }
+    const end = way[way.length - 1];
+    assert.ok(outOf(bed, end), `${name}: its way ends out of the screen's held view ${at(end)}`);
+    assert.ok(dist(end, STAND) > dist(from, STAND), `${name}: it walks away from where he will watch`);
   }
 });
 
@@ -242,6 +293,33 @@ test('after a route\'s show the group leaves behind the bed and along its side: 
   }
 });
 
+test('after a route\'s show the others step round the bed\'s near back corner (never over the sand), apart', () => {
+  for (const s of SIDES) {
+    for (const from of [mouthOf(s), TRAILS[s][2], haltOf(s)]) {
+      const spots = [0, 1, 2, 3].map((i) => backCorner(from, i));
+      for (const [i, p] of spots.entries()) {
+        assert.ok(!onBed(p, 0.3), `${s}: the ${i}th's step ${at(p)} is off the sand`);
+        assert.ok(ductGap(p) > 0.4, `${s}: the ${i}th's step ${at(p)} is off the ecoduct`);
+        for (const t of GROVE) assert.ok(dist(p, t) > 1.2, `${s}: the ${i}th's step ${at(p)} is clear of the grove`);
+        // its way there from the bed's edge passes outside the sand
+        for (const q of samples([from, p], 0.2)) assert.ok(!onBed(q, 0.05), `${s}: the ${i}th's way ${at(q)} keeps off the sand`);
+        if (i) assert.ok(dist(p, spots[i - 1]) > 0.5, `${s}: no two make for one spot`);
+      }
+    }
+  }
+});
+
+test('the flip: a group stops a few steps above the bed, close enough to see, in the lens behind him as he faces them', () => {
+  for (const s of SIDES) {
+    const h = haltOf(s);
+    assert.ok(!onBed(h, 0.3), `${s}: the halt ${at(h)} is off the sand`);
+    assert.ok(dist(h, BED_STAND) >= 4.5 && dist(h, BED_STAND) <= 6.5, `${s}: ${dist(h, BED_STAND).toFixed(2)} m from him`);
+    const cam = behindLens(BED_STAND, Math.atan2(h.x - BED_STAND.x, h.z - BED_STAND.z));
+    assert.ok(!outOf(cam, h, 1.2, 1.8, -0.2), `${s}: the group at its halt is well in the picture`);
+    assert.ok(lineDist(BED_STAND, [h, mouthOf(s), { x: BED.x, z: BED.z }]) < 1.2, `${s}: he stands on their way`);
+  }
+});
+
 test('stepping aside: ≥ 4.5 m from where he stood on the bed, off every group\'s way, clear of the screen, two steps from behind it', () => {
   for (const out of SIDES) {
     const a = ASIDE[out];
@@ -268,7 +346,6 @@ test('a young one comes up to him beside the screen: near, never behind the scre
     assert.ok(obstacleGap(screenObstacle(), y.x, y.z) > 0.25, `${from}: clear of the screen`);
     const c = px(cam, y.x, groundY(y.x, y.z) + 0.3, y.z);
     assert.ok(c.front && c.x > 40 && c.x < W - 40 && c.y < H - 30, `${from}: in the picture (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);
-    assert.ok(!ductHides(STAND, y), `${from}: in his sight`);
   }
 });
 
@@ -303,7 +380,7 @@ test('the three moments: the trial\'s seeded order, the flip never first, every 
   for (const o of ORDERS) assert.ok(seen.has(o.join()), `the order ${o.join()} comes`);
 });
 
-test('a play\'s crossings: drawn from its seed, the deer always, never two alike in a row, the fox never waits to cross', () => {
+test('a play\'s crossings: drawn from its seed, the deer always, never two alike in a row, the fox alone never holds a moment for his feet', () => {
   const firsts = new Set<string>(), corners = new Set<string>();
   for (let seed = 1; seed <= 80; seed++) {
     for (const rounds of [2, 3]) {
@@ -316,10 +393,17 @@ test('a play\'s crossings: drawn from its seed, the deer always, never two alike
         assert.equal(l.crossings[kinds.length - 1].n, 2, 'the hind and her calf: the home\'s own two');
         assert.equal(l.crossings[kinds.length - 1].out, 'N', 'onto the heath by the screen, where they live after');
         for (let i = 1; i < kinds.length; i++) assert.notEqual(kinds[i], kinds[i - 1], `seed ${seed}: never two alike in a row (${kinds.join()})`);
-        const oi = order.indexOf('opzij');
-        assert.notEqual(kinds[crossingsFor(rounds) - 3 + oi], 'vos', `seed ${seed} ${order.join()}: the group that waits for him is a group`);
+        // which crossing holds which moment: the first as the first group comes, the other
+        // two one group each after the route's
+        const n = crossingsFor(rounds);
+        const at = (id: string): number => (order.indexOf(id) === 0 ? 0 : n - 3 + order.indexOf(id));
+        assert.notEqual(kinds[at('opzij')], 'vos', `seed ${seed} ${order.join()}: the group that waits for him to step aside is a group`);
+        assert.notEqual(kinds[at('stil')], 'vos', `seed ${seed} ${order.join()}: the group that stops and stares at his step is a group (${kinds.join()})`);
         for (const c of l.crossings) assert.ok(c.n >= GROUPS[c.kind].min && c.n <= GROUPS[c.kind].members.length);
-        if (order[1] === 'opzij' && l.crossings[kinds.length - 2].out === 'S') assert.equal(l.crossings[kinds.length - 1].from, 'S', 'aside by the north end: the last group comes round the south end');
+        // aside by the screen's end away from where they leave, he looks over the bed toward
+        // that corner: the next group comes round the other one (its wait out of that picture)
+        const oi = at('opzij');
+        if (oi < n - 1) assert.notEqual(l.crossings[oi + 1].from, l.crossings[oi].out, `seed ${seed} ${order.join()}: the group after the flip comes round the other corner`);
         assert.ok(l.variant.length <= 20, l.variant);
         assert.deepEqual(readVariant(l.variant)?.kinds, kinds);
         firsts.add(kinds[0]); corners.add(l.crossings[0].from);
@@ -360,5 +444,4 @@ test('its discoveries: four animals, the tracks, a rare badger; the red deer it 
   assert.ok(rows.some((o) => o.soort === 'zeldzaam' && o.id === 'ecoduct.das'));
   assert.ok(rows.some((o) => o.soort === 'spoor' && o.id === 'ecoduct.sporen'));
   for (const g of Object.values(GROUPS)) assert.ok(rows.some((o) => o.id === g.disc), `${g.disc} is a row`);
-  void headingTo; void segDist;
 });
