@@ -204,14 +204,22 @@ class Group {
     for (const m of this.members) void m.lookAt(() => ({ x: at.x, z: at.z, speed: 0 }), secs);
   }
 
-  /** Off the bed and out its way, until the whole group is out of his picture (then it is
-   *  gone: hidden, all at once — never one left standing behind the others). */
+  /** Off the bed and out its way; it is gone (hidden, all at once — never one left standing
+   *  behind the others) only once the whole group is out of his picture (`tick`): at the
+   *  way's end and still in view it walks on along it a little further, and stands there if
+   *  it must (never a vanishing in front of him). */
   async leave(): Promise<boolean> {
     this.leaving = true;
     await this.walk(EXITS[this.out]);
-    // (at the way's end and still in view: it walks on a little, then it is gone)
-    if (!this.gone) { const e = EXITS[this.out]; const a = e[e.length - 2], b = e[e.length - 1]; await this.walk([{ x: b.x + (b.x - a.x), z: b.z + (b.z - a.z) }]); }
-    this.away();
+    const e = EXITS[this.out];
+    let a = e[e.length - 2], b = e[e.length - 1];
+    for (let i = 0; i < 3 && !this.gone; i++) {
+      const L = dist(a, b) || 1;
+      const on = { x: b.x + ((b.x - a.x) / L) * 6, z: b.z + ((b.z - a.z) / L) * 6 };
+      if (Math.hypot(on.x, on.z) > 72 || !(await this.walk([on]))) break;
+      a = b; b = on;
+    }
+    if (!this.gone) for (const m of this.members) if (OWNER.get(m) === this) m.root(m.x, m.z, 0.4);
     return true;
   }
 
