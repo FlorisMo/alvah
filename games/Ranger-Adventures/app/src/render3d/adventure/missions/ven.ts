@@ -49,6 +49,7 @@ import { ListenCore, StillFor, chorusCalls, listensOf, ringSize } from './ven.li
 import { BLUE_ID, LIFE_KEY, SEEN, blueOf, lastLifeOf, lifeTag, venLife } from './ven.life';
 import { Seen, boxOf } from './ven.finds';
 import type { MoodId } from '../../Moods';
+import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
 import {
   ADDER_NEAR, ADDER_WARN, APPROACH, BAYS, BAY_IDS, CARPET_A, CARPET_SEEN, CARPET_WET, CHORUS_KEYS, FROG_H, FROG_LEN, GO_AWAY, HINT_RING, MISSION, VARIANT_KEY,
   VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderHoldHeading, adderView, between, carpetAt, frogOf, decoySlots, hintRingOf, lastVenVariants, pointAt,
@@ -73,6 +74,26 @@ function speaking(): boolean {
 /** He waited for a line to end at most this long (s): a voice that never says it is done
  *  never holds the frogs up. */
 const READ_MAX_S = 3.5;
+
+/** One new find's card (s; ui/hud/reveal-queue.ts), and the longest a stop waits for the
+ *  cards still waiting: two of them. */
+const CARD_S = (REVEAL_SHOW_MS + REVEAL_GAP_MS) / 1000;
+const CARDS_MAX_S = 2 * CARD_S;
+
+/**
+ * A new find's card shows on his way (the ree's walkCards): where one still waits as a walk
+ * ends (the slang seen in her own moment, a dragonfly seen on a short stretch), he stops
+ * there, the beat still the walk's (a calm moment for the reveal gate), until it has been
+ * seen — two cards' time at most. Most walks wait for none.
+ */
+async function walkCards(k: AdventureKit): Promise<void> {
+  if (!k.revealsWaiting()) return;
+  k.lockFollow();
+  k.world.stopRanger();
+  const t0 = k.now;
+  await k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S);
+  k.stats.walk_cards_s = Math.round(((k.stats.walk_cards_s ?? 0) + k.now - t0) * 10) / 10;
+}
 
 /** This play's bank, drawn and laid under the briefing card. */
 let drawn: { seed: number; laid: VenLaid } | null = null;
@@ -140,7 +161,7 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   const singer = A[CHORUS_KEYS[id]];
   const settings = store.get().settings;
   const life = home.life;
-  watchLife(k, home, laid);
+  watchLife(k, home);
   const zk = k.knobs('zoeken');
   const calls = chorusCalls(zk.trailClarity);
   const rings = ringSize(zk.trailClarity);
@@ -211,6 +232,7 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
       tick: (dt) => { tickChorus(dt); opts.tick?.(dt); },
     });
     curS = Math.max(curS, s);
+    await walkCards(k);
   };
   /** A listening stop: the frogs fall silent; he stands still; they call (and rings). */
   const listenStop = async (line = c.staStil): Promise<void> => {
@@ -415,7 +437,10 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
     if (!keeper.group.visible || keeper.lift < -0.05) { keeper.group.visible = true; await keeper.dive(true, 0.8); }
     void keeper.go(AFTER_FROG.x, AFTER_FROG.z, { speed: 0.35, face: AFTER_FROG.yaw });
     await k.wait(3.4);
-  });
+    // (the line holds on for every new find's card still waiting — the blue frog he just
+    // saw, a feather on the last stretch — two at most: never after the reward instead)
+    await k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S);
+  }, { holdS: Math.min(2, k.revealsWaiting()) * CARD_S });
   /* 11 · the raaf: what a ven is */
   await k.fact(1);
 }
@@ -428,7 +453,7 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
  * his picture, big enough, near enough, long enough — its calm reveal waits for a walk, a
  * look or the ending).
  */
-function watchLife(k: AdventureKit, home: VenHome, laid: VenLaid): void {
+function watchLife(k: AdventureKit, home: VenHome): void {
   const life = home.life;
   life.setBlue(k.rare()?.id === BLUE_ID);
   const ll = life.laid?.life;
@@ -481,7 +506,6 @@ function watchLife(k: AdventureKit, home: VenHome, laid: VenLaid): void {
     }
     for (const [key, v] of Object.entries(seen.most)) k.stats[`px_${key.slice(key.indexOf('.') + 1)}`] = v;
   });
-  void laid;
 }
 
 /** What a moment on the way needs of the follow. */

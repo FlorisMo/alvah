@@ -183,7 +183,7 @@ class Group {
     const shown = (): Actor[] => this.members.filter((m) => m.group.visible && inPicture(cam, m, 0.04));
     if (shown().length) {
       // (one standing about in his picture walks calmly off out of it first)
-      for (const m of shown()) if (m.doing !== 'go' && m.doing !== 'follow') { OWNER.delete(m); void walkOff(m, leaveWay(m)); }
+      for (const m of shown()) if (m.doing !== 'go' && m.doing !== 'follow') { OWNER.delete(m); void walkOff(m, leaveWay(m)).catch(() => {}); }
       k.stats.enter_waited = (k.stats.enter_waited ?? 0) + 1;
       if (!(await k.until(() => !shown().length, 14))) k.stats.enter_seen = (k.stats.enter_seen ?? 0) + 1;
     }
