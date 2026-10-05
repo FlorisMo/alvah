@@ -87,12 +87,17 @@ const CARDS_MAX_S = 2 * CARD_S;
  * seen — two cards' time at most. Most walks wait for none.
  */
 async function walkCards(k: AdventureKit): Promise<void> {
-  if (!k.revealsWaiting()) return;
+  if (!k.revealsWaiting() || k.stats.walk_cards_stalled) return;
   k.lockFollow();
   k.world.stopRanger();
   const t0 = k.now;
+  const waiting = k.revealsWaiting();
   await k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S);
   k.stats.walk_cards_s = Math.round(((k.stats.walk_cards_s ?? 0) + k.now - t0) * 10) / 10;
+  // (a stop in which no card came at all — the browser's voice stuck 'speaking', so the
+  // reveal never finds its quiet moment — is never made again this play: he walks on, and
+  // the cards wait for the reveal's own quiet moment; the close saw 5 such stops, 56 s)
+  if (k.revealsWaiting() >= waiting) k.stats.walk_cards_stalled = 1;
 }
 
 /** This play's bank, drawn and laid under the briefing card. */
@@ -443,8 +448,8 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
     await k.wait(3.4);
     // (the line holds on for every new find's card still waiting — the blue frog he just
     // saw, a feather on the last stretch — two at most: never after the reward instead)
-    await k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S);
-  }, { holdS: Math.min(2, k.revealsWaiting()) * CARD_S });
+    if (!k.stats.walk_cards_stalled) await k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S);
+  }, { holdS: k.stats.walk_cards_stalled ? 0 : Math.min(2, k.revealsWaiting()) * CARD_S });
   /* 11 · the raaf: what a ven is */
   await k.fact(1);
 }
