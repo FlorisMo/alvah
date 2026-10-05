@@ -156,6 +156,33 @@ export const PATH_BANK_S = project(PATH, polar(140, pathR(140))).s;
 /** His way from the marker to the path: up past the hide's land side (golden's `via`). */
 export const APPROACH: readonly Spot[] = [{ x: 22.2, z: -14.0 }];
 
+/**
+ * The first look across the water (the kit's `look`): the lens glides at most `go` m
+ * toward this play's cove, at most `speed` m a second on average (its smoothstep peaks at
+ * 1.5× that), and aims through the calling frog, so the rings read where they call. (It
+ * used to glide out to 6 m short of the frog, 16-28 m, and swing back round him at that
+ * reach: up to ~15 m/s, the biggest camera move in the game — the guardian's playtest.)
+ * The kit glides toward the point it is given until that point is 6.2 m off and rises to
+ * 2.4 m over the ground: `at` is that point, put on the line from the lens to the frog.
+ */
+export const LOOK_GLIDE = { go: 8, speed: 3, ahead: 6.2, up: 2.4, rise: 0.3, aimUp: 0.45 } as const;
+export function lookAim(cam: { x: number; y: number; z: number }, frog: Spot & { y: number }, ground: (x: number, z: number) => number):
+  { at: Spot & { y: number }; seconds: number; lens: { x: number; y: number; z: number } } {
+  const flat = Math.hypot(frog.x - cam.x, frog.z - cam.z) || 1e-6;
+  const ux = (frog.x - cam.x) / flat, uz = (frog.z - cam.z) / flat;
+  const go = Math.min(LOOK_GLIDE.go, Math.max(0, flat - LOOK_GLIDE.ahead));
+  const lens = { x: cam.x + ux * go, z: cam.z + uz * go, y: 0 };
+  lens.y = Math.max(cam.y + LOOK_GLIDE.rise, ground(lens.x, lens.z) + LOOK_GLIDE.up);
+  const seconds = Math.max(2.2, go / LOOK_GLIDE.speed);
+  // near enough: the kit's own look at the frog (it glides to 6.2 m short of it, ≤ `go`)
+  if (flat - go <= LOOK_GLIDE.ahead + 1e-6) return { at: { ...frog }, seconds, lens };
+  // else the point 6.2 m out from where the lens stops, on its line to the frog's point
+  const fy = frog.y + LOOK_GLIDE.aimUp;
+  const k = LOOK_GLIDE.ahead / (flat - go);
+  const at = { x: lens.x + ux * LOOK_GLIDE.ahead, z: lens.z + uz * LOOK_GLIDE.ahead, y: lens.y + (fy - lens.y) * k - LOOK_GLIDE.aimUp };
+  return { at, seconds, lens };
+}
+
 /* ------------------------------------------------------------ the coves ---- */
 
 export type BayId = 'A' | 'B' | 'C';

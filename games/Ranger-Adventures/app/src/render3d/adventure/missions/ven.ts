@@ -51,8 +51,8 @@ import { Seen, boxOf } from './ven.finds';
 import type { MoodId } from '../../Moods';
 import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
 import {
-  ADDER_NEAR, ADDER_WARN, APPROACH, BAYS, BAY_IDS, CARPET_A, CARPET_SEEN, CARPET_WET, CHORUS_KEYS, FROG_H, FROG_LEN, GO_AWAY, HINT_RING, MISSION, VARIANT_KEY,
-  VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderHoldHeading, adderView, between, carpetAt, frogOf, decoySlots, hintRingOf, lastVenVariants, pointAt,
+  ADDER_NEAR, ADDER_WARN, BAYS, BAY_IDS, CARPET_A, CARPET_SEEN, CARPET_WET, CHORUS_KEYS, FROG_H, FROG_LEN, GO_AWAY, HINT_RING, MISSION, VARIANT_KEY,
+  VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderHoldHeading, adderView, between, carpetAt, frogOf, decoySlots, hintRingOf, lastVenVariants, lookAim, pointAt,
   padGoal, project, route, singOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type VenLaid, type WayStep,
 } from './ven.places';
 
@@ -210,9 +210,10 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
     if ((looked === 0 && t > 1.2) || (looked === 1 && t > 4.4)) { looked += 1; chorus(Math.max(2, calls)); }
   });
   try {
-    // (across the water to the cove: 16-28 m of glide, at most ~7 m a second)
-    const glide = Math.max(2.2, Math.min(4.2, (dist(k.ranger(), lookAt) - 6.2) / 7));
-    await k.look(lookAt, c.kijk, 2.6, { face: headingTo(k.ranger(), APPROACH[0]), seconds: glide });
+    // (a short, slow glide toward the cove, aimed through the calling frog, and straight back
+    // behind him: he turns himself when he walks — ven.places lookAim)
+    const aim = lookAim(k.world.camera.position, lookAt, (x, z) => k.ctx.groundY(x, z));
+    await k.look(aim.at, c.kijk, 2.6, { seconds: aim.seconds });
   } finally { offLook(); }
 
   /* 2-5 · he follows the chorus along the bank; the moments on the way */

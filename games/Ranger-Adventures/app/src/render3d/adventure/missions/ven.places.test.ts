@@ -34,7 +34,7 @@ import {
   EDGE_H, HINT_RING,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
   above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet, underBoy,
-  adderHeather, adderHoldHeading, headingAt, hintRingOf, lastVenVariants, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
+  LOOK_GLIDE, adderHeather, adderHoldHeading, headingAt, hintRingOf, lastVenVariants, lookAim, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
   type BayId, type FrogSpot, type Side, type ViewSpec,
 } from './ven.places.ts';
 import type { Spot } from '../types.ts';
@@ -650,5 +650,32 @@ test('the look-alikes: a trial\'s set laid on the cove\'s own slots and its empt
       for (const q of a.filter((d) => d.k === 'bush')) assert.ok(clodSpots(b).some((s) => dist(s, q) < 1e-6), 'a clod lies on a clod spot');
     }
     assert.ok(inNooks > 0, `cove ${id}: an empty nook holds a clod now and then`);
+  }
+});
+
+test('the first look across the water is short and slow: the lens glides at most 8 m toward the cove, at most 3 m/s on average, and aims through the calling frog', () => {
+  // (the guardian's playtest: the old look flew 16-28 m out over the water and swung back
+  // round him at that reach, peaking near 15 m/s; the look now goes straight back)
+  for (const id of BAY_IDS) {
+    const frog = { ...BAYS[id].chorus, y: WATER_LEVEL };
+    for (let i = 0; i < 12; i++) {
+      // the follow camera ~4.6 m behind him at the marker, whichever way he came in
+      const a = (i / 12) * Math.PI * 2;
+      const cam = { x: MARKER.x + Math.sin(a) * 4.6, z: MARKER.z + Math.cos(a) * 4.6, y: groundY(MARKER.x, MARKER.z) + 2.6 };
+      const { at, seconds, lens } = lookAim(cam, frog, groundY);
+      const travel = Math.hypot(lens.x - cam.x, lens.z - cam.z);
+      assert.ok(travel <= LOOK_GLIDE.go + 1e-6, `${id}/${i}: the lens glides ${travel.toFixed(1)} m`);
+      assert.ok(travel / seconds <= LOOK_GLIDE.speed + 1e-6, `${id}/${i}: ${(travel / seconds).toFixed(1)} m/s on average`);
+      // the kit glides toward `at` until it is 6.2 m off: the lens stops where lookAim says
+      const flatAt = Math.hypot(at.x - cam.x, at.z - cam.z);
+      assert.ok(Math.abs(Math.max(0, flatAt - LOOK_GLIDE.ahead) - travel) < 1e-6, `${id}/${i}: the kit's glide is the planned one`);
+      // aimed through the frog: the frog's point lies on the ray from the lens through the aim
+      const t = { x: at.x - lens.x, y: at.y + LOOK_GLIDE.aimUp - lens.y, z: at.z - lens.z };
+      const f = { x: frog.x - lens.x, y: frog.y + LOOK_GLIDE.aimUp - lens.y, z: frog.z - lens.z };
+      const cos = (t.x * f.x + t.y * f.y + t.z * f.z) / (Math.hypot(t.x, t.y, t.z) * Math.hypot(f.x, f.y, f.z));
+      assert.ok(cos > Math.cos((1 * Math.PI) / 180), `${id}/${i}: the aim passes ${(Math.acos(Math.min(1, cos)) * 180 / Math.PI).toFixed(2)}° from the frog`);
+      // the frog stays out on the water, well beyond the lens (a look across, not a fly-over)
+      assert.ok(Math.hypot(frog.x - lens.x, frog.z - lens.z) >= LOOK_GLIDE.ahead - 1e-6, `${id}/${i}: the frog is ahead of the lens`);
+    }
   }
 });
