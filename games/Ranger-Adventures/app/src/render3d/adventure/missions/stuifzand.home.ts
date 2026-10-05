@@ -1010,6 +1010,8 @@ export class Nightjar extends Actor {
   private shiftTo = 0;
   private flapT = 0;
   private clapping: { t: number; claps: number; done: () => void } | null = null;
+  /** 0 on the sand, 1 in the air (its body levels out) */
+  private airK = 0;
   private readonly wingGeos: THREE.BufferGeometry[] = [];
   private readonly wingMat: THREE.MeshStandardMaterial;
   /** called on each wing clap (the script plays its sound) */
@@ -1132,8 +1134,12 @@ export class Nightjar extends Actor {
     if (this.flight) this.stepFlight(dt);
     else if (this.flop) this.stepFlop(dt, reduced);
     super.update(dt, t);
-    // (its contact shadow stays on the sand below it while it flies: it is in the air)
+    // (its contact shadow stays on the sand below it while it flies: it is in the air; and in
+    // the air its body levels out, nose a little down, as a flying bird's does)
     this.shadow.position.y = 0.02 - this.lift;
+    const inAir = this.lift > 0.05 || !!this.clapping;
+    this.airK += ((inAir ? 1 : 0) - this.airK) * Math.min(1, reduced ? 1 : dt * 3);
+    if (!this.flop) this.posed.rotation.x = this.airK * 0.32;
     // pressed flat: lower and a touch wider; shifted off the eggs: up and back a little
     this.press += (this.pressTo - this.press) * Math.min(1, reduced ? 1 : dt * 4);
     this.shiftK += (this.shiftTo - this.shiftK) * Math.min(1, reduced ? 1 : dt * 3);

@@ -345,12 +345,26 @@ export const DISPLAY_UP = 1.1;
 export const DISPLAY_TURN = Math.PI / 4;
 /** Which side of the scrape her spot lies on (+1: the frame's +u). */
 const herSide = (n: NestId, spot: 0 | 1): number => (toLocal(NESTS[n].frame, NESTS[n].spots[spot]).u < 0 ? -1 : 1);
-export function displayOf(n: NestId, spot: 0 | 1): Spot {
-  return atLocal(NESTS[n].frame, -herSide(n, spot) * DISPLAY.u, DISPLAY.v);
+/** The side he claps on: away from her, unless the boulder (or another solid) would stand
+ *  right behind him in the picture there — then on hers, a little further beyond her. */
+function displaySide(n: NestId, spot: 0 | 1): { sg: number; u: number; v: number } {
+  const away = -herSide(n, spot);
+  const behind = (sg: number): number => {
+    const p = atLocal(NESTS[n].frame, sg * DISPLAY.u, DISPLAY.v + 3.2);
+    return Math.min(...SOLIDS.map((q) => dist(p, q) - q.r));
+  };
+  return behind(away) >= 1.5 || behind(away) >= behind(-away) ? { sg: away, u: DISPLAY.u, v: DISPLAY.v } : { sg: -away, u: DISPLAY.u + DISPLAY_BEYOND, v: DISPLAY.v + DISPLAY_BEYOND };
 }
-/** The way he faces while he claps: back toward the lens, turned toward her side. */
+/** How much further out and beyond her he claps when he claps on her side (m). */
+const DISPLAY_BEYOND = 0.2;
+export function displayOf(n: NestId, spot: 0 | 1): Spot {
+  const d = displaySide(n, spot);
+  return atLocal(NESTS[n].frame, d.sg * d.u, d.v);
+}
+/** The way he faces while he claps: back toward the lens, turned three quarters away from
+ *  the side he claps on (toward the picture's middle). */
 export function displayYaw(n: NestId, spot: 0 | 1): number {
-  return NESTS[n].frame.heading + Math.PI + herSide(n, spot) * DISPLAY_TURN;
+  return NESTS[n].frame.heading + Math.PI - displaySide(n, spot).sg * DISPLAY_TURN;
 }
 /** The dusk picture the rare is seen in, and the reunion after it (one calm move from the
  *  close look, then held): a little further back and up over the scrape from the path's side —

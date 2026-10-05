@@ -365,20 +365,26 @@ test('the rare: in the dusk picture the male claps big and in the air, his shado
       const shadow = px(cam, d.x, gd, d.z);
       const her = px(cam, s.x, groundY(s.x, s.z) + 0.08, s.z);
       const toHer = Math.hypot(her.x - him.x, her.y - him.y);
+      // what stands behind him in the picture: the sand, never the boulder or a juniper (the
+      // ground where the line from the lens through him comes down)
+      const c = cam.position, k = (c.y - gd) / (c.y - d.y);
+      const bg = { x: c.x + (d.x - c.x) * k, z: c.z + (d.z - c.z) * k };
+      const bgClear = Math.min(...SOLIDS.map((q) => dist(bg, q) - q.r), dist(bg, HOL_JUNIPER) - HOL_JUNIPER.r);
       for (const side of PASSES) {
         const where = `nest ${n}${side} spot ${j}`;
         assert.ok(span >= 150, `${where}: his open wings show ${span.toFixed(0)} px tip to tip (≥ 150)`);
         assert.ok(Math.max(box.x1 - box.x0, box.y1 - box.y0) >= 120, `${where}: his clap's V shows ${Math.max(box.x1 - box.x0, box.y1 - box.y0).toFixed(0)} px (≥ 120)`);
         assert.ok(him.front && Math.min(l1.x, l2.x, box.x0) > 60 && Math.max(l1.x, l2.x, box.x1) < W - 60 && box.y0 > (view.insetTop ?? 96) + 20 && him.y < H / 2,
           `${where}: he claps in the picture's free band, in its upper half (${him.x.toFixed(0)}, ${him.y.toFixed(0)})`);
+        assert.ok(bgClear >= 0.5, `${where}: open sand behind him in the picture, no solid (${bgClear.toFixed(2)} m from one at ${at(bg)})`);
         assert.ok(shadow.front && shadow.y > box.y1 + 120 && shadow.y < H - 40, `${where}: his shadow on the sand well below him (${shadow.y.toFixed(0)} px; he ${him.y.toFixed(0)})`);
         assert.ok(her.front && her.x > 120 && her.x < W - 120 && her.y > H / 2 && her.y < H - 50 && toHer > 300, `${where}: she sits on her nest low in the picture, apart from him (${her.x.toFixed(0)}, ${her.y.toFixed(0)})`);
         // (the boy, a step back beside the way in: out of this picture too)
         const body = bodyOut(cam, endSpot(n, side));
         assert.ok(body.out >= 30, `${where}: his whole body is out of the dusk picture (nearest ${body.out.toFixed(0)} px beyond its edge)`);
       }
-      // he rises from his branch to there: a short flight up, clear of her
-      assert.ok(dist(d0, s) >= 0.8 && dist(d0, N.roost) <= 2.6, `nest ${n} spot ${j}: he claps beside her (${dist(d0, s).toFixed(2)} m), near his branch (${dist(d0, N.roost).toFixed(2)} m)`);
+      // he rises from his branch to there: a short flight up, never straight over her
+      assert.ok(dist(d0, s) >= 0.6 && dist(d0, N.roost) <= 2.6, `nest ${n} spot ${j}: he claps beside her (${dist(d0, s).toFixed(2)} m), near his branch (${dist(d0, N.roost).toFixed(2)} m)`);
     });
     assert.ok(DISPLAY_UP >= 1.0, 'he claps well up in the air');
   }

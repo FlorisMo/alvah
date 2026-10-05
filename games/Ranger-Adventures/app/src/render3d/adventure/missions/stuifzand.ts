@@ -556,7 +556,10 @@ async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nig
         const span = he.spanPx(k.world.camera, k.ctx.canvas.clientWidth || 1280, k.ctx.canvas.clientHeight || 800);
         if (span > (k.stats.display_px ?? 0)) k.stats.display_px = Math.round(span);
       });
-      await k.guard(he.display(displayOf(laid.nest, laid.spot), DISPLAY_UP, displayYaw(laid.nest, laid.spot)));
+      // (the buntgras under him bends in the wind of his wings: his shadow on the sand shows)
+      const air = displayOf(laid.nest, laid.spot);
+      void k.wait(0.8).then(() => home.cover.partAt(air.x, air.z, 0.8, 0.55, 6)).catch(() => {});
+      await k.guard(he.display(air, DISPLAY_UP, displayYaw(laid.nest, laid.spot)));
       off();
       k.stats.display_seen = Math.round(seenClap * 10) / 10;
       if (seenClap > 0.6) k.discover('stuifzand.vlucht', { first: true });
