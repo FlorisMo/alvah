@@ -53,7 +53,7 @@ import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
 import { Nightjar, Lifted, ZandHome, zandBody } from './stuifzand.home';
 import {
   ARRIVE, BURROW, GUARD_STAND, GUARD_VIEW, GUESTS, HOL_JUNIPER, LEAVE, MISSION, NESTS, OFF_PATH_S, PRESSED_H, SETTLE, STOP, VARIANT_KEY,
-  DISPLAY_UP, ZAND_HOME, ZWALUW_LEN, approachOf, closeViewOf, displayOf, dist, endSpot, endViewOf, femaleAt, flushOf, gapsOf, gapsTo, GAPS_FROM, headingAt, headingTo, larkFrom, lastVariants, maleAt,
+  DISPLAY_UP, ZAND_HOME, ZWALUW_LEN, approachOf, closeViewOf, displayOf, displayYaw, dist, endSpot, endViewOf, femaleAt, flushOf, gapsOf, gapsTo, GAPS_FROM, headingAt, headingTo, larkFrom, lastVariants, maleAt,
   pointAt, project, setNestNow, slotsOf, zandClearings, zandLayout,
   type Edge, type Pass, type ViewSpec, type ZandLaid,
 } from './stuifzand.places';
@@ -218,7 +218,7 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
 
   /* 6-7 · he guards the place by the juniper as the evening falls (wisselen) */
   await k.walk({ name: 'struik', to: GUARD_STAND, r: GUARD_STAND.r, line: c.naarStruik, doel: c.chipStruik, glyph: 'boot', quiet: { line: c.rustig } });
-  await guardLook(k, home);
+  await guardLook(k);
   await guard(k, home, A, laid);
 
   /* 8 · back to the scrape at dusk */
@@ -289,16 +289,16 @@ async function flush(k: AdventureKit, laid: ZandLaid, he: Nightjar): Promise<voi
 
 /* ---------------------------------------------------------- the guard ---- */
 
-/** At the juniper, before the first visitor: one calm look at the guard place — its two places
- *  named, the burrow under the juniper in his picture (a find: its card shows now, while he
- *  stands there and nothing comes yet, never later over the eggs). */
-async function guardLook(k: AdventureKit, home: ZandHome): Promise<void> {
+/** At the juniper, before the first visitor: one calm look at the guard place — the burrow
+ *  under the juniper in his picture (a find: its card shows now, while he stands there and
+ *  nothing comes yet, never later over the eggs). */
+async function guardLook(k: AdventureKit): Promise<void> {
   k.beat = 'look:struik';
   const unhint = k.hint(() => null); // (a perfect player looks)
   try {
     await k.walkRanger(GUARD_STAND.x, GUARD_STAND.z, 0.04);
     await k.frame(GUARD_VIEW, { face: GUARD_STAND.heading });
-    home.showTags(true);
+    // (the places' names come with the first visitor: no card lies over them)
     k.say(k.copy.wacht);
     k.discover('stuifzand.konijnenhol', { first: true });
     const t0 = k.now;
@@ -554,7 +554,7 @@ async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nig
         const span = he.spanPx(k.world.camera, k.ctx.canvas.clientWidth || 1280, k.ctx.canvas.clientHeight || 800);
         if (span > (k.stats.display_px ?? 0)) k.stats.display_px = Math.round(span);
       });
-      await k.guard(he.display(displayOf(laid.nest), DISPLAY_UP, NESTS[laid.nest].frame.heading + Math.PI));
+      await k.guard(he.display(displayOf(laid.nest, laid.spot), DISPLAY_UP, displayYaw(laid.nest, laid.spot)));
       off();
       k.stats.display_seen = Math.round(seenClap * 10) / 10;
       if (seenClap > 0.6) k.discover('stuifzand.vlucht', { first: true });

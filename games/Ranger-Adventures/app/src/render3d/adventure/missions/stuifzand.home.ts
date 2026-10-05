@@ -977,6 +977,9 @@ function wingGeometry(male: boolean): THREE.BufferGeometry {
   return geo;
 }
 
+/** One wing clap of the male's display (s): his wings up into a V and open again. */
+const CLAP_S = 0.75;
+
 /** How a nightjar sits: dead still, a soft breath. */
 const NIGHTJAR_SITS = calmGate({ gait: 'breathe', bobAmp: 0, swayAmp: 0, rotAmp: 0, breathAmp: 0.012, hz: 0.3 });
 
@@ -1144,11 +1147,12 @@ export class Nightjar extends Actor {
       const C = this.clapping;
       this.wings.visible = true;
       C.t += dt;
-      const ph = (C.t % 0.55) / 0.55;
-      const up = ph < 0.35 ? ph / 0.35 : Math.max(0, 1 - (ph - 0.35) / 0.65);
-      this.setWings(-0.2 + up * 1.65, 0);
-      if (C.claps < 3 && C.t >= C.claps * 0.55 + 0.2) { C.claps += 1; this.onClap?.(); }
-      if (C.t >= 3 * 0.55 + 0.2) { this.clapping = null; C.done(); }
+      // (a slow beat: up into a V over his back — the clap — and down open again)
+      const ph = (C.t % CLAP_S) / CLAP_S;
+      const up = ph < 0.4 ? ph / 0.4 : Math.max(0, 1 - (ph - 0.4) / 0.6);
+      this.setWings(-0.15 + up * 1.45, 0);
+      if (C.claps < 3 && C.t >= C.claps * CLAP_S + CLAP_S * 0.4) { C.claps += 1; this.onClap?.(); }
+      if (C.t >= 3 * CLAP_S + 0.25) { this.clapping = null; C.done(); }
     } else if (f) {
       this.wings.visible = true;
       this.flapT += dt * (f.low ? 11 : 6.5);

@@ -336,25 +336,33 @@ export function closeViewOf(n: NestId, spot: 0 | 1): ViewSpec {
     halfW: 0.55, halfD: 0.42, tall: 0.35, pitchDeg: 38, insetTop: 112, insetBottom: 24, near: 1.4,
   };
 }
-/** Where the male claps his wings at dusk (the rare): he rises from his branch to a point
- *  over the sand just beyond her (`DISPLAY`: m along the scrape's frame), `DISPLAY_UP` m up,
- *  facing back the way the lens looks (his wings open across its picture). */
-export const DISPLAY = { u: 0, v: 1.0 } as const;
-export const DISPLAY_UP = 1.6;
-export function displayOf(n: NestId): Spot {
-  return atLocal(NESTS[n].frame, DISPLAY.u, DISPLAY.v);
+/** Where the male claps his wings at dusk (the rare): he rises from his branch to a point over
+ *  the sand just beside her, on the scrape's other side from her spot (`DISPLAY`: m in the
+ *  scrape's frame, `u` away from her), `DISPLAY_UP` m up — and hangs there turned three
+ *  quarters to the lens (`DISPLAY_TURN` off facing it), so his open wings show from above. */
+export const DISPLAY = { u: 0.6, v: 0.2 } as const;
+export const DISPLAY_UP = 1.1;
+export const DISPLAY_TURN = Math.PI / 4;
+/** Which side of the scrape her spot lies on (+1: the frame's +u). */
+const herSide = (n: NestId, spot: 0 | 1): number => (toLocal(NESTS[n].frame, NESTS[n].spots[spot]).u < 0 ? -1 : 1);
+export function displayOf(n: NestId, spot: 0 | 1): Spot {
+  return atLocal(NESTS[n].frame, -herSide(n, spot) * DISPLAY.u, DISPLAY.v);
+}
+/** The way he faces while he claps: back toward the lens, turned toward her side. */
+export function displayYaw(n: NestId, spot: 0 | 1): number {
+  return NESTS[n].frame.heading + Math.PI + herSide(n, spot) * DISPLAY_TURN;
 }
 /** The dusk picture the rare is seen in, and the reunion after it (one calm move from the
- *  close look, then held): low over the sand from the path's side — her on her nest at the
- *  bottom, his branch beyond her, and the air where he claps at the height of the far trees,
- *  near enough that he shows big with his wings open, his shadow on the sand below him. */
+ *  close look, then held): a little further back and up over the scrape from the path's side —
+ *  her on her nest low on one side, the air where he claps high on the other, near enough that
+ *  he shows big with his wings open, his shadow on the sand below him. */
 export function endViewOf(n: NestId, spot: 0 | 1): ViewSpec {
-  const N = NESTS[n], s = N.spots[spot];
-  const d = displayOf(n);
+  const s = NESTS[n].spots[spot];
+  const d = displayOf(n, spot);
   return {
-    at: { x: (s.x + d.x) / 2, z: (s.z + d.z) / 2 }, heading: N.frame.heading, halfW: 0.45, halfD: 0.5, tall: 0.3, pitchDeg: 10,
-    insetTop: 130, insetBottom: 30, near: 1.8,
-    include: [{ x: d.x, z: d.z, h: DISPLAY_UP + 0.3, r: 0.45 }, { x: s.x, z: s.z, h: 0.2 }],
+    at: { x: (s.x + d.x) / 2, z: (s.z + d.z) / 2 }, heading: NESTS[n].frame.heading, halfW: 0.35, halfD: 0.35, tall: 0.2, pitchDeg: 28,
+    insetTop: 130, insetBottom: 30, near: 1.6,
+    include: [{ x: d.x, z: d.z, h: DISPLAY_UP + 0.4, r: 0.45 }, { x: s.x, z: s.z, h: 0.2, r: 0.2 }],
   };
 }
 

@@ -34,7 +34,7 @@ import { ecoductClearings } from './ecoduct.places.ts';
 import {
   ANTHILL, ARRIVE, BOAR_LOOP, BURROW, GUARD_STAND, GUARD_VIEW, GUESTS, HOL_JUNIPER, ZAND_RESIDENTS, headingTo, LEAVE, MARKER, NESTS, NEST_IDS, OPEN, PASSES, PRESSED_H, ROE_LOOP,
   SETTLE, SOLIDS, STOP, TAG_AT, ZAND_HOME, ZAND_PLACES, ZONES, ZWALUW_LEN, ON_PATH, OFF_PATH_S, PAD,
-  COVER_SEED, DISPLAY_UP, FLUSH_BEFORE, GAPS_FROM, allClumps, approachOf, closeViewOf, displayOf, endSpot, endViewOf, headingAt, larkFrom, pointAt, clearOfSolids, flushOf, gapsOf, gapsTo, lastVariants, lineDist, offPath, readVariant, routeOf, rutAlpha, setNestNow, slotsOf, zandClearings, zandLayout,
+  COVER_SEED, DISPLAY_UP, FLUSH_BEFORE, GAPS_FROM, allClumps, approachOf, closeViewOf, displayOf, displayYaw, endSpot, endViewOf, headingAt, larkFrom, pointAt, clearOfSolids, flushOf, gapsOf, gapsTo, lastVariants, lineDist, offPath, readVariant, routeOf, rutAlpha, setNestNow, slotsOf, zandClearings, zandLayout,
   type ViewSpec,
 } from './stuifzand.places.ts';
 import type { Spot } from '../types.ts';
@@ -338,38 +338,49 @@ test('back at the scrape: the close look shows her (and her eggs) big, his whole
   }
 });
 
-test('the rare: in the dusk picture the male claps big and in the air, over her on her nest, his branch beyond her', () => {
+/** Where a wing tip of the displaying male is (`a`: the wings' angle up from level), facing `yaw`. */
+function tip(d: { x: number; y: number; z: number }, yaw: number, a: number, sign: 1 | -1): { x: number; y: number; z: number } {
+  const lat = { x: -Math.cos(yaw), z: Math.sin(yaw) };
+  return { x: d.x + lat.x * sign * 0.36 * Math.cos(a), y: d.y + 0.36 * Math.sin(a), z: d.z + lat.z * sign * 0.36 * Math.cos(a) };
+}
+
+test('the rare: in the dusk picture the male claps big and in the air, his shadow below, over her on her nest', () => {
   for (const n of NEST_IDS) {
     const N = NESTS[n];
-    const d = displayOf(n);
-    const gd = groundY(d.x, d.z);
-    // he faces back the way the lens looks: his open wings lie across the picture
-    const across = { x: -Math.cos(N.frame.heading), z: Math.sin(N.frame.heading) };
     N.spots.forEach((s, j) => {
-      const view = endViewOf(n, j as 0 | 1);
+      const spot = j as 0 | 1;
+      const d0 = displayOf(n, spot);
+      const gd = groundY(d0.x, d0.z);
+      const d = { x: d0.x, y: gd + DISPLAY_UP, z: d0.z };
+      const yaw = displayYaw(n, spot);
+      const view = endViewOf(n, spot);
       const cam = lensOf(view);
-      const tipA = px(cam, d.x + across.x * 0.36, gd + DISPLAY_UP, d.z + across.z * 0.36);
-      const tipB = px(cam, d.x - across.x * 0.36, gd + DISPLAY_UP, d.z - across.z * 0.36);
-      const span = Math.hypot(tipA.x - tipB.x, tipA.y - tipB.y);
-      const him = px(cam, d.x, gd + DISPLAY_UP, d.z);
+      // his open wings (nearly level, mid-beat) tip to tip, and the V of a clap: both big
+      const [l1, l2] = [tip(d, yaw, 0.15, 1), tip(d, yaw, 0.15, -1)].map((q) => px(cam, q.x, q.y, q.z));
+      const span = Math.hypot(l1.x - l2.x, l1.y - l2.y);
+      const vee = [tip(d, yaw, 1.0, 1), tip(d, yaw, 1.0, -1), { x: d.x + Math.sin(yaw) * 0.16, y: d.y, z: d.z + Math.cos(yaw) * 0.16 }, { x: d.x - Math.sin(yaw) * 0.16, y: d.y - 0.08, z: d.z - Math.cos(yaw) * 0.16 }]
+        .map((q) => px(cam, q.x, q.y, q.z));
+      const box = { x0: Math.min(...vee.map((q) => q.x)), x1: Math.max(...vee.map((q) => q.x)), y0: Math.min(...vee.map((q) => q.y)), y1: Math.max(...vee.map((q) => q.y)) };
+      const him = px(cam, d.x, d.y, d.z);
       const shadow = px(cam, d.x, gd, d.z);
-      const g = groundY(s.x, s.z);
-      const her = px(cam, s.x, g + 0.08, s.z);
-      const roost = px(cam, N.roost.x, groundY(N.roost.x, N.roost.z) + 0.1, N.roost.z);
+      const her = px(cam, s.x, groundY(s.x, s.z) + 0.08, s.z);
+      const toHer = Math.hypot(her.x - him.x, her.y - him.y);
       for (const side of PASSES) {
         const where = `nest ${n}${side} spot ${j}`;
-        assert.ok(span >= 150, `${where}: his open wings show ${span.toFixed(0)} px across (≥ 150)`);
-        assert.ok(him.front && Math.min(tipA.x, tipB.x) > 60 && Math.max(tipA.x, tipB.x) < W - 60 && him.y > (view.insetTop ?? 96) + 60 && him.y < H / 2,
+        assert.ok(span >= 150, `${where}: his open wings show ${span.toFixed(0)} px tip to tip (≥ 150)`);
+        assert.ok(Math.max(box.x1 - box.x0, box.y1 - box.y0) >= 120, `${where}: his clap's V shows ${Math.max(box.x1 - box.x0, box.y1 - box.y0).toFixed(0)} px (≥ 120)`);
+        assert.ok(him.front && Math.min(l1.x, l2.x, box.x0) > 60 && Math.max(l1.x, l2.x, box.x1) < W - 60 && box.y0 > (view.insetTop ?? 96) + 20 && him.y < H / 2,
           `${where}: he claps in the picture's free band, in its upper half (${him.x.toFixed(0)}, ${him.y.toFixed(0)})`);
-        assert.ok(shadow.front && shadow.y > him.y + 250 && shadow.y < H - 40, `${where}: his shadow on the sand far below him (${shadow.y.toFixed(0)} px; he ${him.y.toFixed(0)})`);
-        assert.ok(her.front && her.x > 120 && her.x < W - 120 && her.y > shadow.y && her.y < H - 50, `${where}: she sits on her nest at the picture's bottom (${her.x.toFixed(0)}, ${her.y.toFixed(0)})`);
-        assert.ok(roost.front && roost.x > 120 && roost.x < W - 120 && roost.y > him.y + 150 && roost.y < her.y, `${where}: his branch between them, where he rises from (${roost.x.toFixed(0)}, ${roost.y.toFixed(0)})`);
-        // (and the boy, a step back beside the way in: out of this picture too)
+        assert.ok(shadow.front && shadow.y > box.y1 + 120 && shadow.y < H - 40, `${where}: his shadow on the sand well below him (${shadow.y.toFixed(0)} px; he ${him.y.toFixed(0)})`);
+        assert.ok(her.front && her.x > 120 && her.x < W - 120 && her.y > H / 2 && her.y < H - 50 && toHer > 300, `${where}: she sits on her nest low in the picture, apart from him (${her.x.toFixed(0)}, ${her.y.toFixed(0)})`);
+        // (the boy, a step back beside the way in: out of this picture too)
         const body = bodyOut(cam, endSpot(n, side));
         assert.ok(body.out >= 30, `${where}: his whole body is out of the dusk picture (nearest ${body.out.toFixed(0)} px beyond its edge)`);
       }
+      // he rises from his branch to there: a short flight up, clear of her
+      assert.ok(dist(d0, s) >= 0.8 && dist(d0, N.roost) <= 2.6, `nest ${n} spot ${j}: he claps beside her (${dist(d0, s).toFixed(2)} m), near his branch (${dist(d0, N.roost).toFixed(2)} m)`);
     });
-    assert.ok(DISPLAY_UP >= 1.2, 'he claps well up in the air');
+    assert.ok(DISPLAY_UP >= 1.0, 'he claps well up in the air');
   }
 });
 
