@@ -143,6 +143,14 @@ export function haltOf(side: Side): Spot {
   const t = TRAILS[side], a = t[2], b = t[3];
   return { x: a.x + (b.x - a.x) * 0.6, z: a.z + (b.z - a.z) * 0.6 };
 }
+/** Where he faces when a group comes to its halt (`me`: where he stands): a little past them,
+ *  away from the corner they come round — in the lens behind him they stand beside his head,
+ *  never hidden behind it, and their way down is in the picture. */
+export function flipFacing(me: Spot, side: Side): number {
+  const toHalt = headingTo(me, haltOf(side)), toCorner = headingTo(me, TRAILS[side][1]);
+  const s = Math.sign(Math.sin(toCorner - toHalt)) || 1;
+  return toHalt - s * 0.27;
+}
 /** The way back from a wait (a unit vector, away from the bed): a group stands in file
  *  along it, and a play may wait further back along it (`fileBack`). */
 export function backOf(side: Side): Spot {

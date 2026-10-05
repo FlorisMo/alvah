@@ -50,7 +50,7 @@ import { SIZE } from '../../AnimalScale';
 import { EcoductHome } from './ecoduct.home';
 import {
   AFTER_HINDE, AFTER_KALF, ASIDE, BACK_MAX, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, MISSION, STAND, TRAILS, VARIANT_KEY,
-  asideView, backCorner, backOff, backWay, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, fileBack, haltOf, lastVariants, leaveWay, mouthOf, onBed, roepSpot, waitOf,
+  asideView, backCorner, backOff, backWay, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, fileBack, flipFacing, haltOf, lastVariants, leaveWay, mouthOf, onBed, roepSpot, waitOf,
   type Crossing, type EcoductLaid, type Kind, type Side,
 } from './ecoduct.places';
 
@@ -78,7 +78,7 @@ const LOOK_AIM_M = 11;
  *  about `hop` s (`min`-`max` m/s); the patch glows from the moment it steps onto it (`on` m
  *  from its middle) and its nose goes to the sand for `dwell` s. About 1.2-1.9 s a patch (the
  *  2D floor lights one every 1.15 s; the squirrel's visits ≤ 2 s): `visit_s` measures it. */
-const VISIT = { hop: 0.7, min: 2.5, max: 3.2, dwell: 0.4, on: 0.5 } as const;
+const VISIT = { hop: 0.7, min: 2.5, max: 3.5, dwell: 0.4, on: 0.5 } as const;
 /** How big (px) an animal shows in his picture, steady for a second, before it is his. */
 const SEEN_PX = 40;
 
@@ -731,8 +731,8 @@ async function opzijAt(k: AdventureKit, rust: ChoiceRun, e: Encounter, g: Group)
   // and down toward the bed, and stop a few steps above it, looking at him: he is in their
   // way (they are already walking in as the lens turns with him)
   const coming = g.walk([...trail.slice(1, 3), halt]);
-  const r0 = k.ranger();
-  k.world.faceRanger(headingTo(r0, halt));
+  // (he faces a little past them: beside his head in the lens behind him, never behind it)
+  k.world.faceRanger(flipFacing(k.ranger(), g.from));
   await k.behind();
   await coming;
   g.stare(k.ranger(), 99);

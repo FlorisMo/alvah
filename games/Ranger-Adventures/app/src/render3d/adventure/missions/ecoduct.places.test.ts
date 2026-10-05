@@ -34,7 +34,7 @@ import { venClearings } from './ven.places.ts';
 import {
   ASIDE, BACK_MAX, BED, BED_HALF, BED_STAND, BED_VIEW, BEFORE_HINDE, BEFORE_KALF, ECODUCT_HOME, ECODUCT_PLACES, ECODUCT_RESIDENTS, EXITS, FERN, FOX_LOOP, GROUPS,
   GROVE, HIDEAWAY, HOME, MARKER, PATCH_SIZE, SCREEN, SIDES, STAND, TRAILS, AFTER_HINDE, AFTER_KALF,
-  asideView, backCorner, backOff, backWay, bedSpots, crossingLine, crossingsFor, ductGap, ecoductClearings, ecoductLayout, fileBack, haltOf, lastVariants, leaveWay, lineDist, mouthOf, onBed, readVariant, roepSpot,
+  asideView, backCorner, backOff, backWay, bedSpots, crossingLine, crossingsFor, ductGap, ecoductClearings, ecoductLayout, fileBack, flipFacing, haltOf, lastVariants, leaveWay, lineDist, mouthOf, onBed, readVariant, roepSpot,
   screenObstacle, type ViewSpec,
 } from './ecoduct.places.ts';
 import type { Spot } from '../types.ts';
@@ -314,8 +314,16 @@ test('the flip: a group stops a few steps above the bed, close enough to see, in
     const h = haltOf(s);
     assert.ok(!onBed(h, 0.3), `${s}: the halt ${at(h)} is off the sand`);
     assert.ok(dist(h, BED_STAND) >= 4.5 && dist(h, BED_STAND) <= 6.5, `${s}: ${dist(h, BED_STAND).toFixed(2)} m from him`);
-    const cam = behindLens(BED_STAND, Math.atan2(h.x - BED_STAND.x, h.z - BED_STAND.z));
+    const cam = behindLens(BED_STAND, flipFacing(BED_STAND, s));
     assert.ok(!outOf(cam, h, 1.2, 1.8, -0.2), `${s}: the group at its halt is well in the picture`);
+    // beside his head, never behind it: the group's middle stands clear of his head and
+    // shoulders in the picture
+    const head = px(cam, BED_STAND.x, groundY(BED_STAND.x, BED_STAND.z) + RANGER_STAND_HEIGHT, BED_STAND.z);
+    const them = px(cam, h.x, groundY(h.x, h.z) + 0.7, h.z);
+    assert.ok(Math.abs(them.x - head.x) >= 90, `${s}: the group stands ${Math.abs(them.x - head.x).toFixed(0)} px beside his head`);
+    // and the corner they come round is in the picture too
+    const c = px(cam, TRAILS[s][1].x, groundY(TRAILS[s][1].x, TRAILS[s][1].z) + 0.7, TRAILS[s][1].z);
+    assert.ok(c.front && c.x > 0 && c.x < W, `${s}: their way down from the corner is in the picture (${c.x.toFixed(0)})`);
     assert.ok(lineDist(BED_STAND, [h, mouthOf(s), { x: BED.x, z: BED.z }]) < 1.2, `${s}: he stands on their way`);
   }
 });
