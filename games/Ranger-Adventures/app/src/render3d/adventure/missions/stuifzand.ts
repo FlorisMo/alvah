@@ -543,7 +543,7 @@ async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nig
     await k.until(() => he.grounded, 3);
     he.idle();
     // now and then the male rises from his branch and claps his wings over the sand: the lens
-    // draws back once, low over the sand, and holds there through the reunion
+    // draws back once, a little up over the scrape, and holds there through the reunion
     if (k.rare()?.id === 'stuifzand.vlucht') {
       await k.frame(endViewOf(laid.nest, laid.spot), { face: back.heading });
       k.say(c.vlucht);
