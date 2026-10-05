@@ -198,6 +198,29 @@ const ECODUCT: Ontdekking[] = [
     hint: 'Wie waggelt er laat over de brug?', model: 'animal-das-badger' },
 ];
 
+/* ------------------------------------------------- stuifzand (the drift sand) ---- */
+// (run 7, the adventures lane, package stille-zand: render3d/adventure/missions/stuifzand.ts.
+// The nightjar he found pressed flat on the sand is his once the mission is won; a woodlark
+// that rises over the sand and sings (about three plays in five) once he heard its song; the
+// rabbit's burrow under the juniper once he stood guard by it; the anthill at the sand's edge
+// once he walked past it and saw it; the two speckled eggs once she shifted on them in his
+// picture; and now and then, at dusk, the male's display flight: he claps his wings over the
+// sand (rare: a seeded chance and the pity rule).)
+const STUIFZAND: Ontdekking[] = [
+  { id: 'stuifzand.nachtzwaluw', home: 'stuifzand', soort: 'dier', naam: 'de nachtzwaluw',
+    hint: 'Wie lijkt precies op het zand?', model: 'animal-nachtzwaluw-nightjar', geholpen: true },
+  { id: 'stuifzand.leeuwerik', home: 'stuifzand', soort: 'dier', naam: 'de leeuwerik', naamKnap: 'de boomleeuwerik',
+    hint: 'Wie zingt er hoog boven het zand?', model: 'bird-boomleeuwerik' },
+  { id: 'stuifzand.konijnenhol', home: 'stuifzand', soort: 'spoor', naam: 'het konijnenhol',
+    hint: 'Wie woont er onder de struik?', model: 'prop-badger-sett' },
+  { id: 'stuifzand.mierenhoop', home: 'stuifzand', soort: 'spoor', naam: 'de mierenhoop',
+    hint: 'Wie bouwt een berg van naaldjes?', model: 'prop-anthill' },
+  { id: 'stuifzand.eieren', home: 'stuifzand', soort: 'vondst', naam: 'de eitjes',
+    hint: 'Wat ligt er onder de vogel?', icon: 'egg' },
+  { id: 'stuifzand.vlucht', home: 'stuifzand', soort: 'zeldzaam', naam: 'de klappende nachtzwaluw',
+    hint: 'Wie klapt bij schemer met zijn vleugels?', model: 'animal-nachtzwaluw-nightjar' },
+];
+
 /* ------------------------------------------------- wereld (the open world) ---- */
 // The free roam's small surprises (render3d/world/Surprises.ts stages them, one at a time):
 // each is met by seeing it (on screen, big enough, long enough) or hearing its call close by.
@@ -221,7 +244,7 @@ const WERELD: Ontdekking[] = [
     hint: 'Wie waggelt in de schemer voorbij?', model: 'animal-das-badger', stemming: ['schemer'] },
 ];
 
-export const ONTDEKKINGEN: readonly Ontdekking[] = [...FRISLING, ...REE, ...WILDCAMERA, ...EEKHOORN, ...VEN, ...ECODUCT, ...WERELD];
+export const ONTDEKKINGEN: readonly Ontdekking[] = [...FRISLING, ...REE, ...WILDCAMERA, ...EEKHOORN, ...VEN, ...ECODUCT, ...STUIFZAND, ...WERELD];
 
 /** One row by id, or undefined. */
 export function ontdekking(id: string): Ontdekking | undefined {
