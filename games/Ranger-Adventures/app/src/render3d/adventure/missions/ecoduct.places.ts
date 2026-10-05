@@ -211,42 +211,40 @@ export interface EcoductLaid {
  * (the dagnacht trial's: the first is met as the first group comes, the other two after the
  * route, one group each); `last`: his last plays' variants (oldest first).
  *
- * The kinds: every kind once before any comes again, never the same kind twice in a row,
- * the first group never his last play's first group, the red deer always among them (the
- * ecoduct's own animal: the mission helps them). The group that must wait for him to step
- * aside (`opzij`) is a group, never the fox alone (their words say "ze"). The corner each
- * comes round and the way it leaves: seeded, never three groups in a row round the same
- * corner. How many deer and piglets come: seeded.
+ * The last group over is always the hind and her calf (the ecoduct's own animals, the ones
+ * the mission helps: they cross into the heath by the screen and graze there after). Before
+ * them the kinds come in shuffled rounds of all four, never two alike in a row, the first
+ * never his last play's first. The group that must wait for him to step aside (`opzij`) is a
+ * group, never the fox alone (their words say "ze"). The corner each comes round and the
+ * way it leaves: seeded, never three groups in a row round the same corner (the hind and her
+ * calf leave onto the heath, north). How many piglets come: seeded.
  */
 export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: readonly string[], last: readonly string[] = []): EcoductLaid {
   const n = crossingsFor(rounds);
   const prev = last.length ? readVariant(last[last.length - 1]) : null;
   const kf = play.fork('ec-groepen');
-  // the kinds: shuffled rounds of all four, never two alike in a row, the first never his
-  // last play's first
+  // the kinds before the last: shuffled rounds of all four, never two alike in a row (nor the
+  // deer right before the deer), the first never his last play's first
   const kinds: Kind[] = [];
-  for (let guard = 0; kinds.length < n && guard < 40; guard++) {
+  for (let guard = 0; kinds.length < n - 1 && guard < 40; guard++) {
     const deck = kf.shuffle(KINDS);
     for (const k of deck) {
-      if (kinds.length >= n) break;
+      if (kinds.length >= n - 1) break;
       if (kinds.length && kinds[kinds.length - 1] === k) continue;
       if (!kinds.length && prev?.kinds[0] === k) continue;
+      if (kinds.length === n - 2 && k === 'hert') continue;
       kinds.push(k);
     }
   }
-  // the red deer always cross (with fewer crossings than kinds one kind is left out: never them)
-  if (!kinds.includes('hert')) {
-    const i = kinds.findIndex((k, j) => k !== 'hert' && kinds[j - 1] !== 'hert' && kinds[j + 1] !== 'hert' && !(j === 0 && prev?.kinds[0] === 'hert'));
-    kinds[i >= 0 ? i : kinds.length - 1] = 'hert';
-  }
-  // the group that waits for him to step aside is never the fox alone: it changes places
-  // with a group of the post-route moments, or another kind takes its place
+  kinds.push('hert');
+  // the group that waits for him to step aside is never the fox alone: it changes places with
+  // the other post-route group, or another kind takes its place
   const post = (id: string): number => { const j = order.indexOf(id); return j >= 1 ? n - 3 + j : -1; };
   const oi = post('opzij');
   if (oi >= 0 && kinds[oi] === 'vos') {
-    const other = n - 3 + (order.indexOf('opzij') === 1 ? 2 : 1);
-    if (other >= 0 && other < n && kinds[other] !== 'vos' && kinds[other - 1] !== 'vos') [kinds[oi], kinds[other]] = [kinds[other], kinds[oi]];
-    else kinds[oi] = (['hert', 'zwijn', 'ree'] as Kind[]).find((k) => k !== kinds[oi - 1] && k !== kinds[oi + 1]) ?? 'hert';
+    const other = oi === n - 1 ? n - 2 : n - 1;
+    if (kinds[other] !== 'vos' && kinds[other - 1] !== 'vos' && other !== n - 1) [kinds[oi], kinds[other]] = [kinds[other], kinds[oi]];
+    else kinds[oi] = (['zwijn', 'ree'] as Kind[]).find((k) => k !== kinds[oi - 1] && k !== kinds[oi + 1]) ?? 'zwijn';
   }
   // the corners and the ways out
   const sf = play.fork('ec-paden');
@@ -258,11 +256,12 @@ export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: r
     froms.push(s);
   }
   // most groups leave on the far side of the bed from where they came down (they cross it);
-  // now and then one turns back the way it came, onto the heath
-  const outs: Side[] = froms.map((f) => (sf.chance(0.75) ? (f === 'N' ? 'S' : 'N') : f));
+  // now and then one turns back the way it came; the hind and her calf onto the heath (north)
+  const outs: Side[] = froms.map((f, i) => (i === n - 1 ? 'N' : sf.chance(0.75) ? (f === 'N' ? 'S' : 'N') : f));
   const gf = play.fork('ec-grootte');
-  const sizes = kinds.map((k) => {
+  const sizes = kinds.map((k, i) => {
     const g = GROUPS[k];
+    if (i === n - 1) return 2; // (the hind and her calf: the home's own)
     return g.members.length === g.min ? g.min : gf.int(g.min, g.members.length);
   });
   const crossings = kinds.map((kind, i) => ({ kind, from: froms[i], out: outs[i], n: sizes[i] }));

@@ -296,7 +296,9 @@ test('a play\'s crossings: drawn from its seed, the deer always, never two alike
         assert.deepEqual(l, ecoductLayout(newPlay('ecoduct', seed, 1), rounds, order), 'deterministic');
         assert.equal(l.crossings.length, crossingsFor(rounds));
         const kinds = l.crossings.map((c) => c.kind);
-        assert.ok(kinds.includes('hert'), `seed ${seed}: the red deer cross (${kinds.join()})`);
+        assert.equal(kinds[kinds.length - 1], 'hert', `seed ${seed}: the hind and her calf cross last (${kinds.join()})`);
+        assert.equal(l.crossings[kinds.length - 1].n, 2, 'the hind and her calf: the home\'s own two');
+        assert.equal(l.crossings[kinds.length - 1].out, 'N', 'onto the heath by the screen, where they live after');
         for (let i = 1; i < kinds.length; i++) assert.notEqual(kinds[i], kinds[i - 1], `seed ${seed}: never two alike in a row (${kinds.join()})`);
         const oi = order.indexOf('opzij');
         assert.notEqual(kinds[crossingsFor(rounds) - 3 + oi], 'vos', `seed ${seed} ${order.join()}: the group that waits for him is a group`);
@@ -308,6 +310,7 @@ test('a play\'s crossings: drawn from its seed, the deer always, never two alike
     }
   }
   assert.equal(firsts.size, 4, 'every kind comes first now and then');
+  // (a play's groups before the last: at least two kinds)
   assert.equal(corners.size, 2, 'both corners');
 });
 

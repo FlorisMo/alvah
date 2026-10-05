@@ -49,7 +49,7 @@ import { Seen } from './ven.finds';
 import { SIZE } from '../../AnimalScale';
 import { EcoductHome } from './ecoduct.home';
 import {
-  ASIDE, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, HIDEAWAY, MISSION, STAND, TRAILS, VARIANT_KEY,
+  AFTER_HINDE, AFTER_KALF, ASIDE, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, HIDEAWAY, MISSION, STAND, TRAILS, VARIANT_KEY,
   asideView, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, lastVariants, mouthOf, nearestOn, roepSpot,
   type Crossing, type EcoductLaid, type Kind, type Side,
 } from './ecoduct.places';
@@ -125,6 +125,10 @@ export const ecoductAdventure: Adventure = {
 /** A walk the script can hold (a group that stops to stare) and let go on. */
 interface Hold { paused: boolean; stop: boolean }
 
+/** Which group an animal walks with now (a kind may cross twice in a play: the later group
+ *  takes its animals over, and the earlier one, still walking off, lets them be). */
+const OWNER = new WeakMap<Actor, Group>();
+
 /** One group crossing: its animals (the lead first), its way down, over and out. */
 class Group {
   readonly kind: Kind | 'das';
@@ -158,6 +162,7 @@ class Group {
     const back = { x: (p.x - q.x) / dist(p, q), z: (p.z - q.z) / dist(p, q) };
     const face = headingTo(p, q);
     this.members.forEach((m, i) => {
+      OWNER.set(m, this);
       if (m.lies) void m.lie(false);
       m.place(p.x + back.x * this.gap * i, p.z + back.z * this.gap * i, face);
       m.idle();
@@ -213,7 +218,7 @@ class Group {
   tick(cam: THREE.Camera): void {
     if (!this.leaving || this.gone) return;
     const out = this.members.every((m) => {
-      if (!m.group.visible) return true;
+      if (!m.group.visible || OWNER.get(m) !== this) return true;
       const v = new THREE.Vector3(m.x, m.group.position.y + 0.5, m.z).applyMatrix4(cam.matrixWorldInverse);
       const p = new THREE.Vector3(m.x, m.group.position.y + 0.5, m.z).project(cam);
       return (v.z > -0.5 || Math.abs(p.x) > 1.12 || Math.abs(p.y) > 1.15 || Math.hypot(m.x - cam.position.x, m.z - cam.position.z) > 34)
@@ -222,11 +227,11 @@ class Group {
     if (out) this.away();
   }
 
-  /** Every one hidden (out of his picture already): gone. */
-  get gone(): boolean { return this.members.every((m) => !m.group.visible); }
+  /** Every one hidden (out of his picture already), or walking with a later group: gone. */
+  get gone(): boolean { return this.members.every((m) => !m.group.visible || OWNER.get(m) !== this); }
 
   /** Hide them all at once (a stop: the home lays its own). */
-  away(): void { for (const m of this.members) { m.idle(); m.group.visible = false; } this.leaving = false; }
+  away(): void { for (const m of this.members) if (OWNER.get(m) === this) { m.idle(); m.group.visible = false; } this.leaving = false; }
 }
 
 /* ------------------------------------------------------------- the story ---- */
@@ -359,9 +364,10 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   }
   rust.done();
 
-  /* 8 · the reunion: the last group crosses into the heath, "De dieren staken veilig over." */
+  /* 8 · the reunion: the hind and her calf cross into the heath by the screen, where they
+     graze from now on: "De dieren staken veilig over." */
   await k.reunion(async () => {
-    if (finale) await k.guard(Promise.race([crossOver(home, finale, false), k.wait(6)]));
+    if (finale) await k.guard(Promise.race([crossHome(home, finale), k.wait(7)]));
     await k.wait(1.2);
   });
   /* 9 · the raaf: badgers and foxes use it too */
@@ -382,6 +388,22 @@ async function crossOver(home: EcoductHome, g: Group, ahead: boolean): Promise<v
   const out = g.leave().catch(() => false);
   if (!ahead) await out;
 }
+
+/** The last group over (the hind and her calf): over the bed and out onto the heath by the
+ *  screen, to where they graze from now on (the home's after state: nothing pops there). */
+async function crossHome(home: EcoductHome, g: Group): Promise<void> {
+  const mouth = mouthOf(g.from);
+  if (dist(g.lead, mouth) > 1.2) await g.walk([mouth]);
+  await g.walk([{ x: BED.x, z: BED.z }]);
+  home.tread(crossingLine(g.from, 'N'), g.kind, g.members.length, 41);
+  await g.walk([EXITS.N[0], EXITS.N[1], AFTER_HINDE]);
+  const kalf = g.young;
+  await k0(kalf.go(AFTER_KALF.x, AFTER_KALF.z, { speed: 'walk', face: AFTER_KALF.yaw }));
+  g.lead.root(AFTER_HINDE.x, AFTER_HINDE.z, 0.6);
+  kalf.root(AFTER_KALF.x, AFTER_KALF.z, 0.5);
+}
+/** (a promise whose result is not needed) */
+const k0 = (p: Promise<unknown>): Promise<void> => p.then(() => {}, () => {});
 
 /* --------------------------------------------------------- the moments ---- */
 
