@@ -293,6 +293,17 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   /* 1 · one calm look at the green bridge for animals; he ends facing it (the look glides
      toward a point on the line to its deck, so the lens stops ~17 m short of it: the whole
      bridge in the picture, never its arch filling it) */
+  // (a replay begins where the last play ended, often with his back to the bridge: then one
+  // soft dip turns him and the lens toward it first — never a swing round him)
+  {
+    const r = k.ranger(), cam = k.world.camera;
+    const fwd = cam.getWorldDirection(new THREE.Vector3());
+    const want = headingTo(r, DECK_LOOK), now = Math.atan2(fwd.x, fwd.z);
+    if (Math.abs(Math.atan2(Math.sin(want - now), Math.cos(want - now))) > Math.PI / 2) {
+      const ahead = { x: r.x + Math.sin(want) * 6, z: r.z + Math.cos(want) * 6 };
+      await k.frame({ at: ahead, heading: want, halfW: 3, halfD: 3, tall: 2, pitchDeg: 14, include: [{ x: r.x, z: r.z, h: 1.32, r: 0.3 }] }, { face: want, dip: true });
+    }
+  }
   const cam0 = k.world.camera.position;
   const toDeck = Math.hypot(DECK_LOOK.x - cam0.x, DECK_LOOK.z - cam0.z);
   const f = Math.min(1, LOOK_AIM_M / Math.max(1, toDeck));
