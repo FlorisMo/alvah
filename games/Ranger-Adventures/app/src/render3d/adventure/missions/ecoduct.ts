@@ -422,6 +422,9 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
     await crossOver(home, g, true);
   }
   rust.done();
+  // (the last moment may have held a close picture of him and a young one: the reunion is
+  // seen over the sand they cross, from behind him)
+  if (where !== 'scherm') { const r = k.ranger(); await k.frame(asideView(r), { face: headingTo(r, { x: BED.x, z: BED.z }), dip: true }); }
 
   /* 8 · the reunion: the hind and her calf cross into the heath by the screen, where they
      graze from now on: "De dieren staken veilig over." */
