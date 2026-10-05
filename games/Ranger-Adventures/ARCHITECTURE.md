@@ -201,7 +201,7 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          `Group.enter` never moves an animal he can see and, should the lens he
                          has now see a wait, lets the file wait further back), the ways out,
                          where he steps aside, and `ecoductLayout` — this play's groups (red
-                         deer, a sow with piglets, a roe with her calf, a fox; the hind and
+                         deer, a sow with piglets, a roe with her calf, a fox in the mist and at dusk; the hind and
                          her calf always last, they graze by the screen after), their corners
                          and ways out, never his last play's first; ecoduct.home.ts the sand
                          (a rake texture drawn once), the screen, the trails, the tracks the

@@ -48,6 +48,7 @@ import { listenerOf } from '../../world/Residents';
 import { atLocal, dist, headingTo, toward } from '../places';
 import { Seen } from './ven.finds';
 import { SIZE } from '../../AnimalScale';
+import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
 import { EcoductHome } from './ecoduct.home';
 import {
   AFTER_HINDE, AFTER_KALF, ASIDE, BACK_MAX, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, MISSION, STAND, TRAILS, VARIANT_KEY,
@@ -82,6 +83,10 @@ const LOOK_AIM_M = 11;
 const VISIT = { hop: 0.7, min: 2.5, max: 3.5, dwell: 0.4, on: 0.5 } as const;
 /** How big (px) an animal shows in his picture, steady for a second, before it is his. */
 const SEEN_PX = 40;
+/** One new find's card (s; ui/hud/reveal-queue.ts), and the longest a calm moment holds on
+ *  for cards still waiting (two): they show where they belong, never spill into a next play. */
+const CARD_S = (REVEAL_SHOW_MS + REVEAL_GAP_MS) / 1000;
+const CARDS_MAX_S = 2 * CARD_S;
 
 /** Is something being said now (a call never sounds over a spoken line)? */
 function speaking(): boolean {
@@ -511,7 +516,9 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   await k.reunion(async () => {
     await k.guard(crossing);
     await k.wait(0.8);
-  }, { holdS: 2 });
+    // (the line holds on until every new find's card waiting for it was seen, two at most)
+    await k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S);
+  }, { holdS: Math.max(2, Math.min(2, k.revealsWaiting()) * CARD_S) });
   /* 9 · the raaf: badgers and foxes use it too */
   await k.fact(1);
   // (the home takes them over now: they walk the rest of the way to their spot by themselves)
@@ -701,7 +708,8 @@ async function toBed(k: AdventureKit): Promise<void> {
   await k.walk({ name: 'zand', to: BED_STAND, r: BED_STAND.r, line: c.sporen, doel: c.chipZand, glyph: 'footprints' });
   k.lockFollow();
   k.world.stopRanger();
-  k.beat = 'sporen';
+  // (a calm look: the tracks' card, and any other new find's still waiting, shows here)
+  k.beat = 'look:sporen';
   // (he stands among the tracks facing the bridge, the lens behind him: however he walked
   // round the screen, the next group's wait lies out of this picture — pinned)
   k.world.faceRanger(BED.heading);
@@ -711,6 +719,7 @@ async function toBed(k: AdventureKit): Promise<void> {
   const t0 = k.now;
   await k.behind();
   await k.wait(Math.max(0.4, 2.4 - (k.now - t0)));
+  await k.until(() => k.revealsWaiting() === 0, CARDS_MAX_S);
 }
 
 /** Back behind the screen (a group will come, and there he keeps still). */
@@ -831,7 +840,7 @@ function watchFinds(k: AdventureKit, A: Readonly<Record<string, Actor>>): void {
   };
   for (const kind of ['hert', 'zwijn', 'ree', 'vos'] as Kind[]) {
     // (the deer that grazed before the play walk off in the opening look: seen crossing)
-    seen.watch({ id: GROUPS[kind].disc, box: box(GROUPS[kind].members), px: SEEN_PX, secs: 1, within: 26, when: () => !/^(look|walk:scherm)/.test(k.beat) });
+    seen.watch({ id: GROUPS[kind].disc, box: box(GROUPS[kind].members), px: SEEN_PX, secs: 1, within: 26, when: () => !/^(look$|walk:scherm)/.test(k.beat) });
   }
   seen.watch({ id: DAS_ID, box: box([DAS]), px: SEEN_PX, secs: 1, within: 26 });
   k.onTick((dt) => {
