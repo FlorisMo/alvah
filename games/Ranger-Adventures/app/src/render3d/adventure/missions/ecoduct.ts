@@ -422,12 +422,15 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
 
   /* 8 · the reunion: the hind and her calf cross into the heath by the screen, where they
      graze from now on: "De dieren staken veilig over." */
+  const homeWalk: Hold = { paused: false, stop: false };
   await k.reunion(async () => {
-    if (finale) await k.guard(Promise.race([crossHome(home, finale), k.wait(7)]));
+    if (finale) await k.guard(Promise.race([crossHome(home, finale, homeWalk), k.wait(7)]));
     await k.wait(1.2);
   });
   /* 9 · the raaf: badgers and foxes use it too */
   await k.fact(1);
+  // (the home takes them over now: they walk the rest of the way to their spot by themselves)
+  homeWalk.stop = true;
 }
 
 /** Where he is for a moment: behind the screen, on the bed, or aside in front of the screen. */
@@ -447,14 +450,16 @@ async function crossOver(home: EcoductHome, g: Group, ahead: boolean): Promise<v
 
 /** The last group over (the hind and her calf): over the bed and out onto the heath by the
  *  screen, to where they graze from now on (the home's after state: nothing pops there). */
-async function crossHome(home: EcoductHome, g: Group): Promise<void> {
+async function crossHome(home: EcoductHome, g: Group, hold: Hold): Promise<void> {
   const mouth = mouthOf(g.from);
-  if (dist(g.lead, mouth) > 1.2) await g.walk([mouth]);
-  await g.walk([{ x: BED.x, z: BED.z }]);
+  if (dist(g.lead, mouth) > 1.2) await g.walk([mouth], hold);
+  await g.walk([{ x: BED.x, z: BED.z }], hold);
   home.tread(crossingLine(g.from, 'N'), g.kind, g.members.length, 41);
-  await g.walk([EXITS.N[0], EXITS.N[1], AFTER_HINDE]);
+  await g.walk([EXITS.N[0], EXITS.N[1], AFTER_HINDE], hold);
+  if (hold.stop) return;
   const kalf = g.young;
   await k0(kalf.go(AFTER_KALF.x, AFTER_KALF.z, { speed: 'walk', face: AFTER_KALF.yaw }));
+  if (hold.stop) return;
   g.lead.root(AFTER_HINDE.x, AFTER_HINDE.z, 0.6);
   kalf.root(AFTER_KALF.x, AFTER_KALF.z, 0.5);
 }
