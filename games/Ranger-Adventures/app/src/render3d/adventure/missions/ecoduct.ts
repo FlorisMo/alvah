@@ -50,7 +50,7 @@ import { SIZE } from '../../AnimalScale';
 import { EcoductHome } from './ecoduct.home';
 import {
   AFTER_HINDE, AFTER_KALF, ASIDE, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, MISSION, STAND, TRAILS, VARIANT_KEY,
-  asideView, crossingLine, ductHides, ecoductClearings, ecoductLayout, ecoductTreeClearings, lastVariants, mouthOf, roepSpot,
+  asideView, backOff, backWay, crossingLine, ductHides, ecoductClearings, ecoductLayout, ecoductTreeClearings, lastVariants, mouthOf, roepSpot,
   type Crossing, type EcoductLaid, type Kind, type Side,
 } from './ecoduct.places';
 
@@ -208,10 +208,10 @@ class Group {
    *  behind the others) only once the whole group is out of his picture (`tick`): at the
    *  way's end and still in view it walks on along it a little further, and stands there if
    *  it must (never a vanishing in front of him). */
-  async leave(): Promise<boolean> {
+  async leave(way: readonly Spot[] = EXITS[this.out]): Promise<boolean> {
     this.leaving = true;
-    await this.walk(EXITS[this.out]);
-    const e = EXITS[this.out];
+    await this.walk(way);
+    const e = way.length >= 2 ? way : EXITS[this.out];
     let a = e[e.length - 2], b = e[e.length - 1];
     for (let i = 0; i < 3 && !this.gone; i++) {
       const L = dist(a, b) || 1;
@@ -221,6 +221,15 @@ class Group {
     }
     if (!this.gone) for (const m of this.members) if (OWNER.get(m) === this) m.root(m.x, m.z, 0.4);
     return true;
+  }
+
+  /** After a route's show (the lead already stepped off behind the sand): the others step to
+   *  the bed's back from where they waited (never over it), then all leave along its back and
+   *  side — nothing stands in front of a patch while he points them back. */
+  async leaveBehind(): Promise<boolean> {
+    this.leaving = true;
+    await Promise.all(this.members.slice(1).map((m) => { const b = backOff(m); return m.go(b.x, b.z, { speed: this.pace }); }));
+    return this.leave(backWay(this.out));
   }
 
   /** Per frame while leaving: once every one of them is out of his picture (behind the lens,
@@ -329,6 +338,8 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   /* 4 · the route over the sand (corsi): the lead treads it patch by patch; one group a round */
   let round = 0;
   let shownBy: Group = g1;
+  /** patches the lead has trodden in this round's show (the last one: it steps off the bed) */
+  let trodden = 0;
   await routeBeat(k, 0, {
     view: BED_VIEW, stand: STAND, field: home.field,
     lines: { kijk: c.routeKijk, wijs: c.routeWijs, mis: c.routeMis, goed: k.steps[0].skin.copy?.goed ?? c.routeWijs, nogEen: c.nogEenWeg },
@@ -343,17 +354,26 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
       const fwd = { x: Math.sin(g.lead.yaw), z: Math.cos(g.lead.yaw) };
       await g.lead.sniff(s.x + fwd.x * 0.5, s.z + fwd.z * 0.5, VISIT_DWELL, 0.6);
       light(false);
+      // the route's last patch: the lead steps straight back off the sand, behind the
+      // patches, so nothing stands in front of one while he points them back
+      if (++trodden >= (k.stats.route_length ?? 99)) {
+        trodden = 0;
+        const off = backOff(s);
+        await g.lead.go(off.x, off.z, { speed: g.pace });
+      }
     },
-    // the show over: the others come after the lead, and the group walks on into the heath
+    // the show over: the others come after the lead, along the bed's back and side (never
+    // over it), and the group walks on into the heath
     shown: (firstShow) => {
       if (!firstShow) return;
-      void shownBy.leave().catch(() => {});
+      void shownBy.leaveBehind().catch(() => {});
     },
     // a patch he points at: a soft step (the tracks there are his to read; nothing walks)
     picked: async () => { await k.wait(0.25); },
     // the next round: the next group comes round its corner to the bed's mouth
     between: async () => {
       round += 1;
+      trodden = 0;
       const g = groupOf(round);
       live.add(g);
       g.enter();

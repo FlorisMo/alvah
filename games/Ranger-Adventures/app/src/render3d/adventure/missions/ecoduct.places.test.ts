@@ -34,7 +34,7 @@ import { venClearings } from './ven.places.ts';
 import {
   ASIDE, BED, BED_HALF, BED_STAND, BED_VIEW, BEFORE_HINDE, BEFORE_KALF, DUCT, ECODUCT_HOME, ECODUCT_PLACES, ECODUCT_RESIDENTS, EXITS, FERN, FOX_LOOP, GROUPS,
   GROVE, HIDEAWAY, HOME, MARKER, PATCH_SIZE, SCREEN, SIDES, STAND, TRAILS, AFTER_HINDE, AFTER_KALF,
-  asideView, bedSpots, crossingLine, crossingsFor, ductGap, ductHides, ecoductClearings, ecoductLayout, lastVariants, lineDist, mouthOf, onBed, readVariant, roepSpot,
+  asideView, backOff, backWay, bedSpots, crossingLine, crossingsFor, ductGap, ductHides, ecoductClearings, ecoductLayout, lastVariants, lineDist, mouthOf, onBed, readVariant, roepSpot,
   screenObstacle, type Side, type ViewSpec,
 } from './ecoduct.places.ts';
 import type { Spot } from '../types.ts';
@@ -223,6 +223,22 @@ test('the ways out: off the bed sideways, clear of the screen, the ecoduct, the 
     // than toward it)
     const a = px(cam, e[0].x, groundY(e[0].x, e[0].z), e[0].z), b = px(cam, e[1].x, groundY(e[1].x, e[1].z), e[1].z);
     assert.ok(Math.abs(b.x - a.x) > Math.abs(b.y - a.y), `${s}: its way out runs across the picture`);
+  }
+});
+
+test('after a route\'s show the group leaves behind the bed and along its side: never over a patch, off the ecoduct', () => {
+  for (const s of bedSpots()) {
+    const b = backOff(s);
+    assert.ok(!onBed(b, 0.3) && ductGap(b) > 0.4, `the step off behind patch ${s.id} ${at(b)} (gap ${ductGap(b).toFixed(2)})`);
+    assert.ok(dist(b, s) < BED_HALF.v * 2 + 1, 'a few steps');
+  }
+  for (const out of SIDES) {
+    const w = backWay(out);
+    for (const p of samples([backOff(bedSpots()[0]), ...w])) {
+      assert.ok(ductGap(p) > 0.4, `${out}: the way behind the bed ${at(p)} keeps off the ecoduct`);
+      assert.ok(!onBed(p, 0.3) || toLocal(BED, p).v > BED_HALF.v, `${out}: the way behind the bed ${at(p)} never crosses the sand`);
+      for (const t of GROVE) assert.ok(dist(p, t) > 1.2, `${out}: clear of the grove`);
+    }
   }
 });
 

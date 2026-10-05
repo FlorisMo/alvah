@@ -152,6 +152,22 @@ export const EXITS: Readonly<Record<Side, readonly Spot[]>> = {
   S: [{ x: -56.6, z: 4.4 }, { x: -56.2, z: 0.4 }, { x: -55.8, z: -6.0 }, { x: -55.2, z: -13.0 }],
 };
 
+/** How far (m) behind the bed's back edge (toward the ecoduct) a lead steps off it after a
+ *  route's show: nothing stands between the lens and a patch while he points them back. */
+export const BACK_OFF = 0.7;
+/** Where the lead steps off the bed after the route's last patch: straight back off its far
+ *  edge, behind the patches (nothing behind a patch hides it from the lens). */
+export function backOff(p: Spot): Spot {
+  const { u } = toLocal(BED, p);
+  return atLocal(BED, Math.max(-BED_HALF.u, Math.min(BED_HALF.u, u)), BED_HALF.v + BACK_OFF);
+}
+/** …and its way on to the side it leaves by, along the bed's back and side (never over it),
+ *  out onto that side's way out. */
+export function backWay(out: Side): Spot[] {
+  const su = out === 'N' ? -1 : 1;
+  return [atLocal(BED, su * (BED_HALF.u + 0.8), BED_HALF.v + BACK_OFF), ...EXITS[out]];
+}
+
 /** A group's whole way: down its trail, over the bed to the other side, and out. */
 export function crossingLine(from: Side, out: Side): Spot[] {
   return [...TRAILS[from], { x: BED.x, z: BED.z }, ...EXITS[out]];
