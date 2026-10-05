@@ -1131,6 +1131,8 @@ const MISSIE_VEN = {
       zingen: 'Sta stil. Hij gaat zingen.',
       wacht: 'Sst. Hij wacht even.',
       terug: 'Hoor je? Ze roepen terug.',
+      // run 7 (ven-life): the rare answers him from the moss beside his frog
+      blauw: 'Kijk! Een blauwe kikker!',
     },
     knap: {
       kijk: 'Hoor je de heikikkers?',

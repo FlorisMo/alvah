@@ -30,11 +30,11 @@ import { reeClearings } from './ree.places.ts';
 import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import {
-  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY, GO_CLEAR,
+  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, LOOK_UP, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY, GO_CLEAR,
   EDGE_H, HINT_RING,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
   above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet, underBoy,
-  hintRingOf, lastVenVariants, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
+  adderHeather, adderHoldHeading, headingAt, hintRingOf, lastVenVariants, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
   type BayId, type FrogSpot, type Side, type ViewSpec,
 } from './ven.places.ts';
 import type { Spot } from '../types.ts';
@@ -252,9 +252,9 @@ test('the search: every nook partly visible at every level, off the middle, big 
         if (under) assert.ok(underBoy(b, side, q), `cove ${id}: a look-alike spot ${at(q)} lies under the boy from side ${side} (at ${p.x.toFixed(0)}, ${p.y.toFixed(0)}) and is not left out`);
       }
       // …and enough are left: five clods, a heath blue and a stonechat
-      const free = (qs: readonly Spot[]): number => qs.filter((q) => !underBoy(b, side, q)).length;
+      const free = (qs: readonly Spot[], up = 0): number => qs.filter((q) => !underBoy(b, side, q, up)).length;
       for (const n of b.nooks.filter((m) => m.side === side)) {
-        assert.ok(free([...b.slots.clods, ...b.nooks.filter((m) => m !== n)]) >= 5 && free(b.slots.butterflies) >= 1 && free(b.slots.birds) >= 1, `cove ${id} side ${side}: look-alikes enough beside the boy`);
+        assert.ok(free([...b.slots.clods, ...b.nooks.filter((m) => m !== n)]) >= 5 && free(b.slots.butterflies, LOOK_UP.butterfly) >= 1 && free(b.slots.birds, LOOK_UP.bird) >= 1, `cove ${id} side ${side}: look-alikes enough beside the boy`);
       }
     }
   }
@@ -291,6 +291,63 @@ test('the late hint rings the same at every nook: on open water straight out in 
     }
   }
   assert.ok(Math.max(...gaps) / Math.min(...gaps) < 1.5, `the ring's distance from him in the picture differs at most half again over the nooks (${Math.min(...gaps).toFixed(0)}-${Math.max(...gaps).toFixed(0)} px)`);
+});
+
+test('no look-alike perches on the boy in the search picture: a stonechat up its stalk, a heath blue on its head, a clod — each clear of his big hair, or never laid there', () => {
+  // (ven-life, band 4 seed 4001 at C4: the stonechat's stalk stood just beside him and the
+  // bird sat on the top of his hair, which the boy's box — a body 0.16 m round, 1.32 m tall —
+  // left out: his hair is wider and higher than that)
+  for (const id of BAY_IDS) {
+    const b = BAYS[id];
+    for (const side of SIDES) {
+      const cam = lensOf(b.views.search[side]);
+      const boy = boyBox(cam, b.stands[side]);
+      // (his big hair: wider and higher than his box, over its top half; his body below)
+      const hair = { x0: boy.x0 - 45, x1: boy.x1 + 45, y0: boy.y0 - 100, y1: boy.y0 + (boy.y1 - boy.y0) * 0.55 };
+      const body = { x0: boy.x0 + 10, x1: boy.x1 - 10, y0: boy.y0 + 10, y1: boy.y1 };  // (its box's corners are air)
+      const tops: [string, Spot, readonly number[]][] = [
+        ...b.slots.birds.map((p, i): [string, Spot, readonly number[]] => [`stonechat slot ${i}`, p, [0, 0.3, 0.62, 0.72]]),
+        ...b.slots.butterflies.map((p, i): [string, Spot, readonly number[]] => [`heath blue slot ${i}`, p, [0, 0.36]]),
+        ...[...b.slots.clods, ...b.nooks].map((p, i): [string, Spot, readonly number[]] => [`clod spot ${i}`, p, [0, CLOD_H]]),
+      ];
+      for (const [what, p, hs] of tops) {
+        if (underBoy(b, side, p, what.startsWith('stonechat') ? LOOK_UP.bird : what.startsWith('heath') ? LOOK_UP.butterfly : 0)) continue;
+        for (const h of hs) {
+          const q = screenAt(cam, p, h);
+          // (a low clod may lie close beside him; a bird up its stalk or a butterfly on its
+          // head never sits by his hair)
+          const low = h <= CLOD_H;
+          const near = low ? body : hair;
+          const on = [near, body].some((r) => q.x > r.x0 && q.x < r.x1 && q.y > r.y0 && q.y < r.y1);
+          assert.ok(!on, `cove ${id} side ${side}: the ${what} at ${at(p)} (${h} m up) is on the boy at (${q.x.toFixed(0)}, ${q.y.toFixed(0)}); his hair ${hair.x0.toFixed(0)}-${hair.x1.toFixed(0)}, ${hair.y0.toFixed(0)}-${hair.y1.toFixed(0)}`);
+        }
+      }
+    }
+  }
+});
+
+test('the late hint never rings round a look-alike: no slot (a clod, the heath blue on its head, the stonechat up its stalk) nor an empty nook within 60 px of a nook\'s rings in its picture', () => {
+  // (review r3 of ven-world: at B4 the stonechat's stalk stood in the middle of his rings, so
+  // the hint circled the bird instead of the water in front of the frog)
+  for (const id of BAY_IDS) {
+    const b = BAYS[id];
+    for (const f of b.nooks) {
+      const cam = lensOf(b.views.search[f.side]);
+      const r = hintRingOf(b, f);
+      const q = screenAt(cam, r, WATER_LEVEL - groundY(r.x, r.z));
+      const gap = (p: Spot, hs: readonly number[]): number => Math.min(...hs.map((h) => { const s = screenAt(cam, p, h); return Math.hypot(s.x - q.x, s.y - q.y); }));
+      const spots: [string, Spot, readonly number[]][] = [
+        ...b.slots.clods.map((p, i): [string, Spot, readonly number[]] => [`clod slot ${i}`, p, [0, CLOD_H]]),
+        ...b.nooks.filter((n) => n.nook !== f.nook).map((p): [string, Spot, readonly number[]] => [`empty nook ${p.nook}`, p, [0, CLOD_H]]),
+        ...b.slots.butterflies.map((p, i): [string, Spot, readonly number[]] => [`heath blue slot ${i}`, p, [0, 0.18, 0.36]]),
+        ...b.slots.birds.map((p, i): [string, Spot, readonly number[]] => [`stonechat slot ${i}`, p, [0, 0.15, 0.3, 0.45, 0.62, 0.72]]),
+      ];
+      for (const [what, p, hs] of spots) {
+        if (underBoy(b, f.side, p, what.startsWith('stonechat') ? LOOK_UP.bird : what.startsWith('heath') ? LOOK_UP.butterfly : 0)) continue; // (never laid in that play)
+        assert.ok(gap(p, hs) >= 60, `cove ${id} nook ${f.nook}: the ${what} at ${at(p)} stands ${gap(p, hs).toFixed(0)} px from his rings (want ≥ 60)`);
+      }
+    }
+  }
 });
 
 test('every moss clod (in an empty nook or on the open moss) is seen — at least half the frog\'s share — and the frog still shows the level\'s share', () => {
@@ -351,6 +408,13 @@ test('the song: the frog big and three-quarters toward the lens (his throat to i
       assert.ok(Math.abs(above(at) - EDGE_H) < 0.01, `cove ${id} nook ${f.nook}: he sings at the very edge (${r2(above(at))} m over the water)`);
       const wet = hintRingOf(b, at, 0, -0.01);
       assert.ok(dist(wet, at) <= 0.35, `cove ${id} nook ${f.nook}: the water lies ${r2(dist(wet, at))} m in front of where he sings`);
+      // (review r3: at B4 the frog sat at the picture's foot, the water in front of him and
+      // so his rings out of it) he sits well up from the foot, the water half a metre in
+      // front of him in the picture: the rings that spread from under him are seen
+      assert.ok(box.y1 <= H - 120, `cove ${id} nook ${f.nook}: the singing frog sits up from the picture's foot (his feet at ${box.y1.toFixed(0)} px)`);
+      const front = hintRingOf(b, at, 0.45, -0.01);
+      const fq = screenAt(cam, front, WATER_LEVEL - groundY(front.x, front.z));
+      assert.ok(fq.y < H - 20 && fq.x > 40 && fq.x < W - 40, `cove ${id} nook ${f.nook}: the water half a metre in front of him is in the picture (${fq.x.toFixed(0)}, ${fq.y.toFixed(0)})`);
       // the answer: the singing frog, the boy and the nearest answering cove's frog all in
       // the pulled-back picture
       const ans = lensOf(answerView(b, f));
@@ -386,6 +450,58 @@ test('the stations: the path runs through the moss, a dry way round it above, no
       assert.ok(above(round) > 0.2 && !blocked(round) && dist(round, a) >= 3.2 && dist(round, a) > ADDER_NEAR, 'a dry way round her');
     }
   }
+});
+
+test('in her hold he sees her: the walk lens behind him, she lies beside his body on the heather side, in the picture; walking on still reaches her', () => {
+  // (ven-life: straight behind him his body hid her — only her head showed by his shoulder
+  // as she reared. The hold's lens is kit `behind()`: 4.6 m back, 2.4 m up, looking 1.6 m
+  // ahead of him at 0.9 m; his walk to her ends within 0.9 m of its spot, on the path or a
+  // step off it)
+  const hair = (cam: THREE.Camera, p: Spot): { x0: number; x1: number; y0: number; y1: number } => {
+    const g = groundY(p.x, p.z);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < 16; i++) for (const [k, r] of [[0, 0.14], [RANGER_STAND_HEIGHT * 0.7, 0.2], [RANGER_STAND_HEIGHT * 0.8, 0.28], [RANGER_STAND_HEIGHT + 0.08, 0.24]] as const) {
+      const v = new THREE.Vector3(p.x + Math.cos((i / 16) * Math.PI * 2) * r, g + k, p.z + Math.sin((i / 16) * Math.PI * 2) * r).project(cam);
+      const x = ((v.x + 1) / 2) * W, y = ((1 - v.y) / 2) * H;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    return { x0, x1, y0, y1 };
+  };
+  let worst = Infinity;
+  for (const { bay, st } of allStations()) for (const side of SIDES) {
+    const l = route(bay, side);
+    for (const sh of [-ADDER_SHIFT, 0, ADDER_SHIFT]) for (const turn of [-0.6, 0.6]) {
+      const a = adderAt(bay, side, stationsOf(bay, side)[st.i], sh, turn);
+      const end = a.s - ADDER_BEFORE;
+      for (const back of [0, 0.45, 0.9]) for (const off of [-0.4, 0, 0.4]) {
+        const p0 = pointAt(l, end - back), hd = headingAt(l, end - back);
+        const me = { x: p0.x - Math.cos(hd) * off, z: p0.z + Math.sin(hd) * off };
+        if (above(me) < 0.05) continue; // (never in the water)
+        const h = adderHoldHeading(me, a);
+        const f = { x: Math.sin(h), z: Math.cos(h) };
+        const g = groundY(me.x, me.z);
+        const cam = new THREE.PerspectiveCamera(FOV, W / H, 0.1, 400);
+        const to = { x: me.x - f.x * 4.6, z: me.z - f.z * 4.6 };
+        cam.position.set(to.x, Math.max(g + 2.4, groundY(to.x, to.z) + 1.4), to.z);
+        cam.lookAt(me.x + f.x * 1.6, g + 0.9, me.z + f.z * 1.6);
+        cam.updateMatrixWorld(true);
+        const her = boxOf(cam, a, 0.47, 0.25), him = hair(cam, me);
+        const name = `${bay}${side}.S${st.i + 1} shift ${sh} turn ${turn} (${back} m short, ${off} m aside)`;
+        assert.ok(her.x0 > 60 && her.x1 < W - 60 && her.y0 > 120 && her.y1 < H - 60, `${name}: she lies in the picture (${her.x0.toFixed(0)}-${her.x1.toFixed(0)}, ${her.y0.toFixed(0)}-${her.y1.toFixed(0)})`);
+        const gap = Math.max(her.x0 - him.x1, him.x0 - her.x1);
+        worst = Math.min(worst, gap);
+        assert.ok(gap >= 16, `${name}: she lies beside him in the picture, not behind his body (${gap.toFixed(0)} px apart)`);
+        // she lies on the heather side of him there, so she slides off away from him
+        const heath = adderHeather(a), right = { x: -Math.cos(h), z: Math.sin(h) };
+        const heathRight = (heath.x - a.x) * right.x + (heath.z - a.z) * right.z > 0;
+        assert.equal(her.x0 > him.x1, heathRight, `${name}: she lies on the heather side of him`);
+        // walking on as he faces brings him into her reach (the impulse is still there)
+        const d = dist(me, a), along = (a.x - me.x) * f.x + (a.z - me.z) * f.z;
+        assert.ok(along > 0 && Math.sqrt(Math.max(0, d * d - along * along)) < ADDER_NEAR - 0.5, `${name}: walking on he passes her within her reach`);
+      }
+    }
+  }
+  assert.ok(worst < 400, `(the closest she came to his body: ${worst.toFixed(0)} px)`);
 });
 
 test('every order of the three moments fits on the way to every cove and side; the dry path is never first; band 1 listens twice', () => {

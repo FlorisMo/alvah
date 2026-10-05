@@ -127,6 +127,35 @@ function knor(freq: number, start: number, dur: number, peak: number, dest: Audi
 }
 
 /**
+ * Run 7 (ven-life): a mallard's soft "kwak" — a nasal buzz (a sawtooth through a narrow
+ * band-pass round its formant), falling a little, with a quick soft start and end. Quiet:
+ * a duck on the far side of the water, never a horn.
+ */
+function quack(freq: number, start: number, dur: number, peak: number, dest: AudioNode, sweep = 0.8): void {
+  const a = ac();
+  if (!a) return;
+  const t0 = a.currentTime + start;
+  const osc = a.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(freq, t0);
+  osc.frequency.exponentialRampToValueAtTime(freq * sweep, t0 + dur);
+  const filt = a.createBiquadFilter();
+  filt.type = 'bandpass';
+  filt.frequency.value = 1150;
+  filt.Q.value = 2.2;
+  const env = a.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(peak, t0 + 0.018);
+  env.gain.setValueAtTime(peak, t0 + dur * 0.55);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(filt);
+  filt.connect(env);
+  env.connect(dest);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.03);
+}
+
+/**
  * Run 7 (the ven): a moor frog's soft "woog" — a low round note bubbling (a quick flutter,
  * as a bottle emptying under water), rising a little, through a soft lowpass. Calm and
  * small: a frog, never a horn.
@@ -173,7 +202,7 @@ function woog(freq: number, start: number, dur: number, peak: number, dest: Audi
 // `notes` (when present) plays that pitch SEQUENCE instead of `rep` copies of
 // `freq` — the way to synth a call with distinct successive pitches (koekoek's
 // hoog→laag, koolmees' ti-ta-ti-ta) so "Ken je roep" (W6.4) is learnable by ear.
-interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[]; knor?: boolean; sweep?: number; peak?: number; drum?: number; woog?: boolean; hiss?: boolean }
+interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[]; knor?: boolean; sweep?: number; peak?: number; drum?: number; woog?: boolean; hiss?: boolean; quack?: boolean }
 const CALLS: Record<string, CallSpec> = {
   edelhert:   { freq: 150, dur: 0.7,  type: 'sawtooth', vibrato: 6 },   // burlen — deep bellow
   ree:        { freq: 420, dur: 0.22, type: 'square',   rep: 2 },        // blaf — short bark
@@ -216,6 +245,9 @@ const CALLS: Record<string, CallSpec> = {
   // little higher; the adder's soft short hiss (band-passed air, quiet, never sharp)
   heikikker:     { freq: 430, dur: 0.17, type: 'sine', notes: [430, 455, 440], sweep: 1.2, peak: 0.2, woog: true },
   adder:         { freq: 3400, dur: 0.5, type: 'sine', peak: 0.045, hiss: true },
+  // run 7 (ven-life): a mallard duck's soft "kwak kwak" — a short nasal note falling a
+  // little, twice, through a soft band-pass: a duck chatting to her ducklings, never loud
+  eend:          { freq: 360, dur: 0.15, type: 'sawtooth', notes: [370, 340], sweep: 0.8, peak: 0.07, quack: true },
 };
 const DEFAULT_CALL: CallSpec = { freq: 440, dur: 0.3, type: 'sine', rep: 2 };
 
@@ -319,6 +351,8 @@ function playCallOn(a: AudioContext, bus: GainNode, id: string): number {
     const start = i * (spec.dur + gap);
     if (spec.woog) {
       woog(freq, start, spec.dur, spec.peak ?? 0.2, bus, spec.sweep ?? 1.18);
+    } else if (spec.quack) {
+      quack(freq, start, spec.dur, spec.peak ?? 0.07, bus, spec.sweep ?? 0.8);
     } else if (spec.knor) {
       knor(freq * (i % 2 ? 0.92 : 1), start, spec.dur, spec.peak ?? 0.4, bus);
     } else if (spec.vibrato) {

@@ -223,8 +223,8 @@ export const COVES: Readonly<Record<BayId, CoveSpec>> = {
       { u: 0.6, v: 0.21, side: 1, turn: -0.9, px: [777, 421] }, { u: -0.65, v: 0.53, side: -1, turn: 0.9, px: [464, 420] },
       { u: 1.2, v: 0.24, side: -1, turn: -0.9, px: [804, 277] }, { u: 1.8, v: 0.19, side: -1, turn: 0.9, px: [890, 234] },
     ],
-    clods: [{ u: 0.8, v: -0.2 }, { u: 0.8, v: 0.7 }, { u: -0.6, v: -0.7 }, { u: 0.6, v: -0.7 }, { u: -0.4, v: 0.1 }],
-    butterflies: [{ u: -1.0, v: 0.9 }, { u: -0.8, v: -0.2 }],
+    clods: [{ u: 0.8, v: -0.2 }, { u: 0.3, v: 0.75 }, { u: -0.6, v: -0.7 }, { u: 0.6, v: -0.7 }, { u: -0.4, v: 0.1 }],
+    butterflies: [{ u: -1.2, v: 0.0 }, { u: 0.25, v: -0.3 }],
     birds: [{ u: 0.0, v: -0.7 }, { u: 0.0, v: 0.4 }],
   },
   B: {
@@ -235,7 +235,7 @@ export const COVES: Readonly<Record<BayId, CoveSpec>> = {
     ],
     clods: [{ u: -0.6, v: -0.7 }, { u: -0.4, v: 0.1 }, { u: 0.5, v: -0.7 }, { u: -0.3, v: -0.4 }, { u: 0.5, v: -0.1 }],
     butterflies: [{ u: -0.8, v: -0.2 }, { u: 0.8, v: -0.3 }],
-    birds: [{ u: 0.0, v: -0.7 }, { u: 0.0, v: 0.8 }],
+    birds: [{ u: 0.0, v: -0.7 }, { u: 1.25, v: -0.2 }],
   },
   C: {
     nooks: [
@@ -244,7 +244,7 @@ export const COVES: Readonly<Record<BayId, CoveSpec>> = {
       { u: 0.15, v: 0.55, side: -1, turn: 0.9, px: [589, 292] }, { u: 1.2, v: 0.36, side: -1, turn: -0.9, px: [774, 203] },
     ],
     clods: [{ u: -1.2, v: 0.4 }, { u: -0.4, v: 0.2 }, { u: -0.6, v: -0.7 }, { u: 0.5, v: -0.7 }, { u: -0.3, v: -0.4 }],
-    butterflies: [{ u: 0.9, v: 0.7 }, { u: 0.8, v: -0.3 }],
+    butterflies: [{ u: 1.1, v: 0.0 }, { u: 0.2, v: -0.15 }],
     birds: [{ u: 0.0, v: -0.7 }, { u: -0.8, v: -0.2 }],
   },
 };
@@ -365,16 +365,25 @@ export function hintRingOf(b: Bay, at: Spot, near: number = HINT_RING.near, dept
 export const BAYS: Readonly<Record<BayId, Bay>> = { A: bay('A'), B: bay('B'), C: bay('C') };
 
 /** Is `q` hidden behind the boy in the search's picture from `side` (seen from above his big
- *  hair shades the ground beyond him, away from the lens)? A look-alike is never laid there. */
-export function underBoy(b: Bay, side: Side, q: Spot): boolean {
+ *  hair shades the ground beyond him, away from the lens)? A look-alike is never laid there.
+ *  `up` (run 7 ven-life): a look-alike that stands up — the stonechat at the top of its
+ *  0.62 m stalk, the heath blue on its cotton-grass head — counts by its top: seen down the
+ *  steep lens it sits further from the lens than its foot, and beside his big hair (wider than
+ *  his shoulders) it reads as perched on him. */
+export function underBoy(b: Bay, side: Side, q: Spot, up = 0): boolean {
   const L = searchLensNear(b.frame, b.turns[side]), B = b.stands[side];
   const ex = B.x - L.x, ez = B.z - L.z, e2 = ex * ex + ez * ez || 1;
   const dx = q.x - L.x, dz = q.z - L.z;
-  const t = (dx * ex + dz * ez) / e2;
-  if (t < 0.8 || t > 2.3) return false;
+  const t0 = (dx * ex + dz * ez) / e2;
+  // (a top `up` m over its foot lands ~0.7·up further on down the lens's 56° view)
+  const t = t0 + (up * 0.7) / Math.sqrt(e2);
+  if (t < 0.8 || t > 2.3 + (up > 0 ? 0.4 : 0)) return false;
   const lateral = Math.abs(dx * ez - dz * ex) / Math.sqrt(e2);
-  return lateral < 0.42 + 0.15 * (t - 1);
+  return lateral < 0.42 + 0.15 * (t - 1) + (up > 0 ? 0.3 : 0);
 }
+
+/** How tall (m) each kind of look-alike stands (its top, for `underBoy`). */
+export const LOOK_UP: Readonly<Record<string, number>> = { bird: 0.62, butterfly: 0.36 };
 
 /** A spot in a cove's frame (world). */
 export function inCove(b: Bay, u: number, v: number): Spot { return atLocal(b.frame, u, v); }
@@ -396,10 +405,6 @@ export function edgeOf(b: Bay, frog: FrogSpot): FrogSpot {
   if (v - fl.v < 0.1) return frog;
   return { ...atLocal(b.frame, u, v), yaw: frog.yaw, side: frog.side, nook: frog.nook };
 }
-
-/** The singing frog's rings spread from under him over the water at his feet (the same at
- *  every nook: he always sings at the very edge, `EDGE_H` over the water, the water a short
- *  step out — the low lens over the water sees them either side of him and in front). */
 
 /**
  * The song (after the find): he stays where he searched; the frog sings at the water's edge
@@ -429,8 +434,8 @@ export function singOf(b: Bay, sat: FrogSpot): { stand: Place; view: ViewSpec; y
     if (score > best) { best = score; heading = h; boySide = ang >= 0 ? 1 : -1; }
   }
   const view: ViewSpec = {
-    at: { x: frog.x, z: frog.z }, heading, halfW: 0.2, halfD: 0.1, tall: 0.12, pitchDeg: 8,
-    insetTop: 110, insetBottom: 46, seconds: 1.6, near: SING_NEAR, lensUp: 0.3,
+    at: { x: frog.x, z: frog.z }, heading, halfW: 0.2, halfD: 0.1, tall: 0.12, pitchDeg: 10,
+    insetTop: 110, insetBottom: 110, seconds: 1.6, near: SING_NEAR, lensUp: 0.3,
     include: [{ x: stand.x, z: stand.z, h: RANGER_STAND_HEIGHT, r: 0.16 }],
   };
   // (toward the lens is heading + π; his nose turns toward the boy's side of the picture)
@@ -449,11 +454,13 @@ export function answerOrder(id: BayId): BayId[] {
  * The answer: once he has sung, the lens draws calmly back over the water until the
  * nearest answering cove's water is in the picture with him — the singing frog at the
  * water's edge, the boy on the bank behind, the rings where the other frog answers. One
- * eased pull-back; the plop that follows is seen in it too.
+ * eased pull-back; the plop that follows is seen in it too. `answer` (run 7 ven-life): the
+ * frog that answers first sits there instead (the rare blue frog on the moss beside him):
+ * the picture draws back just far enough for it.
  */
-export function answerView(b: Bay, sat: FrogSpot): ViewSpec {
+export function answerView(b: Bay, sat: FrogSpot, answer?: Spot): ViewSpec {
   const frog = edgeOf(b, sat);
-  const other = BAYS[answerOrder(b.id)[0]].chorus;
+  const other = answer ?? BAYS[answerOrder(b.id)[0]].chorus;
   const stand = b.stands[frog.side];
   const mid = { x: (frog.x + other.x) / 2, z: (frog.z + other.z) / 2 };
   const half = dist(frog, other) / 2;
@@ -555,6 +562,23 @@ export function adderView(a: Spot, me: Spot): ViewSpec {
     tall: 0.5, pitchDeg: 28, insetTop: 120, insetBottom: 40, seconds: 1.5,
     include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT, r: 0.25 }],
   };
+}
+
+/** How far (rad) he stands turned off her in her hold, toward the water (`adderHoldHeading`). */
+export const ADDER_ASIDE = 0.32;
+/** His heading in her hold. The hold's lens is his walk lens behind him (so his turn keys
+ *  turn him: review r3 of ven-world), and straight behind him his body hid her coiled on the
+ *  path ahead (ven-life: she showed only as a head beside his shoulder as she reared). Turned
+ *  `ADDER_ASIDE` toward the water, in that picture she lies beside him on the heather side,
+ *  where she slides off, away from him; walking on as he faces still brings him into her
+ *  reach. */
+export function adderHoldHeading(me: Spot, a: Spot): number {
+  const h = headingTo(me, a);
+  const heath = adderHeather(a);
+  // (the picture's right of a lens looking along h: (−cos h, sin h); a larger heading turns
+  // him to the left, so she moves to the right of his body)
+  const onRight = (heath.x - a.x) * -Math.cos(h) + (heath.z - a.z) * Math.sin(h) > 0;
+  return h + (onRight ? ADDER_ASIDE : -ADDER_ASIDE);
 }
 
 /** The soft moss across the path and down to the water at a station: a strip `2a` wide from
@@ -897,10 +921,10 @@ export function decoySlots(b: Bay, nook: number, decoys: readonly { id: string; 
   };
   // (never a look-alike behind the boy in this play's picture: from his side)
   const side = b.nooks[nook].side;
-  const seen = (q: Spot): boolean => !underBoy(b, side, q);
+  const seen = (up: number) => (q: Spot): boolean => !underBoy(b, side, q, up);
   const pools: Record<string, Spot[]> = {
-    bush: shuffled([...b.slots.clods, ...b.nooks.filter((n) => n.nook !== nook).map((n) => ({ x: n.x, z: n.z }))].filter(seen)),
-    butterfly: shuffled(b.slots.butterflies.filter(seen)), bird: shuffled(b.slots.birds.filter(seen)),
+    bush: shuffled([...b.slots.clods, ...b.nooks.filter((n) => n.nook !== nook).map((n) => ({ x: n.x, z: n.z }))].filter(seen(0))),
+    butterfly: shuffled(b.slots.butterflies.filter(seen(LOOK_UP.butterfly))), bird: shuffled(b.slots.birds.filter(seen(LOOK_UP.bird))),
   };
   const out: { id: string; k: string; x: number; z: number }[] = [];
   for (const d of decoys) {

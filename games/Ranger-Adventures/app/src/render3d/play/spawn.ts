@@ -45,6 +45,11 @@ const ANIMAL_MODEL: Record<string, string> = {
   'vos-welp': 'animal-vos-fox',
   // run 7 (wc-album): the wildcamera's rare white roe, on the roe's model (Coat: its pale coat)
   'witte-ree': 'animal-ree-roedeer',
+  // run 7 (ven-life): the ven's duck family on the mallard's model (Coat: a duck's brown, a
+  // duckling's dark back and yellow face) and its rare sky-blue frog on the frog's
+  'eend-moeder': 'bird-wilde-eend',
+  eendje: 'bird-wilde-eend',
+  'heikikker-blauw': 'animal-heikikker-frog',
 };
 
 /** The antler meshes of the red-deer model (`Stag_Horns`), and the red deer that

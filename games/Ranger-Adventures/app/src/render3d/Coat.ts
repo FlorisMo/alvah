@@ -97,6 +97,16 @@ const COAT_TINT: Record<string, CoatTint> = {
   // fill (measured at the den in all four of the squirrel's lights: p10 ≥ 22, median ≥ 40).
   // (`color` names its coat; the ramp draws it, no tint on top.)
   'eekhoorn-donker': { color: '#4a2c1c', strength: 0, ramp: { dark: '#4e2d1c', light: '#94704f', split: [0.08, 0.7] } },
+  // run 7 (ven-life): the ven's duck family on the mallard's model — the GLB is a drake (a
+  // green head, a white collar, grey flanks); a mother with ducklings is a duck: mottled
+  // brown all over, darker on the back, buff below (dossier-plain: "vrouwtje bruin gespikkeld").
+  // Its fur laid on a ramp keeps the drake's markings as mottling, all in her browns.
+  'eend-moeder': { color: '#8a6a45', strength: 0, ramp: { dark: '#3f2c1b', light: '#c9a77a', split: [0.04, 0.62] } },
+  // …and her ducklings (the same model, small): a dark brown back and a yellow face and belly
+  'eendje': { color: '#6b5226', strength: 0, ramp: { dark: '#3b2b16', light: '#e6cd62', split: [0.05, 0.55] } },
+  // the ven's rare: a moor frog male in its few blue days of spring — the frog's own spots
+  // and shading kept, coloured a soft sky blue (the `pale` path, as the brown frog's)
+  'heikikker-blauw': { color: '#6fb0e0', strength: 1, pale: true },
 };
 
 /**

@@ -150,6 +150,32 @@ const EEKHOORN: Ontdekking[] = [
 /* ------------------------------------------------------------- the new homes ---- */
 // the adventures lane adds a block per new adventure here (the ven first)
 
+/* ------------------------------------------------------- ven (the north bank) ---- */
+// (run 7, the adventures lane, package ven-life: render3d/adventure/missions/ven.finds.ts
+// shows them, ven.life.ts says where. The frog he helped is his once the mission is won;
+// the adder once he really saw her in her moment; the duck with her ducklings on the open
+// water (from the bank, in a mission or in free roam); a dragonfly that comes up to him on
+// his way (the warm moods); the heath blue that flutters up from the heather by the path
+// (the sunny moods); a duck's blue feather he walks past on the bank; and now and then a
+// sky-blue frog that answers his singing frog — moor frog males turn blue for a few days in
+// spring: the world shows no season, so its line says "heel even".)
+const VEN: Ontdekking[] = [
+  { id: 'ven.heikikker', home: 'ven', soort: 'dier', naam: 'de kikker', naamKnap: 'de heikikker',
+    hint: 'Wie zingt er bij het water?', model: 'animal-heikikker-frog', geholpen: true },
+  { id: 'ven.adder', home: 'ven', soort: 'dier', naam: 'de slang', naamKnap: 'de adder',
+    hint: 'Wie ligt er in de zon?', model: 'animal-adder-snake' },
+  { id: 'ven.eend', home: 'ven', soort: 'dier', naam: 'de eend met haar kleintjes', naamKnap: 'de wilde eend met kuikens',
+    hint: 'Wie zwemt er met kleintjes?', model: 'eend-moeder' },
+  { id: 'ven.libel', home: 'ven', soort: 'dier', naam: 'de libel', naamKnap: 'de oeverlibel',
+    hint: 'Wie vliegt er over het water?', icon: 'dragonfly', stemming: ['zonnig', 'gouden-uur', 'bewolkt'] },
+  { id: 'ven.heideblauwtje', home: 'ven', soort: 'dier', naam: 'het blauwe vlindertje', naamKnap: 'het heideblauwtje',
+    hint: 'Wie zit er op de hei?', model: 'animal-heideblauwtje-butterfly', stemming: ['zonnig', 'gouden-uur'] },
+  { id: 'ven.veer', home: 'ven', soort: 'vondst', naam: 'de blauwe veer', naamKnap: 'de spiegelveer van de eend',
+    hint: 'Wat ligt er op de oever?', model: 'prop-feather' },
+  { id: 'ven.blauw', home: 'ven', soort: 'zeldzaam', naam: 'de blauwe kikker', naamKnap: 'de blauwe heikikker',
+    hint: 'Soms is een kikker heel even blauw.', model: 'heikikker-blauw' },
+];
+
 /* ------------------------------------------------- wereld (the open world) ---- */
 // The free roam's small surprises (render3d/world/Surprises.ts stages them, one at a time):
 // each is met by seeing it (on screen, big enough, long enough) or hearing its call close by.
@@ -173,7 +199,7 @@ const WERELD: Ontdekking[] = [
     hint: 'Wie waggelt in de schemer voorbij?', model: 'animal-das-badger', stemming: ['schemer'] },
 ];
 
-export const ONTDEKKINGEN: readonly Ontdekking[] = [...FRISLING, ...REE, ...WILDCAMERA, ...EEKHOORN, ...WERELD];
+export const ONTDEKKINGEN: readonly Ontdekking[] = [...FRISLING, ...REE, ...WILDCAMERA, ...EEKHOORN, ...VEN, ...WERELD];
 
 /** One row by id, or undefined. */
 export function ontdekking(id: string): Ontdekking | undefined {

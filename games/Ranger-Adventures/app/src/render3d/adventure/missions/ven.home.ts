@@ -29,6 +29,8 @@ import { atLocal, dist, headingTo, stream } from '../places';
 import { heatherGeometry, plantMaterial } from '../../world/Plants';
 import { calmGate } from '../../ProceduralMotion';
 import { WATER_LEVEL } from '../../Biomes';
+import { VenLife3d, boxInPicture, boxOf, seenStep, type LifeLay } from './ven.finds';
+import { SEEN } from './ven.life';
 import {
   BAYS, BAY_IDS, CUSHION, FLOAT_SINK, FROG_H, FROG_LEN, PATH, PATH_HALF, HIDE, BENCH, MARKER,
   allStations, carpetAt, clodSpots, coveClumps, clodsOf, fitCove, inCarpet, pathR, polar, type BayId, type Carpet, type FrogSpot, type VenLaid, type ViewSpec,
@@ -56,6 +58,9 @@ export interface VenPlay {
   adder: (Spot & { yaw: number }) | null;
   /** the soft moss this play */
   carpet: Carpet | null;
+  /** run 7 ven-life: what lives on the bank this play (the ducks, dragonflies, the heath
+   *  blue, the feather, the plopping frogs, the blue frog) */
+  life?: LifeLay;
 }
 
 /** The search's lens as the kit frames it (kit.ts `lensFor`: a spot to include with a width
@@ -91,9 +96,10 @@ export class Frog extends Actor {
   private near = true;
   private diving: { t: number; to: number; done: () => void } | null = null;
 
-  constructor(key: string, env: ActorEnv, height: number, home: VenHome | null) {
+  /** `animal` (run 7 ven-life, additive): a frog in another coat (the rare blue one) */
+  constructor(key: string, env: ActorEnv, height: number, home: VenHome | null, animal = 'heikikker') {
     const self: { frog: Frog | null } = { frog: null };
-    super(key, 'heikikker', {
+    super(key, animal, {
       ...env,
       // (in the ven it floats, its back above the water; it swims there: no shore holds it)
       groundY: (x, z) => Math.max(env.groundY(x, z), WATER_LEVEL - FLOAT_SINK) + (self.frog?.lift ?? 0),
@@ -152,6 +158,16 @@ export class Frog extends Actor {
 
   /** It sinks under the water (hidden there), or comes up again (`up`). */
   dive(up = false, secs = 0.8): Promise<void> {
+    // (a frog already under the water — hidden — is down at once: it is never updated while
+    // hidden, so a dive left pending there would surface later and take a laid-out frog
+    // under in the middle of the next play: run 7 ven-life, a second play's search waited
+    // on the cove's own calling frog for ever)
+    if (!up && !this.group.visible) {
+      this.diving?.done();
+      this.diving = null;
+      this.lift = -0.16;
+      return Promise.resolve();
+    }
     return new Promise((done) => {
       this.diving?.done();
       if (up) { this.group.visible = true; this.lift = -0.14; }
@@ -208,9 +224,15 @@ export class Frog extends Actor {
     }
   }
 
-  /** Laid at a spot (its home laid out again): it sits there, on the ground or afloat. */
+  /** Laid at a spot (its home laid out again): it sits there, on the ground or afloat — and
+   *  a dive it was in is over (it is laid here, not on its way under). */
   override place(x: number, z: number, yaw = this.yaw): void {
-    if (!this.leaping) this.lift = 0;
+    if (!this.leaping) {
+      this.lift = 0;
+      const d = this.diving;
+      this.diving = null;
+      d?.done();
+    }
     super.place(x, z, yaw);
   }
 
@@ -360,6 +382,11 @@ export class VenHome implements HomeDressing {
   private readonly spawned: { dispose(): void }[] = [];
   private disposed = false;
   private clock = 0;
+  /** run 7 ven-life: the bank's life (ven.finds.ts) */
+  readonly life: VenLife3d;
+  /** in free roam: how long (s) the duck family has been in his picture (seen: the veldgids) */
+  private ducksSeen = 0;
+  private ducksAt: { x: number; y: number } | null = null;
 
   constructor(env: DressingEnv) {
     this.group.name = 'ven-home';
@@ -581,6 +608,10 @@ export class VenHome implements HomeDressing {
     });
 
     this.layClods(null);
+
+    /* -- the ven alive: the duck family, and a play's dragonflies, heath blue, feather,
+       plopping frogs and blue frog (ven.finds.ts) -- */
+    this.life = new VenLife3d(env, this, (key, animal, aenv) => new Frog(key, aenv, FROG_H, this, animal));
   }
 
   /* ------------------------------------------------------------- a play ---- */
@@ -624,6 +655,8 @@ export class VenHome implements HomeDressing {
     }
     this.well.visible = false;
     this.wellT = -1;
+    // what lives on the bank this play (free roam: the ducks only, as the last play left them)
+    this.life.lay(p?.life ?? null);
   }
 
   /** The search's own fit for the lens it really stands at (searchBeat's `fit`): the
@@ -807,6 +840,19 @@ export class VenHome implements HomeDressing {
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void {
     this.clock += dt;
     this.cover.update(dt, t, reduced, movers);
+    // the bank's life (and in free roam: the duck family seen from the bank is his)
+    const me = movers.find((m) => m.ranger) ?? null;
+    const cam = this.env.view?.() ?? null;
+    this.life.update(dt, reduced, me, cam);
+    if (!this.laid && cam && me && this.env.discover && this.ducksSeen >= 0) {
+      // (the mother herself, as in a play: ven.ts)
+      const mother = this.life.motherObject;
+      const box = mother ? boxOf(mother) : new THREE.Box3();
+      const w = typeof window !== 'undefined' ? window.innerWidth : 1280, h = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const pic = box.isEmpty() ? null : boxInPicture(cam, box, w, h);
+      ({ run: this.ducksSeen, last: this.ducksAt } = pic ? seenStep(this.ducksSeen, this.ducksAt, pic, me, SEEN.eend, dt) : { run: 0, last: null });
+      if (this.ducksSeen >= SEEN.eend.secs) { this.ducksSeen = -1; this.env.discover('ven.eend'); }
+    }
     // the rings spread and fade
     for (const r of this.rings) {
       if (r.t < 0) { r.mesh.visible = false; continue; }
@@ -906,6 +952,7 @@ export class VenHome implements HomeDressing {
 
   dispose(): void {
     this.disposed = true;
+    this.life.dispose();
     this.cover.dispose();
     for (const s of this.spawned) s.dispose();
     for (const m of this.made) {
