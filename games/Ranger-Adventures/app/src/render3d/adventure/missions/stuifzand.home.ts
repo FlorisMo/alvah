@@ -348,7 +348,6 @@ export class ZandHome implements HomeDressing {
   private readonly spawned: { dispose(): void }[] = [];
   private disposed = false;
   private clock = 0;
-  private state: HomeState = 'before';
   /** in free roam: what he saw of the home (the anthill) */
   private readonly seen: Seen | null;
 
@@ -651,7 +650,7 @@ export class ZandHome implements HomeDressing {
       () => ({ cam: env.view!() ?? new THREE.PerspectiveCamera(), w: 1280, h: 800, me: this.me }),
       (id) => { env.discover?.(id); },
     ) : null;
-    this.seen?.watch({ id: 'stuifzand.mierenhoop', box: () => (this.anthill ? boxOf(this.anthill) : null), px: 40, secs: 1, within: 9, when: () => this.state !== null && !this.laid });
+    this.seen?.watch({ id: 'stuifzand.mierenhoop', box: () => (this.anthill ? boxOf(this.anthill) : null), px: 40, secs: 1, within: 9, when: () => !this.playing });
 
     this.layLooks(null);
     this.setState('before');
@@ -659,6 +658,8 @@ export class ZandHome implements HomeDressing {
 
   /** where the ranger is (free roam: the movers' ranger) */
   private me: Spot = { x: 0, z: 0 };
+  /** a play is laid and not yet over (the mission sees for itself what he found) */
+  private playing = false;
 
   /* ------------------------------------------------------------- a play ---- */
 
@@ -670,6 +671,7 @@ export class ZandHome implements HomeDressing {
    */
   lay(p: ZandPlay | null): void {
     this.laid = p;
+    this.playing = !!p;
     // the tufts as grown, everywhere (a window opened for another play closes)
     this.cover.stems.forEach((s, i) => {
       const b = this.built[i];
@@ -835,8 +837,10 @@ export class ZandHome implements HomeDressing {
 
   /* ----------------------------------------------------------- the frame ---- */
 
-  setState(state: HomeState): void {
-    this.state = state;
+  setState(state: HomeState, fresh = false): void {
+    // (given back after a play, in front of him: free roam again)
+    if (fresh) this.playing = false;
+    void state;
     this.showTags(false);
     this.showVisitor(null);
     this.eggs.visible = false;
