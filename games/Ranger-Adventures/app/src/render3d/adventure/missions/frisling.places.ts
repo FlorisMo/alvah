@@ -540,17 +540,30 @@ export function wallowClumps(): (Spot & { size: number })[] {
   return WALLOW_CLUMPS.map(([u, v, size]) => ({ ...atLocal(WALLOW_FRAME, u, v), size }));
 }
 
-/** A nook's world spot and the way he lies there in a pose: 0 side-on (his striped flank
- *  toward the searching eye), 1 head toward the lens, 2 tail toward it. */
+/** How far behind its aim point the search's lens stands (m, along the view's heading: the
+ *  Stage fit on a 1280×800 screen; pinned within 0.3 m of it per way by the places test). */
+export const SEARCH_EYE_BACK = 4.2;
+/** Where the search's lens stands over the ground (its x/z), seen as the search frames it. */
+export function searchEyeOf(w: Way): Spot {
+  return atLocal({ x: w.searchView.at.x, z: w.searchView.at.z, heading: w.searchView.heading }, 0, -SEARCH_EYE_BACK);
+}
+
+/** How far (rad) he lies turned off square to the lens in every pose (~17°): never more than
+ *  ~35° (run 7 fix: end-on he was a sliver without stripes, harder than his level). */
+export const POSE_TURN = 0.3;
+
+/** A nook's world spot and the way he lies there in a pose, always side-on to the line from
+ *  the search's lens to him, so his striped flank shows (run 7 fix: no pose lies end-on):
+ *  0 his head the nook's `side`, turned a little toward the lens; 1 his head the other way,
+ *  turned a little toward the lens; 2 his head the nook's `side`, turned a little away. */
 export function nookAt(id: WayId, nook: number, pose: 0 | 1 | 2): Spot & { yaw: number } {
   const w = WAYS[id];
   const n = w.nooks[nook];
   const p = atLocal(w.frame, n.u, n.v);
-  const lens = w.searchView.heading; // the way the search lens looks
-  const yaw = pose === 0 ? lens + n.side * (Math.PI / 2) + 0.3 * n.side
-    : pose === 1 ? lens + Math.PI + 0.3 * n.side
-      : lens + 0.3 * n.side;
-  return { ...p, yaw };
+  const sight = headingTo(searchEyeOf(w), p); // the way the lens looks at him
+  const side = pose === 1 ? -n.side : n.side;
+  const turn = pose === 2 ? -POSE_TURN : POSE_TURN;
+  return { ...p, yaw: sight + side * (Math.PI / 2 + turn) };
 }
 
 /** A look-alike spot of a way's stand, in the world. */

@@ -18,8 +18,9 @@ import {
   cluePosts, clueGap, bootPrints, CLUE_FRAME, WAYS, WAY_IDS, FAMILY_LAYOUTS, nookAt, decoyAt, placesFor, useWay, wallowLog,
   wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, outSpotOf, bagView, sideBySideView, BAG_REACH, type WayId, type Way, type WayView,
   zeugStare, zeugView, ZEUG_STARE_M, NEST_R, ZEUG_STEP_M, walkOnSpot, yearlingSideOf, yearlingWay, legGap, YEARLING_LOG_M,
-  larkLandings, LARK_LAND, LENS_BACK, NOOK_CLEAR_PX,
+  larkLandings, LARK_LAND, LENS_BACK, NOOK_CLEAR_PX, searchEyeOf, POSE_TURN,
 } from './frisling.places.ts';
+import { fitGlimpse, lensAxis, looksSize, pigletBack, shareFor, BACK_GRID, LOOKS_REF, PIGLET_TOP } from './frisling.window.ts';
 import { WALK_ON_M } from '../beats/walk-math.ts';
 import { anchorInBiome, biomeAt, heightAt, VEN_CENTER } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
@@ -29,7 +30,7 @@ import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { obstacleGap } from '../../CharacterController.ts';
 import { REE_PLACES, reeClearings, LAYOUTS as REE_LAYOUTS, COPSE_TREES } from './ree.places.ts';
 import { fitFrame, screenOf } from '../../play/frame-fit.ts';
-import { growStems, openWindow, visibleShare, backPoints } from '../cover-math.ts';
+import { growStems, visibleShare, blocks, type V3 } from '../cover-math.ts';
 import { SIZE, RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import { lyingHeight, LEG_SHARE } from '../../play/pose.ts';
 import { knobsFor } from '../../../core/skill.ts';
@@ -400,27 +401,108 @@ for (const id of WAY_IDS) {
     }
   });
 
-  test(`${id}: every nook shows the glimpse the knobs ask for (the same window, never more)`, () => {
-    const clumps = standCover(id);
+  test(`${id}: he always lies side-on to the search's lens (his striped flank, never end-on)`, () => {
+    // (run 7 fix: end-on he was a ~110 px² sliver with no stripes, harder than his level)
+    const lens = lensOf(w.searchView);
+    const eye = searchEyeOf(w);
+    assert.ok(Math.hypot(eye.x - lens.cam.x, eye.z - lens.cam.z) < 0.3, `${id}: the search eye stands where the lens fits (${Math.hypot(eye.x - lens.cam.x, eye.z - lens.cam.z).toFixed(2)} m off)`);
+    for (let n = 0; n < w.nooks.length; n++) {
+      const yaws = new Set<string>();
+      for (const pose of [0, 1, 2] as const) {
+        const p = nookAt(id, n, pose);
+        yaws.add(p.yaw.toFixed(3));
+        const sight = { x: p.x - lens.cam.x, z: p.z - lens.cam.z };
+        const l = Math.hypot(sight.x, sight.z);
+        // the angle between his body and square to the line of sight: at most ~35°
+        const along = Math.abs((Math.sin(p.yaw) * sight.x + Math.cos(p.yaw) * sight.z) / l);
+        const off = Math.asin(Math.min(1, along)) * 180 / Math.PI;
+        assert.ok(off <= 35 && Math.abs(off - POSE_TURN * 180 / Math.PI) < 6, `${id} nook ${n} pose ${pose}: ${off.toFixed(0)}° off side-on`);
+      }
+      assert.equal(yaws.size, 3, `${id} nook ${n}: three different ways to lie`);
+    }
+  });
+}
+
+/* ---- his glimpse: the same share, the same size in the picture, in every hiding place ---- */
+
+/** A back point's piece of his flank in the picture (px²): its stretch of his back along his
+ *  body (the fine grid's step) × a stripe of his flank's height, projected through the lens. */
+function cellPx(p: V3, yaw: number, lens: { cam: THREE.Vector3; look: THREE.Vector3 }): number {
+  const half = (SIZE.frisling.len * 0.72) / (BACK_GRID.along - 1) / 2;
+  const fx = Math.sin(yaw) * half, fz = Math.cos(yaw) * half, dy = PIGLET_TOP / 10;
+  const pr = (q: V3): { x: number; y: number } => screenOf(q, lens.cam, lens.look, FOV, W, H);
+  const a0 = pr({ x: p.x - fx, y: p.y, z: p.z - fz }), a1 = pr({ x: p.x + fx, y: p.y, z: p.z + fz });
+  const c0 = pr({ x: p.x, y: p.y - dy, z: p.z }), c1 = pr({ x: p.x, y: p.y + dy, z: p.z });
+  return Math.abs((a1.x - a0.x) * (c1.y - c0.y) - (a1.y - a0.y) * (c1.x - c0.x));
+}
+
+/** Every way × nook × pose fitted at every band from the planned lens: the share shown and
+ *  the visible area of him in the picture (the back points the lens sees × their size). */
+const FITTED = (() => {
+  const out: { id: WayId; n: number; pose: number; band: number; g: number; share: number; area: number; changed: number; closed: number }[] = [];
+  for (const id of WAY_IDS) {
+    const w = WAYS[id];
     const lens = lensOf(w.searchView);
     const eye = { x: lens.cam.x, y: lens.cam.y, z: lens.cam.z };
+    const axis = lensAxis(w.searchView.heading, w.searchView.pitchDeg);
+    const clumps = standCover(id);
     for (let n = 0; n < w.nooks.length; n++) {
       for (const pose of [0, 1, 2] as const) {
         const p = nookAt(id, n, pose);
-        const back = backPoints(p.x, heightAt(p.x, p.z), p.z, p.yaw, SIZE.frisling.len, LYING_H);
-        const closed = visibleShare(back, eye, growStems(clumps, standSeed(id), heightAt).stems);
-        assert.ok(closed < 0.25, `${id} nook ${n} pose ${pose}: before the window he is (nearly) hidden (${closed.toFixed(2)})`);
-        for (const g of GLIMPSES) {
+        const y = heightAt(p.x, p.z);
+        const back = pigletBack(p, y);
+        for (let band = 1; band <= 6; band++) {
+          const g = knobsFor('zoeken', band).glimpse;
           const stems = growStems(clumps, standSeed(id), heightAt).stems;
-          const changed = openWindow(stems, eye, back, g, g * 1.5);
-          const share = visibleShare(back, eye, stems);
-          assert.ok(share >= g * 0.6 && share <= g * 1.6, `${id} nook ${n} pose ${pose}: glimpse ${g} shows ${share.toFixed(2)} of his back`);
-          assert.ok(changed.length <= 20, `${id} nook ${n}: a few plants made smaller (${changed.length})`);
+          const closed = visibleShare(back, eye, stems);
+          const built = stems.map((s) => ({ h: s.h, lx: s.lx, lz: s.lz, r: s.r }));
+          const changed = fitGlimpse(stems, built, eye, back, shareFor(g, back, p.yaw, eye, axis), { x: p.x, y, z: p.z }).length;
+          const seen = back.filter((q) => !stems.some((st) => blocks(st, eye, q)));
+          out.push({ id, n, pose, band, g, share: seen.length / back.length, area: seen.reduce((a, q) => a + cellPx(q, p.yaw, lens), 0), changed, closed });
         }
       }
     }
-  });
+  }
+  return out;
+})();
+const median = (xs: readonly number[]): number => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
+test('every hiding place shows the share of his back the level asks for (±15 %), fitted both ways', () => {
+  for (const f of FITTED) {
+    const at = `${f.id} nook ${f.n} pose ${f.pose} band ${f.band}`;
+    assert.ok(f.closed < 0.25, `${at}: before the window he is (nearly) hidden (${f.closed.toFixed(2)})`);
+    assert.ok(f.share >= f.g * 0.85 && f.share <= f.g * 1.15, `${at}: glimpse ${f.g} shows ${f.share.toFixed(3)} of his back`);
+    assert.ok(f.changed <= 20, `${at}: a few plants changed (${f.changed})`);
+  }
+});
+
+test('he is as big in the picture in every hiding place at one level, and smaller band by band', () => {
+  let before = Infinity;
+  for (let band = 1; band <= 6; band++) {
+    const row = FITTED.filter((f) => f.band === band);
+    const mid = median(row.map((f) => f.area));
+    for (const f of row) {
+      const k = f.area / mid;
+      assert.ok(k >= 0.8 && k <= 1.22, `band ${band}: ${f.id} nook ${f.n} pose ${f.pose} shows ${f.area.toFixed(0)} px² of him (${k.toFixed(2)} × the band's ${mid.toFixed(0)})`);
+    }
+    assert.ok(mid < before * 0.95, `band ${band}: ${mid.toFixed(0)} px² of him, less than the band before (${before.toFixed(0)})`);
+    before = mid;
+  }
+  // (the size the share evens out to: the middle hiding place's)
+  const looks: number[] = [];
+  for (const id of WAY_IDS) {
+    const w = WAYS[id];
+    const lens = lensOf(w.searchView);
+    for (let n = 0; n < w.nooks.length; n++) for (const pose of [0, 1, 2] as const) {
+      const p = nookAt(id, n, pose);
+      looks.push(looksSize(pigletBack(p, heightAt(p.x, p.z)), p.yaw, lens.cam, lensAxis(w.searchView.heading, w.searchView.pitchDeg)));
+    }
+  }
+  assert.ok(Math.abs(median(looks) / LOOKS_REF - 1) < 0.02, `LOOKS_REF ${LOOKS_REF} is the middle hiding place's (${median(looks).toFixed(4)})`);
+});
+
+for (const id of WAY_IDS) {
+  const w = WAYS[id];
   test(`${id}: ≥ 8 look-alike spots, none on a nook, inside the picture; the dead bracken on each`, () => {
     assert.ok(w.decoySpots.length >= 8, `${w.decoySpots.length} spots`);
     assert.ok(w.decoySpots.filter((d) => d.edge).length >= 2, 'edge spots for the nightjar');

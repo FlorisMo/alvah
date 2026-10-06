@@ -25,7 +25,8 @@ export interface FrislingVariant {
   way: WayId;
   /** WAYS[way].nooks index: where in the stand he lies */
   nook: number;
-  /** 0 side-on, 1 head toward the lens, 2 tail toward it */
+  /** how he lies in the nook, always his striped flank to the lens (frisling.places
+   *  `nookAt`): 0 head the nook's way, 1 head the other way, 2 turned a little away */
   pose: 0 | 1 | 2;
   /** per trial decoy (in trial order): the WAYS[way].decoySpots index it is laid on */
   decoySpots: number[];
@@ -81,13 +82,14 @@ export const LONGEST_WEIGHT = 2;
  * time that way came, nor does the family lie the way it lay then: a way he knows still
  * hides him somewhere new and finds the family otherwise.
  *
- * Notes: the way, the family and the nook as ONE short note ('way:steen/modder/3'), how
- * he lies in it last ('pose:1', cut first when the history runs short): the history keeps
- * a play's variant to 60 characters, and the light and a rare visitor are noted before the
- * home lays its play (the caller notes the calm order, 'rust', before this), so the way,
- * the family and the nook always fit — the next play reads them back, and a grown-up
- * reading his growth sees where each search was (run 7 growth: with the longest light and
- * a rare visitor the nook used to be cut).
+ * Notes: the way, the family, the nook and how he lay in it as ONE short note
+ * ('way:steen/modder/3b': nook 3, pose b = 1; pose a, b, c = 0, 1, 2): the history keeps a
+ * play's variant to 60 characters, and the light and a rare visitor are noted before the
+ * home lays its play (the caller notes the calm order, 'rust', before this), so all four
+ * always fit — the next play reads them back, and a grown-up reading his growth sees where
+ * each search was and how he lay (run 7 growth: with the longest light and a rare visitor
+ * the nook used to be cut; run 7 fix: a separate 'pose' note was the first thing cut, and
+ * 'way:steen/modder/3/1' would be one character too many in the worst case).
  */
 export function frislingVariant(play: Play, past: readonly PastPlay[], decoys: readonly DecoyKind[]): FrislingVariant {
   const way = drawWay(play.fork('way'), past.map((p) => p.way));
@@ -114,8 +116,7 @@ export function frislingVariant(play: Play, past: readonly PastPlay[], decoys: r
   const lk = play.fork('leeuwerik');
   const leeuwerik = extras && lk.chance(0.5) ? lk.int(0, w.walkSpots.length - 1) : null;
   const nest = extras && play.fork('nest').chance(0.5);
-  play.note('way', `${way}/${FAMILY_LAYOUTS[family].id}/${nook}`);
-  play.note('pose', pose); // (how he lies in the nook: last, it may be cut)
+  play.note('way', `${way}/${FAMILY_LAYOUTS[family].id}/${nook}${POSE_CODE[pose]}`);
   return { way, nook, pose, decoySpots, family, leeuwerik, nest };
 }
 
@@ -159,14 +160,18 @@ export function assignSpots(order: readonly number[], spots: readonly DecoySpot[
   return out;
 }
 
+/** How a pose is written after the nook in the way note ('3b': nook 3, pose 1). */
+export const POSE_CODE = ['a', 'b', 'c'] as const;
+
 /** One of his earlier frisling plays, as the next one reads it back: its seed, its way,
- *  and (when the history kept them) its family layout and nook. */
-export interface PastPlay { sd?: number; way: string; fam?: string; nook?: number }
+ *  and (when the history kept them) its family layout, nook and how he lay there. */
+export interface PastPlay { sd?: number; way: string; fam?: string; nook?: number; pose?: number }
 
 /** His newest frisling plays, newest first, one per play (by its seed): the plays started
  *  in this page session (`started`, oldest first: a play stopped early may have left no
- *  beat) before the history's (`BeatLog.va`, 'way:steen/boom/3,pose:1'; a save from before
- *  run 7's growth package noted 'way:steen/boom,nook:3/1'). */
+ *  beat) before the history's (`BeatLog.va`, 'way:steen/boom/3b'; a save from before run
+ *  7's fair-variety fix noted 'way:steen/boom/3,pose:1', one from before its growth package
+ *  'way:steen/boom,nook:3/1'). */
 export function recentPlays(history: readonly Beat[], started: readonly PastPlay[] = []): PastPlay[] {
   const seen = new Set<number>();
   const out: PastPlay[] = [];
@@ -178,13 +183,18 @@ export function recentPlays(history: readonly Beat[], started: readonly PastPlay
   for (let i = history.length - 1; i >= 0; i--) {
     const h = history[i];
     if (h.m !== 'frisling' || !h.va || (h.sd !== undefined && seen.has(h.sd))) continue;
-    // ('way:steen/boom/3': the way, the family layout, the nook; an older save: 'way:steen/boom'
-    // and 'nook:3/1', the nook then the pose)
-    const m = /(?:^|,)way:([a-z]+)(?:\/([a-z]+))?(?:\/(\d+))?/.exec(h.va);
+    // ('way:steen/boom/3b': the way, the family layout, the nook and the pose; older saves:
+    // 'way:steen/boom/3' and 'pose:1', or 'way:steen/boom' and 'nook:3/1', the nook then the pose)
+    const m = /(?:^|,)way:([a-z]+)(?:\/([a-z]+))?(?:\/(\d+)([a-c])?)?/.exec(h.va);
     if (!m) continue;
     if (h.sd !== undefined) seen.add(h.sd);
-    const n = m[3] ?? /(?:^|,)nook:(\d+)/.exec(h.va)?.[1];
-    out.push({ sd: h.sd, way: m[1], ...(m[2] ? { fam: m[2] } : {}), ...(n !== undefined ? { nook: Number(n) } : {}) });
+    const old = /(?:^|,)nook:(\d+)(?:\/(\d))?/.exec(h.va);
+    const n = m[3] ?? old?.[1];
+    const pose = m[4] ? POSE_CODE.indexOf(m[4] as 'a') : (/(?:^|,)pose:(\d)/.exec(h.va)?.[1] ?? old?.[2]);
+    out.push({
+      sd: h.sd, way: m[1], ...(m[2] ? { fam: m[2] } : {}), ...(n !== undefined ? { nook: Number(n) } : {}),
+      ...(pose !== undefined ? { pose: Number(pose) } : {}),
+    });
   }
   return out;
 }

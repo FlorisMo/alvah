@@ -10,9 +10,10 @@
  * It stands before the mission and after it (a place, not a prop that vanishes); only
  * the ring's little prints go once he is home. Each play is laid in under the briefing
  * card (`lay`): the piglet's nook gets a small window in the stems over his back for the
- * search's lens (cover-math `openWindow`, the knobs' glimpse: his stripes glimpsed between
- * the stems, never more), the trial's look-alikes go to this play's spots, the ring's
- * prints point the way. `layDefault` puts back free roam's home (run 6's stand).
+ * search's lens (frisling.window `fitGlimpse`, the knobs' glimpse fitted both ways: his
+ * stripes glimpsed between the stems, as much in every nook and every way he lies), the
+ * trial's look-alikes go to this play's spots, the ring's prints point the way.
+ * `layDefault` puts back free roam's home (run 6's stand).
  */
 
 import * as THREE from 'three';
@@ -20,14 +21,13 @@ import type { Distractor } from '../../../content/types';
 import type { DressingEnv, HomeDressing } from '../../world/Residents';
 import type { HomeState } from '../types';
 import { CoverField } from '../cover';
-import { backPoints, openWindow, visibleShare, type Clump, type V3 } from '../cover-math';
+import { visibleShare, type Clump, type V3 } from '../cover-math';
 import { PatchField } from '../patches';
 import { StandDecoys, type Decoy } from '../decoys';
 import { groundDecal } from '../decal';
 import { atLocal, headingTo, stream } from '../places';
-import { heightFor } from '../../play/spawn';
-import { lyingHeight, LEG_SHARE } from '../../play/pose';
 import { CutFence } from './frisling.clue';
+import { fitGlimpse, lensAxis, pigletBack, refitGlimpse, shareFor } from './frisling.window';
 import { SIZE } from '../../AnimalScale';
 import {
   FRISLING_PLACES, WALLOW, WALLOW_FRAME, WALLOW_LOG, MARKER, WAYS, WAY_IDS, DEFAULT_WAY, NEST_R,
@@ -56,6 +56,10 @@ class Stand {
   readonly nest: THREE.Mesh;
   private readonly env: DressingEnv;
   readonly id: WayId;
+  /** the stems as grown (a window is fitted from these) */
+  private readonly built: readonly { h: number; lx: number; lz: number; r: number }[];
+  /** the nook, pose and glimpse the window was last fitted for */
+  private laid: { nook: number; pose: 0 | 1 | 2; glimpse: number } = { nook: 0, pose: 0, glimpse: 0.3 };
 
   constructor(env: DressingEnv, id: WayId, distractors: readonly Distractor[]) {
     this.env = env;
@@ -64,6 +68,7 @@ class Stand {
     this.group = env.detail(w.stand, STAND_REACH);
     const clumps: Clump[] = standCover(id);
     this.cover = new CoverField({ parent: this.group, groundY: env.groundY, clumps, seed: standSeed(id) });
+    this.built = this.cover.stems.map((s) => ({ h: s.h, lx: s.lx, lz: s.lz, r: s.r }));
     this.spotClump = w.decoySpots.map((_, i) => clumps.findIndex((c) => c.decoy === spotTag(i)));
     // the look-alikes, first on their default spots (free roam's stand shows them there)
     const spots = assignSpots(w.decoySpots.map((_, i) => i), w.decoySpots, distractors.map(kindOf));
@@ -98,18 +103,35 @@ class Stand {
     this.cover.reset();
   }
 
-  /** Close any old window and open one over him lying in `nook` (as `pose`), for the
-   *  search's lens: `glimpse` of his back shows, never more than 1.5× it. */
+  /** Close any old window and fit one over him lying in `nook` (as `pose`), for the
+   *  search's lens: the level's `glimpse` of his back shows (frisling.window `shareFor`:
+   *  as big in the picture in every nook), the stand opened or closed to it. */
   openFor(nook: number, pose: 0 | 1 | 2, glimpse: number): { share: number; changed: number; eye: V3 } {
     const w = WAYS[this.id];
     this.cover.reset();
-    const lens = this.env.lensFor(w.searchView);
-    const p = nookAt(this.id, nook, pose);
-    const g = this.env.groundY;
-    const back = backPoints(p.x, g(p.x, p.z), p.z, p.yaw, SIZE.frisling.len, lyingHeight(heightFor('frisling'), LEG_SHARE.frisling));
-    const changed = openWindow(this.cover.stems, lens.cam, back, glimpse, glimpse * 1.5);
+    this.laid = { nook, pose, glimpse };
+    const eye = this.env.lensFor(w.searchView).cam;
+    const { back, at, want } = this.backFor(eye);
+    const changed = fitGlimpse(this.cover.stems, this.built, eye, back, want, at);
     this.cover.refresh();
-    return { share: visibleShare(back, lens.cam, this.cover.stems), changed: changed.length, eye: lens.cam };
+    return { share: visibleShare(back, eye, this.cover.stems), changed: changed.length, eye };
+  }
+
+  /** The search's own check for the lens it really stands at (`searchBeat`'s `fit`): off
+   *  the band, the window is fitted again for it; returns the stems that grow to it. */
+  refitFor(eye: V3, glimpse = this.laid.glimpse): number[] {
+    this.laid = { ...this.laid, glimpse };
+    const { back, at, want } = this.backFor(eye);
+    return refitGlimpse(this.cover.stems, this.built, eye, back, want, at);
+  }
+
+  /** His back lying as laid, where he lies, and the share of it to show from `eye`. */
+  private backFor(eye: V3): { back: V3[]; at: V3; want: number } {
+    const p = nookAt(this.id, this.laid.nook, this.laid.pose);
+    const y = this.env.groundY(p.x, p.z);
+    const back = pigletBack(p, y);
+    const v = WAYS[this.id].searchView;
+    return { back, at: { x: p.x, y, z: p.z }, want: shareFor(this.laid.glimpse, back, p.yaw, eye, lensAxis(v.heading, v.pitchDeg)) };
   }
 
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean }[]): void {
@@ -346,6 +368,10 @@ export class FrislingHome implements HomeDressing {
   /** This play's stand, its field, its look-alikes (what the script works with). */
   get stand(): Stand { return this.stands[this.way]; }
   get cover(): CoverField { return this.stands[this.way].cover; }
+
+  /** The search's check for the lens it really stands at (`searchBeat`'s `fit`): this
+   *  play's stand fitted again for it when its share is off the level's (frisling.window). */
+  refitSearch(eye: V3, glimpse: number): number[] { return this.stands[this.way].refitFor(eye, glimpse); }
   get field(): PatchField { return this.fields[WAYS[this.way].field]; }
   get decoys(): readonly Decoy[] { return this.stands[this.way].decoys.decoys; }
   /** run 7 (body): this play's stand's nest of bitten fronds */

@@ -325,8 +325,9 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   stopRub();
   hideButterflies();
 
-  // 3 · find him (zoeken): the knobs' glimpse of his back, never more than 1.5× it, among
-  // the knobs' look-alikes (laid under the briefing card), the first hint after the knobs'
+  // 3 · find him (zoeken): the knobs' glimpse of his back, fitted both ways for the lens the
+  // search really stands at (frisling.window: as much of him in every nook), among the
+  // knobs' look-alikes (laid under the briefing card), the first hint after the knobs'
   // seconds (searchBeat reads them)
   k.stats.look_alikes = home.decoys.filter((d) => d.object.visible).length;
   // (the moment he finds him, the look-alikes' birds and butterfly startle and fly off)
@@ -334,7 +335,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const offFly = k.onTick(() => { if (!flewOff && k.stats.search_seconds !== undefined) { flewOff = true; flyOff(); } });
   await searchBeat(k, 0, {
     view: way.searchView, stand: way.coverApproach, cover: home.cover, target: lost, call: 'piep',
-    lyingH: lyingHeight(heightFor('frisling'), LEG_SHARE.frisling), glimpse: knobs.glimpse, glimpseMax: knobs.glimpse * 1.5,
+    lyingH: lyingHeight(heightFor('frisling'), LEG_SHARE.frisling), glimpse: knobs.glimpse,
+    fit: (eye, _back, share) => home.refitSearch(eye, share),
     decoys: home.decoys.map((d) => ({ id: d.id, object: d.object, x: d.x, z: d.z, poke: (f) => home.poke(d, f) })),
     lines: { zoek: c.zoek, mis: c.mis, hint: c.hint, gevonden: k.steps[0].skin.copy?.goed ?? c.zoek },
   });
