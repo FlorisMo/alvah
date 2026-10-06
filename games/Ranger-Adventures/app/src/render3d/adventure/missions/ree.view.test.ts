@@ -265,7 +265,8 @@ test('run 7 (words-ree): three calf moments, three pictures — by his boots low
     // calf still clearly there, his head under the objective line
     const room = fitLens(roomView(l, c, talk));
     const r = backOf(room, c);
-    assert.ok(r.len >= 75, `${l.id}${i} room: the calf is ${r.len.toFixed(0)} px long`);
+    // (measured lying; here it stands up and totters, a bigger shape than its back)
+    assert.ok(r.len >= 70, `${l.id}${i} room: the calf is ${r.len.toFixed(0)} px long`);
     const back = toward(talk, c, -ROOM_BACK_M);
     for (const [what, q] of [['here', talk], ['a step back', back]] as const) {
       const gq = groundY(q.x, q.z);

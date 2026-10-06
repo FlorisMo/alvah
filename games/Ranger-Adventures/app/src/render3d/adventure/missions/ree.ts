@@ -376,7 +376,8 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   const bed0 = { x: calf.x, z: calf.z };
   const talk = calfTalkOf(l, bed0);
   await k.walkRanger(talk.x, talk.z, 0.05);  // up to it, calmly, through the grass
-  /** Where he stands now (he may have stepped back), facing the calf. */
+  /** Where he stands now (he may have stepped back, or stopped a stride short of `talk`
+   *  in the grass), facing the calf: every picture is fitted to where he really is. */
   const standing = (): Place => { const m = k.ranger(); return { x: m.x, z: m.z, r: 0.4, heading: headingTo(m, calf) }; };
   /** Each moment's own picture, from where the calf lies and he stands now: the close side
    *  view (aai), lower by his boots (geur), a little wider with room behind him (oppakken). */
@@ -384,7 +385,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
     id === 'geur' ? bootView(l, at, stand) : id === 'oppakken' ? roomView(l, at, stand) : calfView(l, at, stand);
   // the stems between him and it bend aside: from the close view it lies in plain sight
   // by his boots (a window in the grass for that lens, the grass round it parted)
-  let view = viewOf((rust.current?.id ?? 'aai') as CalfMoment, bed0, talk);
+  let view = viewOf((rust.current?.id ?? 'aai') as CalfMoment, bed0, standing());
   const uncover = (at: { x: number; z: number; yaw: number }): void => {
     const lens = k.lensFor(view).cam;
     const drawnH = home.cover.stems.map((st) => st.h);
@@ -394,7 +395,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   };
   uncover(calf);
   k.beat = 'calf:frame';
-  await k.frame(view, { face: talk.heading });
+  await k.frame(view, { face: headingTo(k.ranger(), bed0) });
   // a wrong answer startles it: it jumps up, bolts a metre and a half to the side (never at
   // him, never at the lens) and drops flat in the grass again
   const boltTo = calfBolt(l, bed0, talk);
@@ -485,6 +486,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
     // drops again, and the moment comes back. Given room, it lies down again where it stands.
     oppakken: () => {
       steps = 0;
+      const stood = { x: k.ranger().x, z: k.ranger().z };
       feet(true);
       return rust.still('oppakken', {
         line: c.opstaan ?? c.raakNiet, hands: () => calf.body,
@@ -498,8 +500,12 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
           await bolt(true);
           feet(true);
         },
-        held: () => { feet(false); },
-        right: async () => { await k.guard(calf.lie(true)); },
+        held: () => { feet(false); k.stats.room_back_m = Math.round(dist(k.ranger(), stood) * 100) / 100; },
+        right: async () => {
+          // (the dev read: how far he stepped back in all, once he stands)
+          k.stats.room_stood_m = Math.round(dist(k.ranger(), stood) * 100) / 100;
+          await k.guard(calf.lie(true));
+        },
       }).finally(() => feet(false));
     },
   };

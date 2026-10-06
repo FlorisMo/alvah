@@ -617,8 +617,9 @@ export function bootView(l: ReeLayout, calf: Spot, talk: Place): ViewSpec {
 }
 
 /** How far back (m) the give-room picture keeps room for his step: the moment asks for
- *  `BACK_M` (beats/hold-math.ts), a child's step back may run on a little. */
-export const ROOM_BACK_M = 1.2;
+ *  `BACK_M` (beats/hold-math.ts, 0.6), and with the stop and its short coast he stands
+ *  ~0.8 m back (measured in play: 0.77 m twice) — twice that, so he never leaves it. */
+export const ROOM_BACK_M = 1.5;
 
 /** Run 7 (words-ree): the calf standing up and tottering toward him (`oppakken`, GIVE IT
  *  ROOM): the same side as `calfView`, a little wider — he whole where he stands and where
