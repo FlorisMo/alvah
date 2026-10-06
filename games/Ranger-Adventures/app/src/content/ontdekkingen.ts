@@ -15,6 +15,14 @@
  * names only. Each home ends up with ≥ 4 rows and ≥ 1 `zeldzaam` (§4.7). Every lane adds
  * its home's rows in its OWN block below, so lanes never edit the same lines.
  *
+ * A page fills over a few sessions of now-and-then play, never in one afternoon (owner,
+ * 2026-10-05): a home's first play finds about half its page at most; the rare ones come
+ * from its 2nd play on (core/discover.ts); and a few things come only in their own light
+ * (`stemming`) or from a later visit (`vanaf`: its hint line says so, calmly, never "come
+ * back tomorrow"). One animal can live on several pages (a buzzard over the meadow and
+ * over the whole heath): once he knows it from one page, the others show it softened with
+ * where it is met there (`OOK_HIER`).
+ *
  * Pure data (the node tests read it directly): type-only imports.
  */
 
@@ -43,6 +51,9 @@ export interface Ontdekking {
   icon?: IconName;
   /** only in these moods (a nightjar at dusk) */
   stemming?: MoodId[];
+  /** a later visit: it first comes on his `vanaf`-th play of this home, never before (the
+   *  home obeys it: `komtNog`); 2 = from his second visit */
+  vanaf?: number;
   /** the animal this home's mission helped: recorded quietly when the mission is won */
   geholpen?: boolean;
 }
@@ -108,8 +119,9 @@ const WILDCAMERA: Ontdekking[] = [
     hint: 'Loop eens langs de camera.', model: 'ranger-alvah' },
   { id: 'wildcamera.vos', home: 'wildcamera', soort: 'dier', naam: 'de vos',
     hint: 'Wie sluipt er ’s nachts langs?', model: 'animal-vos-fox' },
+  // (never on his first night: the camera's own close-up is a later night's surprise)
   { id: 'wildcamera.neus', home: 'wildcamera', soort: 'foto', naam: 'de neus op de foto', naamKnap: 'de snuit op de foto',
-    hint: 'Wie komt héél dichtbij?', model: 'animal-wildzwijn-boar' },
+    hint: 'Wie komt op een nacht héél dichtbij?', model: 'animal-wildzwijn-boar', vanaf: 2 },
   { id: 'wildcamera.vosjes', home: 'wildcamera', soort: 'zeldzaam', naam: 'de vos met jongen', naamKnap: 'de vos met welpen',
     hint: 'Soms komt er een hele familie.', model: 'vos-welp' },
   { id: 'wildcamera.witte-ree', home: 'wildcamera', soort: 'zeldzaam', naam: 'de witte ree',
@@ -121,7 +133,9 @@ const WILDCAMERA: Ontdekking[] = [
 // the day are met with a click and recorded quietly (the meet is their moment); the
 // nest, the gnawed cones and the seedling only once he saw them; the two rare visitors
 // are staged where a squirrel is big in the picture. The great tit, the blackbird, the
-// robin, the raven and the cuckoo are birds of the whole wood: their rows are 'wereld'.)
+// robin, the raven and the cuckoo are birds of the whole wood: met here by a click, they
+// are in no row ('Overal' is met out in the open world); the nuthatch comes from his
+// second visit on.)
 const EEKHOORN: Ontdekking[] = [
   { id: 'eekhoorn.eekhoorn', home: 'eekhoorn', soort: 'dier', naam: 'de eekhoorn', naamKnap: 'de rode eekhoorn',
     hint: 'Wie verstopt nootjes onder het mos?', model: 'animal-eekhoorn-squirrel', geholpen: true },
@@ -132,8 +146,9 @@ const EEKHOORN: Ontdekking[] = [
     hint: 'Wie lacht er in het bos?', model: 'bird-groene-specht' },
   { id: 'eekhoorn.grote-bonte-specht', home: 'eekhoorn', soort: 'dier', naam: 'de bonte specht', naamKnap: 'de grote bonte specht',
     hint: 'Wie roffelt op een boom?', model: 'bird-grote-bonte-specht' },
+  // (a neighbour of a later day: never on his first visit)
   { id: 'eekhoorn.boomklever', home: 'eekhoorn', soort: 'dier', naam: 'de boomklever',
-    hint: 'Wie loopt ondersteboven langs de boom?', model: 'bird-boomklever' },
+    hint: 'Wie loopt ondersteboven langs de boom?', model: 'bird-boomklever', vanaf: 2 },
   { id: 'eekhoorn.nest', home: 'eekhoorn', soort: 'vondst', naam: 'het eekhoornnest', naamKnap: 'de kobel',
     hint: 'Waar slaapt de eekhoorn?', icon: 'home' },
   { id: 'eekhoorn.kale-kegels', home: 'eekhoorn', soort: 'spoor', naam: 'de kale dennenappels',
@@ -188,13 +203,15 @@ const ECODUCT: Ontdekking[] = [
     hint: 'Wie komt er over de brug?', model: 'hinde', geholpen: true },
   { id: 'ecoduct.wildzwijn', home: 'ecoduct', soort: 'dier', naam: 'het zwijn met haar biggen', naamKnap: 'de zeug met frislingen',
     hint: 'Wie knort er over de brug?', model: 'animal-wildzwijn-boar' },
+  // (the roe and the fox never on his first evening here: they cross on later ones, the fox
+  // in the mist and at dusk; nothing walks ON the bridge: they come round its end)
   { id: 'ecoduct.ree', home: 'ecoduct', soort: 'dier', naam: 'de ree met haar kalfje', naamKnap: 'de reegeit met haar kalf',
-    hint: 'Wie stapt er licht over?', model: 'animal-ree-roedeer' },
-  { id: 'ecoduct.vos', home: 'ecoduct', soort: 'dier', naam: 'de vos op de brug',
-    hint: 'Wie sluipt er bij schemer over?', model: 'animal-vos-fox', stemming: ['ochtendnevel', 'schemer'] },
+    hint: 'Wie stapt er licht over?', model: 'animal-ree-roedeer', vanaf: 2 },
+  { id: 'ecoduct.vos', home: 'ecoduct', soort: 'dier', naam: 'de vos bij de brug', naamKnap: 'de vos bij het ecoduct',
+    hint: 'Wie sluipt er bij schemer over?', model: 'animal-vos-fox', stemming: ['ochtendnevel', 'schemer'], vanaf: 2 },
   { id: 'ecoduct.sporen', home: 'ecoduct', soort: 'spoor', naam: 'de sporen in het zand', naamKnap: 'het sporenbed',
     hint: 'Wie liep er door het zand?', icon: 'paw' },
-  { id: 'ecoduct.das', home: 'ecoduct', soort: 'zeldzaam', naam: 'de das op de brug',
+  { id: 'ecoduct.das', home: 'ecoduct', soort: 'zeldzaam', naam: 'de das bij de brug', naamKnap: 'de das bij het ecoduct',
     hint: 'Wie waggelt er laat over de brug?', model: 'animal-das-badger' },
 ];
 
@@ -209,10 +226,13 @@ const ECODUCT: Ontdekking[] = [
 const STUIFZAND: Ontdekking[] = [
   { id: 'stuifzand.nachtzwaluw', home: 'stuifzand', soort: 'dier', naam: 'de nachtzwaluw',
     hint: 'Wie lijkt precies op het zand?', model: 'animal-nachtzwaluw-nightjar', geholpen: true },
+  // (the woodlark sings over the sand on a later visit, never his first)
   { id: 'stuifzand.leeuwerik', home: 'stuifzand', soort: 'dier', naam: 'de leeuwerik', naamKnap: 'de boomleeuwerik',
-    hint: 'Wie zingt er hoog boven het zand?', model: 'bird-boomleeuwerik' },
-  { id: 'stuifzand.konijnenhol', home: 'stuifzand', soort: 'spoor', naam: 'het konijnenhol',
+    hint: 'Een andere keer zingt hier een vogel.', model: 'bird-boomleeuwerik', vanaf: 2 },
+  // (the burrow the night animals go into at the guard place: the badger, the boar)
+  { id: 'stuifzand.konijnenhol', home: 'stuifzand', soort: 'spoor', naam: 'het dierenhol', naamKnap: 'het hol onder de jeneverbes',
     hint: 'Wie woont er onder de struik?', model: 'prop-badger-sett' },
+  // (his once he walks right up to it: a find for the curious, in a mission or in free roam)
   { id: 'stuifzand.mierenhoop', home: 'stuifzand', soort: 'spoor', naam: 'de mierenhoop',
     hint: 'Wie bouwt een berg van naaldjes?', icon: 'mound' },
   { id: 'stuifzand.eieren', home: 'stuifzand', soort: 'vondst', naam: 'de eitjes',
@@ -245,6 +265,56 @@ const WERELD: Ontdekking[] = [
 ];
 
 export const ONTDEKKINGEN: readonly Ontdekking[] = [...FRISLING, ...REE, ...WILDCAMERA, ...EEKHOORN, ...VEN, ...ECODUCT, ...STUIFZAND, ...WERELD];
+
+/* ---------------------------------------- one animal on several pages ---- */
+// Where an animal he already knows from another page is met on THIS page (a row that shares
+// its animal with a row of another home): its tile shows the animal softened with this line
+// (≤ 7 words, read aloud), still not found here. A photo is a photo, never the animal itself.
+export const OOK_HIER: Readonly<Record<string, string>> = {
+  'frisling.zeug': 'Hier past ze op haar biggen.',
+  'frisling.overloper': 'Hier loopt de grote broer mee.',
+  'frisling.leeuwerik': 'Hier vliegt hij op bij de zwijnen.',
+  'ree-niet-aanraken.moeder': 'Hier eet ze bij het bosje.',
+  'ree-niet-aanraken.leeuwerik': 'Hier vliegt hij op uit de hei.',
+  'ree-niet-aanraken.buizerd': 'Hier zweeft hij boven de hei.',
+  'ree-niet-aanraken.koekoek': 'Hier roept hij als je stil wacht.',
+  'wildcamera.das': 'Hier snuffelt hij ’s nachts rond.',
+  'wildcamera.vos': 'Hier sluipt hij ’s nachts langs.',
+  'eekhoorn.grote-bonte-specht': 'Hier roffelt hij bij de eekhoorn.',
+  'ecoduct.wildzwijn': 'Hier komt ze met haar biggen over.',
+  'ecoduct.ree': 'Hier stapt ze met haar kalfje over.',
+  'ecoduct.vos': 'Hier sluipt hij bij schemer over.',
+  'ecoduct.das': 'Soms komt hij hier laat over.',
+  'stuifzand.leeuwerik': 'Hier zingt hij hoog boven het zand.',
+  'wereld.buizerd': 'Hij cirkelt hoog boven de hei.',
+  'wereld.specht': 'Hij tikt ergens op een boom.',
+  'wereld.koekoek': 'Hij roept in het bos zijn naam.',
+  'wereld.das': 'Soms waggelt hij voorbij in de schemer.',
+};
+
+/** The animal a row shows (its model), so one animal on several pages is known as one; a
+ *  photo, a track or a find is never an animal he met. */
+export function dierVan(o: Ontdekking): string | null {
+  return o.soort === 'dier' || o.soort === 'zeldzaam' ? o.model ?? null : null;
+}
+
+/** Does he know this row's animal from another page (a row of another home with the same
+ *  animal that he found)? */
+export function bekendElders(o: Ontdekking, found: Readonly<Record<string, unknown>>, table: readonly Ontdekking[] = ONTDEKKINGEN): boolean {
+  const dier = dierVan(o);
+  if (!dier) return false;
+  return table.some((r) => r.home !== o.home && !!found[r.id] && dierVan(r) === dier);
+}
+
+/** May this find come in this play of its home (its later visit, its light)? A home asks
+ *  before it stages it. */
+export function komtNog(id: string, play: { n: number }, mood?: MoodId): boolean {
+  const o = ontdekking(id);
+  if (!o) return false;
+  if (o.vanaf && play.n < o.vanaf) return false;
+  if (mood && o.stemming?.length && !o.stemming.includes(mood)) return false;
+  return true;
+}
 
 /** One row by id, or undefined. */
 export function ontdekking(id: string): Ontdekking | undefined {

@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { R, sleep, walkTo, MAX_DRAW_CALLS, type P2 } from './golden-lib';
 import { VELDGIDS, REVEAL } from '../src/content/copy';
+import { OOK_HIER } from '../src/content/ontdekkingen';
 
 /**
  * Run 7 (veldgids): his field guide and the open world's small surprises, played with the
@@ -69,7 +70,7 @@ test('the veldgids opens from Pauze and the hut; pages, pictures, shapes and hin
   await seedSave(page, {
     voltooid: { frisling: true },
     companion: { rescued: true, naam: 'Kroa', soort: 'raaf', fase: 'baby', bond: 10, kunstjes: [], meeOpMissie: false },
-    ontdekt: { 'frisling.frisling': { t, n: 1 }, 'wereld.buizerd': { t, n: 2, g: 1 }, 'wereld.edelhert': { t, n: 1 } },
+    ontdekt: { 'frisling.frisling': { t, n: 1 }, 'wereld.buizerd': { t, n: 2, g: 1 }, 'wereld.edelhert': { t, n: 1 }, 'wildcamera.das': { t, n: 1, g: 1 } },
   });
   await enter(page);
 
@@ -111,6 +112,14 @@ test('the veldgids opens from Pauze and the hut; pages, pictures, shapes and hin
   await expect(specht.locator('img.vg-img'), 'its shape').toBeVisible({ timeout: 15_000 });
   await specht.hover();
   await said(page, 'Wie tikt er op een boom?', 'a hint is read aloud when the pointer rests on it');
+  // an animal he knows from another page (the badger he helped at the camera): its real
+  // picture softened, with where it is met here — still not found here (fix-discovery-homes)
+  const das = card.locator('.vg-entry[data-id="wereld.das"]');
+  await expect(das).toHaveClass(/is-missing/);
+  await expect(das).toHaveClass(/is-known/);
+  await expect(das.locator('.vg-hint')).toHaveText(OOK_HIER['wereld.das']);
+  await expect(das.locator('img.vg-img'), 'its picture').toBeVisible({ timeout: 15_000 });
+  expect(await das.locator('img.vg-img').evaluate((e) => Number(getComputedStyle(e).opacity)), 'softened').toBeLessThan(0.8);
   // the dots: a picture of how much of the page he found
   expect(await card.locator('.vg-dot').count()).toBe(await card.locator('.vg-entry').count());
   expect(await card.locator('.vg-dot.on').count()).toBe(2);

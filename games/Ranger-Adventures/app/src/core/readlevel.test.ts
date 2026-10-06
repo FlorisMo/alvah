@@ -35,7 +35,7 @@ import { AVATAR_KENMERKEN, KENMERK_LABEL, NAAM_SUGGESTIES } from './avatar.ts';
 import { SKILL_META, tierFor } from './skill.ts';
 import { FASE_META, KUNSTJE_META, ZORG_STAPPEN, OPVANG_GASTEN, COMPANION_SOORTEN } from './companion.ts';
 import { pickWorldBeat, withAnimal } from './worldbeat.ts';
-import { ONTDEKKINGEN } from '../content/ontdekkingen.ts';
+import { ONTDEKKINGEN, OOK_HIER } from '../content/ontdekkingen.ts';
 
 // ---- 1. pure lint maths --------------------------------------------------
 
@@ -263,6 +263,8 @@ function readingCorpus(): Entry[] {
     push(`ontdekking.${o.id}.naamKnap`, o.naamKnap, true);
     push(`ontdekking.${o.id}.hint`, o.hint, true);
   }
+  // (where an animal he knows from another page is met on this one: a softened tile's line)
+  for (const [id, line] of Object.entries(OOK_HIER)) push(`ontdekking.${id}.ookHier`, line, true);
   for (const tick of [3, 6]) {
     const b = pickWorldBeat({ patrolTick: tick, heading: 'links' });
     if (!b) continue;
