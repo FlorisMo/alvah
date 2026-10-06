@@ -325,12 +325,15 @@ async function finish(log: Log, mission: Mission, then: 'patrol' | 'finale' = 'p
   if (line) log.soft(capText.toLowerCase().includes(line.toLowerCase()), `the reunion says "${line}" (it says "${capText}")`);
   if (await page.locator('.reunion-cap').isVisible().catch(() => false)) { await sleep(page, 1_000); await log.shot('reunion'); }
   // the reward card (an adventure tells its last fact after the reunion: read it on)
+  // (run 7 fix: an adventure's whole ending comes first — the frisling's reunion, the
+  // piglets' chase, the raaf's card and his first look at the cut fence take ~19 s at low
+  // load, past 20 s with two worlds on the GPU: measured 2026-10-06, seed 1518303363)
   const reward = await expect.poll(async () => {
     // (a card that closes while the click lands is fine: on a loaded laptop a click on a
     // card being replaced can outlast its timeout; the poll looks again)
     if (await visible(page, /^Verder$/) && !(await uiText(page)).includes('Knap gedaan')) await click(log, /^Verder$/, 'the fact after the reunion', 5_000, 15_000).catch(() => {});
     return (await uiText(page)).includes('Knap gedaan');
-  }, { timeout: 20_000 }).toBe(true).then(() => true, () => false);
+  }, { timeout: 40_000 }).toBe(true).then(() => true, () => false);
   log.soft(reward, 'no reward card after the reunion');
   log.soft((await uiText(page)).toLowerCase().includes(mission.titel.toLowerCase()), `the reward names "${mission.titel}"`);
   await log.shot('reward');
