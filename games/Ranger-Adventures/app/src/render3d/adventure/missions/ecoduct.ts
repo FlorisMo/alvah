@@ -715,8 +715,11 @@ async function toBed(k: AdventureKit, A: Readonly<Record<string, Actor>>): Promi
     k.beat = 'wacht:zand';
     const unhint = k.hint(() => null);
     const t0 = k.now;
+    const clear = (): boolean => Object.values(A).every((a) => !a.group.visible || !onBed(a, BED_CLEAR_M));
+    // (he is told to wait while they go: the screen's own line)
+    if (!clear()) k.say(c.wacht);
     try {
-      await k.until(() => Object.values(A).every((a) => !a.group.visible || !onBed(a, BED_CLEAR_M)), 30);
+      await k.until(clear, 30);
     } finally { unhint(); }
     k.stats.zand_wait = Math.round((k.now - t0) * 10) / 10;
   }
