@@ -343,6 +343,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     decoys: home.decoys.map((d) => ({ id: d.id, object: d.object, x: d.x, z: d.z, poke: (f) => home.poke(d, f) })),
     lines: { zoek: c.zoek, mis: c.mis, hint: c.hint, gevonden: k.steps[0].skin.copy?.goed ?? c.zoek },
   });
+  // (the glimpse he searched with, as the window was fitted: its fine grid, not fifteenths)
+  k.stats.glimpse = Math.round(home.searchShown * 100) / 100;
   offFly();
   if (!flewOff) { flewOff = true; flyOff(); }
   // the trail has done its work: under the raaf's card its prints fade into the ground

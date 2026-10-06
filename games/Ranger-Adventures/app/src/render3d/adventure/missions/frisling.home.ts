@@ -122,8 +122,12 @@ class Stand {
   refitFor(eye: V3, glimpse = this.laid.glimpse): number[] {
     this.laid = { ...this.laid, glimpse };
     const { back, at, want } = this.backFor(eye);
-    return refitGlimpse(this.cover.stems, this.built, eye, back, want, at);
+    const changed = refitGlimpse(this.cover.stems, this.built, eye, back, want, at);
+    this.shown = visibleShare(back, eye, this.cover.stems);
+    return changed;
   }
+  /** the share of his back the search's lens saw (frisling.window's fine grid), as fitted */
+  shown = 0;
 
   /** His back lying as laid, where he lies, and the share of it to show from `eye`. */
   private backFor(eye: V3): { back: V3[]; at: V3; want: number } {
@@ -372,6 +376,9 @@ export class FrislingHome implements HomeDressing {
   /** The search's check for the lens it really stands at (`searchBeat`'s `fit`): this
    *  play's stand fitted again for it when its share is off the level's (frisling.window). */
   refitSearch(eye: V3, glimpse: number): number[] { return this.stands[this.way].refitFor(eye, glimpse); }
+  /** The share of his back the search showed, on frisling.window's fine grid (the measure
+   *  the window is fitted to; the search's own fifteen points read it in fifteenths). */
+  get searchShown(): number { return this.stands[this.way].shown; }
   get field(): PatchField { return this.fields[WAYS[this.way].field]; }
   get decoys(): readonly Decoy[] { return this.stands[this.way].decoys.decoys; }
   /** run 7 (body): this play's stand's nest of bitten fronds */
