@@ -189,6 +189,12 @@ test('a free-roam walk meets the seed\'s surprise: a calm reveal, read aloud, th
   await page.locator('.explore-pause').click();
   await page.locator('.ra-overlay .ph-veldgids').click();
   const card = page.locator('.ra-overlay .card.veldgids');
+  // (this save comes from before the veldgids: the piglet his finished mission rescued is in
+  // it too, new — fix-discovery-homes — so the gids opens on its page, the first; ← turns
+  // round to "Overal")
+  await expect(card.locator('.vg-title')).toHaveText(VELDGIDS.plek.frisling);
+  await expect(card.locator('.vg-entry[data-id="frisling.frisling"]')).toHaveClass(/is-new/);
+  await page.keyboard.press('ArrowLeft');
   await expect(card.locator('.vg-title')).toHaveText(VELDGIDS.plek.wereld);
   await expect(card.locator('.vg-entry[data-id="wereld.buizerd"]')).toHaveClass(/is-new/);
 });
