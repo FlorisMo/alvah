@@ -130,7 +130,7 @@ export function plopSpot(b: Bay, i: 0 | 1): Spot & { yaw: number } {
   return { ...p, yaw: b.frame.heading + (i === 0 ? 0.5 : -0.5) };
 }
 /** He comes this near (m) and it plops in: his own cove's, and one he passes on the path. */
-export const PLOP_NEAR = 4.2;
+export const PLOP_NEAR = 5.5;
 export const PLOP_PASS = 8;
 
 /* ---------------------------------------------------------- the blue frog ---- */

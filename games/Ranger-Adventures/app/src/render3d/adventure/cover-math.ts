@@ -89,14 +89,22 @@ export function blockersOf(eye: V3, p: V3, stems: readonly Stem[]): number[] {
  * Points on the back of an animal lying at (x, y, z), `len` long, facing `yaw`, whose
  * back is `top` m above the ground: a 3 × 5 grid over the upper body, where a searching
  * child sees its stripes or spots.
+ *
+ * Run 7 (additive): `grid` lays a finer grid over the same stretch of back (`along` points
+ * along it, `across` over it; the back rounds off from 0.96 of `top` on its ridge to 0.8 at
+ * its sides), so a share can be measured finer than in fifteenths. Left out: the 3 × 5 grid.
  */
-export function backPoints(x: number, y: number, z: number, yaw: number, len: number, top: number): V3[] {
+export function backPoints(x: number, y: number, z: number, yaw: number, len: number, top: number, grid?: { along: number; across: number }): V3[] {
   const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = -fz, rz = fx;
   const out: V3[] = [];
-  for (const a of [-0.36, -0.18, 0, 0.18, 0.36]) {
-    for (const s of [-0.16, 0, 0.16]) {
-      const along = a * len, across = s * len * 0.55;
-      out.push({ x: x + fx * along + rx * across, y: y + top * (s === 0 ? 0.96 : 0.8), z: z + fz * along + rz * across });
+  const steps = (n: number, half: number): number[] => Array.from({ length: n }, (_, i) => (n < 2 ? 0 : -half + (2 * half * i) / (n - 1)));
+  const along = grid ? steps(grid.along, 0.36) : [-0.36, -0.18, 0, 0.18, 0.36];
+  const across = grid ? steps(grid.across, 0.16) : [-0.16, 0, 0.16];
+  for (const a of along) {
+    for (const s of across) {
+      const al = a * len, ac = s * len * 0.55;
+      const lift = grid ? 0.96 - Math.abs(s) : s === 0 ? 0.96 : 0.8;
+      out.push({ x: x + fx * al + rx * ac, y: y + top * lift, z: z + fz * al + rz * ac });
     }
   }
   return out;

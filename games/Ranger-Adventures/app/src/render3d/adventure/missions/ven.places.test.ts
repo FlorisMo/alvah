@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { heightAt as groundY, WATER_LEVEL } from '../../Biomes.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import { fitFrame } from '../../play/frame-fit.ts';
-import { dist, headingTo, offCentre, segDist, toLocal } from '../places.ts';
+import { atLocal, dist, headingTo, offCentre, segDist, toLocal } from '../places.ts';
 import { backPoints, growStems, visibleShare } from '../cover-math.ts';
 import { fitWindow } from './ree.window.ts';
 import { knobsFor } from '../../../core/skill.ts';
@@ -30,14 +30,16 @@ import { reeClearings } from './ree.places.ts';
 import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import {
-  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, LOOK_UP, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY, GO_CLEAR,
-  EDGE_H, HINT_RING,
+  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, LOOK_UP, CARPET_WET, CLOD_H, CLOD_LEN, COVES, COVE_LENS, CUSHION, FROG_H, FROG_LEN, GO_AWAY, GO_CLEAR,
+  EDGE_H, HINT_RING, LISTEN_GAP, LISTEN_KEEP, MAX_LISTENS,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
   above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet, underBoy,
   LOOK_GLIDE, adderHeather, adderHoldHeading, headingAt, hintRingOf, lastVenVariants, lookAim, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
   type BayId, type FrogSpot, type Side, type ViewSpec,
 } from './ven.places.ts';
 import type { Spot } from '../types.ts';
+import { listensOf } from './ven.listen.ts';
+import { MOODS, MOOD_IDS } from '../../Moods.ts';
 
 const W = 1280, H = 800, FOV = 55;
 
@@ -93,6 +95,19 @@ function boyBox(cam: THREE.Camera, p: Spot): ReturnType<typeof boxOf> {
     x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
   }
   return { w: x1 - x0, h: y1 - y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, x0, x1, y0, y1 };
+}
+/** Is any of him (his body and his big hair: 0.3 m round, up to 1.5 m) in the picture of
+ *  `cam` — in front of the lens and inside the screen? */
+function boyInPicture(cam: THREE.Camera, p: Spot): boolean {
+  const g = groundY(p.x, p.z);
+  const inv = new THREE.Matrix4().copy(cam.matrixWorld).invert();
+  for (let a = 0; a < 16; a++) for (const k of [0, 0.4, 0.8, RANGER_STAND_HEIGHT, RANGER_STAND_HEIGHT + 0.18]) {
+    const v = new THREE.Vector3(p.x + Math.cos((a / 16) * Math.PI * 2) * 0.3, g + k, p.z + Math.sin((a / 16) * Math.PI * 2) * 0.3);
+    if (v.clone().applyMatrix4(inv).z > -0.05) continue; // (behind the lens)
+    const q = v.project(cam);
+    if (Math.abs(q.x) <= 1 && Math.abs(q.y) <= 1) return true;
+  }
+  return false;
 }
 /** A spot `h` m over the ground, on the screen (px). */
 function screenAt(cam: THREE.Camera, p: Spot, h: number): { x: number; y: number } {
@@ -211,10 +226,11 @@ test('the search: every nook partly visible at every level, off the middle, big 
       assert.ok(Math.hypot(box.cx - px[0], box.cy - px[1]) <= 25, `cove ${id} nook ${f.nook} lands at (${box.cx.toFixed(0)}, ${box.cy.toFixed(0)}), its table says (${px[0]}, ${px[1]})`);
       // in the picture, below the line, never its middle (the free band's), never at the boy
       assert.ok(box.y0 > view.insetTop + 20 && box.y1 < H - 40 && box.x0 > 60 && box.x1 < W - 60, `cove ${id} nook ${f.nook} is in the picture, below the line`);
+      // never the middle of the picture: the free band's, nor the screen's (run 7 fix: the
+      // playtest's click measure, missions.spec, reads the screen's; B4 sat 102 px from it)
       const mid = { x: W / 2, y: (view.insetTop + 12 + H - view.insetBottom - 12) / 2 };
       assert.ok(Math.hypot(box.cx - mid.x, box.cy - mid.y) >= 120, `cove ${id} nook ${f.nook} is not in the middle of the picture (${Math.hypot(box.cx - mid.x, box.cy - mid.y).toFixed(0)} px)`);
-      const boy = boyBox(cam, b.stands[f.side]);
-      assert.ok(box.x1 < boy.x0 - 40 || box.x0 > boy.x1 + 40 || box.y1 < boy.y0 - 40, `cove ${id} nook ${f.nook} keeps away from the boy in the picture (frog ${box.x0.toFixed(0)}-${box.x1.toFixed(0)}, ${box.y0.toFixed(0)}-${box.y1.toFixed(0)}; boy ${boy.x0.toFixed(0)}-${boy.x1.toFixed(0)}, ${boy.y0.toFixed(0)}-${boy.y1.toFixed(0)})`);
+      assert.ok(Math.hypot(box.cx - W / 2, box.cy - H / 2) >= 120, `cove ${id} nook ${f.nook} is not in the middle of the screen (${Math.hypot(box.cx - W / 2, box.cy - H / 2).toFixed(0)} px from (640, 400))`);
       // the cover round it stands at least twice its height (the same ring at every nook)
       const near = stems.filter((s) => Math.hypot(s.x - f.x, s.z - f.z) < 0.5).map((s) => s.h).sort((a, c) => a - c);
       assert.ok(near.length >= 3 && near[Math.floor(near.length / 2)] >= 2 * FROG_H, `cove ${id} nook ${f.nook} sits among sedge twice its height`);
@@ -241,15 +257,12 @@ test('the search: every nook partly visible at every level, off the middle, big 
       for (const q2 of slots.slice(k + 1)) assert.ok(Math.hypot(q.u - q2.u, q.v - q2.v) >= 0.3, `cove ${id}: slots ${k} apart`);
     }
     // every look-alike spot (a slot, or a nook a clod may fill) is in the picture from either
-    // side, and never under the boy (his hair is big seen from above)
+    // side; none lies under the boy (run 7 fix: he stands out of the picture)
     for (const side of SIDES) {
-      const boy = boyBox(cams[side], b.stands[side]);
       for (const q of [...b.slots.clods, ...b.slots.butterflies, ...b.slots.birds, ...b.nooks]) {
         const p = screenAt(cams[side], q, 0.06);
         assert.ok(p.x > 60 && p.x < W - 60 && p.y > b.views.search[side].insetTop + 20 && p.y < H - 40, `cove ${id}: a look-alike spot ${at(q)} is in the picture from side ${side}`);
-        // (the box is a little wider than his drawn hair: no margin on top of it)
-        const under = !(p.x < boy.x0 || p.x > boy.x1 || p.y < boy.y0 || p.y > boy.y1);
-        if (under) assert.ok(underBoy(b, side, q), `cove ${id}: a look-alike spot ${at(q)} lies under the boy from side ${side} (at ${p.x.toFixed(0)}, ${p.y.toFixed(0)}) and is not left out`);
+        assert.ok(!underBoy(b, side, q, LOOK_UP.bird), `cove ${id}: a look-alike spot ${at(q)} counts as under the boy from side ${side}`);
       }
       // …and enough are left: five clods, a heath blue and a stonechat
       const free = (qs: readonly Spot[], up = 0): number => qs.filter((q) => !underBoy(b, side, q, up)).length;
@@ -287,20 +300,59 @@ test('the late hint rings the same at every nook: on open water straight out in 
       const box = boxOf(cam, f);
       const gap = Math.hypot(q.x - box.cx, q.y - box.cy);
       gaps.push(gap);
-      assert.ok(gap >= 95 && gap <= 150, `cove ${id} nook ${f.nook}: in the picture the ring is ${gap.toFixed(0)} px from him (want 95-150)`);
+      // (run 7 fix: the lens frames the cove alone now, a tenth nearer than when it framed
+      // the boy too: the frog ~10 % bigger, the ring as much further from him in px)
+      assert.ok(gap >= 105 && gap <= 165, `cove ${id} nook ${f.nook}: in the picture the ring is ${gap.toFixed(0)} px from him (want 105-165)`);
     }
   }
   assert.ok(Math.max(...gaps) / Math.min(...gaps) < 1.5, `the ring's distance from him in the picture differs at most half again over the nooks (${Math.min(...gaps).toFixed(0)}-${Math.max(...gaps).toFixed(0)} px)`);
 });
 
+test('the search picture is the cove\'s alone: he stands out of it (no hair over a lower quarter), the lens where COVE_LENS says', () => {
+  // (playtest 2026-10-05: his blond hair filled ~220 × 250 px of every ven search; at the
+  // lens distance that keeps the frog ≥ 50 px a whole boy anywhere in the picture is
+  // ≥ 300 × 250 px, so he stands just behind the lens, at the cove's side)
+  for (const id of BAY_IDS) {
+    const b = BAYS[id];
+    for (const side of SIDES) {
+      const view = b.views.search[side];
+      assert.ok(!view.include?.length, `cove ${id} side ${side}: the search frames the cove only`);
+      const cam = lensOf(view);
+      assert.ok(!boyInPicture(cam, b.stands[side]), `cove ${id} side ${side}: he stands out of the search picture`);
+      // (the lens's foot where the places' maths takes it: underBoy, the frogs' turn)
+      const foot = atLocal({ x: view.at.x, z: view.at.z, heading: view.heading }, 0, -COVE_LENS.back);
+      assert.ok(Math.hypot(foot.x - cam.position.x, foot.z - cam.position.z) < 0.06, `cove ${id} side ${side}: the lens stands ${Math.hypot(foot.x - cam.position.x, foot.z - cam.position.z).toFixed(2)} m off COVE_LENS.back`);
+      assert.ok(above(b.stands[side]) >= 0.3, `cove ${id} side ${side}: he stands on the dry bank`);
+      // …and his shadow stays out of it in every mood's light (the sun at one azimuth, low in
+      // the dusk: his shadow then 4 m long), never a dark soft blob at the picture's foot
+      const inv = new THREE.Matrix4().copy(cam.matrixWorld).invert();
+      const st = b.stands[side];
+      for (const mood of MOOD_IDS) {
+        const k = MOODS[mood].keyAt;
+        const len = Math.hypot(k.x, k.z), dx = -k.x / len, dz = -k.z / len;
+        const reach = ((RANGER_STAND_HEIGHT + 0.18) * len) / k.y;
+        for (let t = 0; t <= reach; t += 0.1) for (const w of [-0.22, 0, 0.22]) {
+          const x = st.x + dx * t - dz * w, z = st.z + dz * t + dx * w;
+          const v = new THREE.Vector3(x, groundY(x, z) + 0.02, z);
+          if (v.clone().applyMatrix4(inv).z > -0.05) continue;
+          const q = v.project(cam);
+          assert.ok(Math.abs(q.x) > 1 || Math.abs(q.y) > 1, `cove ${id} side ${side} (${mood}): his shadow lies in the search picture ${t.toFixed(1)} m from his feet`);
+        }
+      }
+    }
+  }
+});
+
 test('no look-alike perches on the boy in the search picture: a stonechat up its stalk, a heath blue on its head, a clod — each clear of his big hair, or never laid there', () => {
   // (ven-life, band 4 seed 4001 at C4: the stonechat's stalk stood just beside him and the
   // bird sat on the top of his hair, which the boy's box — a body 0.16 m round, 1.32 m tall —
-  // left out: his hair is wider and higher than that)
+  // left out: his hair is wider and higher than that. Run 7 fix: he is out of the picture;
+  // this stays as the guard should he ever come back into it)
   for (const id of BAY_IDS) {
     const b = BAYS[id];
     for (const side of SIDES) {
       const cam = lensOf(b.views.search[side]);
+      if (!boyInPicture(cam, b.stands[side])) continue;
       const boy = boyBox(cam, b.stands[side]);
       // (his big hair: wider and higher than his box, over its top half; his body below)
       const hair = { x0: boy.x0 - 45, x1: boy.x1 + 45, y0: boy.y0 - 100, y1: boy.y0 + (boy.y1 - boy.y0) * 0.55 };
@@ -502,6 +554,28 @@ test('in her hold he sees her: the walk lens behind him, she lies beside his bod
     }
   }
   assert.ok(worst < 400, `(the closest she came to his body: ${worst.toFixed(0)} px)`);
+});
+
+test('the way to the frogs: at most three listening stops with the cove\'s own, each walk to one a real walk', () => {
+  // (playtest 2026-10-05: at a higher level 'Loop naar de kikkers.' / 'Sta stil. Luister.'
+  // came four or five times in a row with walks of 1-3 s between)
+  const ORD = [['adder-ven', 'pad-ven', 'modder-ven'], ['adder-ven', 'modder-ven', 'pad-ven'], ['modder-ven', 'pad-ven', 'adder-ven'], ['modder-ven', 'adder-ven', 'pad-ven']] as const;
+  for (let band = 1; band <= 6; band++) {
+    const n = listensOf(knobsFor('zoeken', band).trailLegs);
+    for (const id of BAY_IDS) for (const side of SIDES) for (const order of ORD) {
+      const stations = order[0] === 'adder-ven' ? { 'adder-ven': 0, 'modder-ven': 1 } : { 'modder-ven': 0, 'adder-ven': 1 };
+      const way = wayOf({ bay: id, side, order: [...order], stations, adderShift: 0, adderTurn: 0 } as never, n);
+      const stops = way.filter((w) => w.kind === 'listen').map((w) => w.s);
+      const name = `band ${band} cove ${id}${side} ${order.join(',')}`;
+      assert.ok(stops.length >= 1 && stops.length <= MAX_LISTENS, `${name}: ${stops.length} listening stops on the way (and the cove's own)`);
+      for (let i = 1; i < stops.length; i++) assert.ok(stops[i] - stops[i - 1] >= LISTEN_GAP, `${name}: two stops ${(stops[i] - stops[i - 1]).toFixed(1)} m apart`);
+      assert.ok(stops[0] >= 6, `${name}: the first stop after a real walk (${stops[0].toFixed(1)} m)`);
+      for (const w of way) if (w.kind !== 'listen' && w.kind !== 'bay') {
+        const [a, b] = spanOf(w);
+        for (const s0 of stops) assert.ok(s0 <= a - LISTEN_KEEP + 1e-6 || s0 >= b + LISTEN_KEEP - 1e-6, `${name}: a stop at ${s0.toFixed(1)} m lies ${Math.min(Math.abs(s0 - a), Math.abs(s0 - b)).toFixed(1)} m from the ${w.kind}`);
+      }
+    }
+  }
 });
 
 test('every order of the three moments fits on the way to every cove and side; the dry path is never first; band 1 listens twice', () => {

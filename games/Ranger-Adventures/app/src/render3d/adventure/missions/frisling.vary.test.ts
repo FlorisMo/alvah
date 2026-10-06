@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { compactVariant, newPlay } from '../../../core/play.ts';
-import { drawFrisling, frislingVariant, recentFams, recentPlays, recentWays, wantsEdge, type DecoyKind, type PastPlay } from './frisling.vary.ts';
+import { drawFrisling, frislingVariant, recentFams, recentPlays, recentWays, wantsEdge, POSE_CODE, type DecoyKind, type PastPlay } from './frisling.vary.ts';
 import { FAMILY_LAYOUTS, WAYS, WAY_IDS, type WayId } from './frisling.places.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import { buildDagnachtTrial, playDagnachtTrial, recentRust, rustCode } from '../../../engines/dagnacht.ts';
@@ -35,9 +35,8 @@ test('the same seed gives the same play; its choices are noted on the play', () 
     assert.deepEqual(variant(seed), variant(seed));
     const play = newPlay('frisling', seed, 1);
     const v = frislingVariant(play, [], DECOYS);
-    assert.equal(play.variant.way, `${v.way}/${FAMILY_LAYOUTS[v.family].id}/${v.nook}`, 'the way, the family and the nook, one note');
-    assert.equal(play.variant.pose, v.pose);
-    assert.deepEqual(Object.keys(play.variant), ['way', 'pose'], 'the pose noted last');
+    assert.equal(play.variant.way, `${v.way}/${FAMILY_LAYOUTS[v.family].id}/${v.nook}${POSE_CODE[v.pose]}`, 'the way, the family, the nook and how he lies, one note');
+    assert.deepEqual(Object.keys(play.variant), ['way'], 'no separate pose note (it was the first thing the history cut)');
   }
 });
 
@@ -139,7 +138,7 @@ test('the recent family layouts: this session\'s plays first, then the history\'
   assert.deepEqual(recentFams(h, [{ sd: 7, fam: 'modder' }, { sd: 8, fam: 'boom' }]), ['boom', 'modder', 'rand']);
 });
 
-test('his earlier plays are read back from the history: way, family and nook, whatever the history kept', () => {
+test('his earlier plays are read back from the history: way, family, nook and pose, whatever the history kept', () => {
   assert.deepEqual(recentPlays([]), []);
   assert.deepEqual(recentPlays([{ m: 'ree-niet-aanraken', va: 'way:steen' }]), []);
   assert.deepEqual(recentPlays([
@@ -147,7 +146,7 @@ test('his earlier plays are read back from the history: way, family and nook, wh
     { m: 'frisling', sd: 2, va: 'mood:ochtendnevel,rare:ekster,rust:advzp,way:berk/rand' }, // (the nook cut)
     { m: 'wildcamera', sd: 3, va: 'way:wei' },
     { m: 'frisling', sd: 4 }, { m: 'frisling', sd: 5, va: 'nook:1' },
-  ]), [{ sd: 2, way: 'berk', fam: 'rand' }, { sd: 1, way: 'steen', fam: 'boom', nook: 2 }]);
+  ]), [{ sd: 2, way: 'berk', fam: 'rand' }, { sd: 1, way: 'steen', fam: 'boom', nook: 2, pose: 0 }]);
 });
 
 test('a way that comes again hides him in another nook than the last time that way came', () => {
@@ -254,7 +253,7 @@ test('the orders of his last plays are read from the history, one per play, neve
 /** One play as the game plays it, into a save's history: the briefing notes the light (and
  *  a rare visitor), the home notes the calm order, then the way and the family, the nook
  *  last; every beat of the play carries the variant compacted to the history's 60 chars. */
-function playInto(history: { m: string; sd: number; va?: string }[], seed: number, n: number, o: { mood?: string; rare?: string } = {}): { way: string; fam: string; nook: number; rust: string; va: string } {
+function playInto(history: { m: string; sd: number; va?: string }[], seed: number, n: number, o: { mood?: string; rare?: string } = {}): { way: string; fam: string; nook: number; pose: number; rust: string; va: string } {
   const play = newPlay('frisling', seed, n);
   play.note('mood', o.mood ?? MOOD_IDS[seed % MOOD_IDS.length]);
   if (o.rare) play.note('rare', o.rare);
@@ -264,7 +263,7 @@ function playInto(history: { m: string; sd: number; va?: string }[], seed: numbe
   const trial = playDagnachtTrial(skin, { slowmo: false } as never, play, history);
   const va = compactVariant(play.variant)!;
   for (let b = 0; b < 3; b++) history.push({ m: 'frisling', sd: play.seed, va }); // (zoeken, corsi, dagnacht)
-  return { way: v.way, fam: FAMILY_LAYOUTS[v.family].id, nook: v.nook, rust: rustCode(trial.encounters.map((e) => e.id)), va };
+  return { way: v.way, fam: FAMILY_LAYOUTS[v.family].id, nook: v.nook, pose: v.pose, rust: rustCode(trial.encounters.map((e) => e.id)), va };
 }
 
 test('thirty plays in a row: never the same way twice, no fixed cycle, every way meets every family (review r1: a save locked into one three-play cycle)', () => {
@@ -303,7 +302,7 @@ test('thirty plays in a row: never the same way twice, no fixed cycle, every way
   }
 });
 
-test('the history keeps what the next play reads: the light, a rare visitor, the calm order, the way, the family and the nook fit in 60 characters', () => {
+test('the history keeps what the next play reads: the light, a rare visitor, the calm order, the way, the family, the nook and how he lay fit in 60 characters', () => {
   // the longest light and this home's longest rare visitor (the design's magpie, or a
   // longer one the table adds): the worst a play's variant can start with
   const longestMood = [...MOOD_IDS].sort((a, b) => b.length - a.length)[0];
@@ -313,29 +312,37 @@ test('the history keeps what the next play reads: the light, a rare visitor, the
     const history: { m: string; sd: number; va?: string }[] = [];
     const p = playInto(history, seed, 1, { mood: longestMood, rare });
     assert.ok(p.va.length <= 60, p.va);
-    assert.match(p.va, new RegExp(`^mood:${longestMood},rare:${rare},rust:[a-z]{5},way:[a-z]+/[a-z]+/\\d+`), p.va);
+    assert.match(p.va, new RegExp(`^mood:${longestMood},rare:${rare},rust:[a-z]{5},way:[a-z]+/[a-z]+/\\d+[a-c]$`), p.va);
     assert.deepEqual(recentWays(history), [p.way], p.va);
     assert.deepEqual(recentFams(history), [p.fam], p.va);
     assert.deepEqual(recentPlays(history).map((q) => q.nook), [p.nook], p.va);
+    assert.deepEqual(recentPlays(history).map((q) => q.pose), [p.pose], p.va);
     assert.deepEqual(recentRust(history, 'frisling', seed + 1), [p.rust], p.va);
   }
-  // the worst case the review named, laid by hand: the way, the family and the nook all fit
-  // (only how he lay in the nook may be cut)
+  // the worst case the review named, laid by hand: the way, the family, the nook and how he
+  // lay all fit (run 7 fix: a separate 'pose:1' was the first thing cut)
   const play = newPlay('frisling', 7, 1);
   play.note('mood', 'ochtendnevel');
   play.note('rare', rare);
   play.note('rust', 'advzp');
-  play.note('way', 'steen/modder/3');
-  play.note('pose', 1);
+  play.note('way', 'steen/modder/3b');
   const va = compactVariant(play.variant)!;
   const h = [{ m: 'frisling', sd: 7, va }];
-  assert.deepEqual([recentWays(h), recentFams(h), recentPlays(h).map((q) => q.nook), recentRust(h, 'frisling', 8)], [['steen'], ['modder'], [3], ['advzp']], va);
+  assert.ok(va.length <= 60, va);
+  assert.deepEqual([recentWays(h), recentFams(h), recentPlays(h).map((q) => q.nook), recentPlays(h).map((q) => q.pose), recentRust(h, 'frisling', 8)], [['steen'], ['modder'], [3], [1], ['advzp']], va);
 });
 
-test('a save from before the nook joined the way note still reads back its way, family and nook', () => {
+test('a save from before the nook (or the pose) joined the way note still reads back its way, family, nook and pose', () => {
   const old = [
     { m: 'frisling', sd: 11, va: 'mood:zonnig,rust:advpz,way:berk/rand,nook:4/2' },
     { m: 'frisling', sd: 12, va: 'mood:schemer,rust:avdzp,way:steen/boom/2,pose:0' },
+    { m: 'frisling', sd: 13, va: 'mood:ochtendnevel,rare:ekster,rust:advzp,way:steen/modder/3' },
+    { m: 'frisling', sd: 14, va: 'mood:zonnig,rust:advpz,way:wei/rand/4c' },
   ];
-  assert.deepEqual(recentPlays(old), [{ sd: 12, way: 'steen', fam: 'boom', nook: 2 }, { sd: 11, way: 'berk', fam: 'rand', nook: 4 }]);
+  assert.deepEqual(recentPlays(old), [
+    { sd: 14, way: 'wei', fam: 'rand', nook: 4, pose: 2 },
+    { sd: 13, way: 'steen', fam: 'modder', nook: 3 },
+    { sd: 12, way: 'steen', fam: 'boom', nook: 2, pose: 0 },
+    { sd: 11, way: 'berk', fam: 'rand', nook: 4, pose: 2 },
+  ]);
 });

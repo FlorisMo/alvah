@@ -447,9 +447,11 @@ export class VenHome implements HomeDressing {
     this.built = this.cover.stems.map((s) => ({ h: s.h, lx: s.lx, lz: s.lz, r: s.r }));
 
     /* -- veenmos: each cove's moss, its cushion and patches (into the one ground mesh) -- */
+    // (run 7 fix: each with a crisp rim — seen from the search's close lens a soft-rimmed patch
+    // read as a blurred blob in the middle of the picture, a brown one like a frog out of focus)
     const decals: THREE.BufferGeometry[] = [];
     const patch = (p: Spot, rx: number, rz: number, yaw: number, color: string, layer: number, seed: number): void => {
-      const m = groundDecal(g, p.x, p.z, rx, rz, yaw, color, { layer, wobble: 0.22, seed, feather: true });
+      const m = groundDecal(g, p.x, p.z, rx, rz, yaw, color, { layer, wobble: 0.22, seed, feather: true, edge: Math.min(0.12, 0.015 / Math.min(rx, rz)) });
       decals.push(m.geometry);
       (m.material as THREE.Material).dispose();
     };
@@ -458,12 +460,12 @@ export class VenHome implements HomeDressing {
       const f = b.frame;
       patch(atLocal(f, 0, 0.05), 1.75, 1.0, f.heading, '#56672f', 2, 5 + bi);                          // the cove's moss
       patch(atLocal(f, CUSHION.u, CUSHION.v), CUSHION.r + 0.06, CUSHION.r, f.heading, '#6c8338', 3, 7 + bi); // the cushion
-      patch(atLocal(f, -0.95, -0.35), 0.26, 0.2, f.heading + 0.6, '#6f6d3c', 3, 9 + bi);               // a tuft of older, yellower moss
+      patch(atLocal(f, -0.95, -0.35), 0.26, 0.2, f.heading + 0.6, '#828a3c', 3, 9 + bi);               // a tuft of older, yellower moss
       patch(atLocal(f, 0.45, 0.32), 0.26, 0.18, f.heading + 0.2, '#617a35', 3, 13 + bi);
     });
     const mossGeo = mergeGeometries(decals);
     for (const d of decals) d.dispose();
-    if (mossGeo) { mottle(mossGeo, 0.24, 31); ground.push(mossGeo); }
+    if (mossGeo) { mottle(mossGeo, 0.14, 31); ground.push(mossGeo); }
     const groundGeo = mergeGeometries(ground);
     for (const q of ground) q.dispose();
     if (groundGeo) {
@@ -562,11 +564,13 @@ export class VenHome implements HomeDressing {
       const up = { x: c.top.x - ((c.low.x - c.top.x) / len) * 0.35, z: c.top.z - ((c.low.z - c.top.z) / len) * 0.35 };
       const line: Spot[] = [];
       for (let k = 0; k <= 12; k++) line.push({ x: up.x + (c.low.x - up.x) * (k / 12), z: up.z + (c.low.z - up.z) * (k / 12) });
-      const moss = groundStrip(g, line, c.a * 1.08, MOSS.green, { layer: 4, wobble: 0.22, seed: 17 + st.i, ends: 0.7, roughness: 0.9 });
+      // (crisp sides and ends: run 7 fix — feathered, it lay as a bright smear at the edge of a
+      // cove's search picture)
+      const moss = groundStrip(g, line, c.a * 1.08, MOSS.green, { layer: 4, wobble: 0.22, seed: 17 + st.i, ends: 0.2, roughness: 0.9, edge: 0.03 });
       mottle(moss.geometry, 0.3, 41 + st.i);
       moss.name = `ven-soft-moss-${bay}${st.i}`;
       // its wet sheen: a lighter, glossy skin over its middle that quakes under a boot
-      const sheen = groundStrip(g, line.slice(1, -1), c.a * 0.7, MOSS.sheen, { layer: 5, wobble: 0.3, seed: 23 + st.i, ends: 0.9, roughness: 0.32 });
+      const sheen = groundStrip(g, line.slice(1, -1), c.a * 0.7, MOSS.sheen, { layer: 5, wobble: 0.3, seed: 23 + st.i, ends: 0.3, roughness: 0.32, edge: 0.05 });
       mottle(sheen.geometry, 0.2, 47 + st.i);
       // (it quakes about its own middle: the mesh sits there, its points round it)
       sheen.geometry.translate(-c.x, 0, -c.z);
