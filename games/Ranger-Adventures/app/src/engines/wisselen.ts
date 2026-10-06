@@ -11,6 +11,11 @@
  * before a second turn adapts: one longer after a switch error (≤ 5). Never two turns in a
  * row; the last turn leaves at least two animals. The summary says what was played: sorts,
  * right first time, turns, switch errors.
+ *
+ * Fair variety (run 7 fix, decision 1): every stretch between two turns needs BOTH places
+ * (a day and a night animal in it), whichever way the second turn falls, so a child who
+ * clicks one place every time misses in every stretch and is never judged easy or fine;
+ * which stretch holds which animals stays the seed's.
  */
 
 import type { Skin } from '../content/types';
@@ -39,35 +44,108 @@ function wisselKnobsOf(k: WisselKnobs | OldWisselDiff): WisselKnobs {
 }
 
 /** Build a shuffled day/night queue + resolve the turns. Half day, half night animals; of
- *  each kind every animal comes once before any comes again (a set of six shows every night
- *  animal), and never the same animal twice in a row (a queue that repeats itself is a flat
- *  round). `knobs` (run 7: the level's): how many animals (a skin's `trials` caps them),
- *  when the rule turns and how often. */
+ *  each kind every animal comes once before any comes again, in the queue's own order (a set
+ *  of six shows every night animal), and never the same animal twice in a row (a queue that
+ *  repeats itself is a flat round). Every stretch the rule holds (before the first turn,
+ *  between two turns, after the last) has a day AND a night animal, for every way the turns
+ *  can fall (a second turn one later after a switch error): a round never lets one place do.
+ *  `knobs` (run 7: the level's): how many animals (a skin's `trials` caps them), when the
+ *  rule turns and how often. */
 export function buildWisselTrial(skin: Skin, knobs: WisselKnobs | OldWisselDiff, rng: () => number = looseRng('wisselen')): WisselTrial {
   const k = wisselKnobsOf(knobs);
   const dag = skin.dagDieren?.length ? skin.dagDieren : ['edelhert', 'ree'];
   const nacht = skin.nachtDieren?.length ? skin.nachtDieren : ['das', 'nachtzwaluw', 'wildzwijn'];
   const totaal = Math.max(4, Math.min(Math.round(k.sorts), skin.trials ?? Infinity));
 
-  const nextDag = deck(dag, rng);
-  const nextNacht = deck(nacht, rng);
-  const pool: WisselItem[] = [];
-  for (let i = 0; i < totaal; i++) {
-    const fromDag = i % 2 === 0;
-    pool.push({ id: fromDag ? nextDag() : nextNacht(), dag: fromDag });
-  }
-
   // at least a third of the round comes after the first turn (a short round of six turns
   // after the fourth at the latest: the switch is a real part of it, never its last animal)
   const flipEvery = Math.min(Math.max(2, Math.round(k.flipEvery)), Math.max(2, totaal - Math.ceil(totaal / 3)));
+  const flips = Math.max(1, Math.round(k.flips));
 
-  return { queue: spread(pool, rng), flipEvery, flips: Math.max(1, Math.round(k.flips)) };
+  // which places come in which order (the seed's, among the fair ones), then the animals of
+  // each kind dealt from their own deck in that order
+  const masks = fairMasks(totaal, flipEvery, flips, dag.length < 2, nacht.length < 2);
+  const mask = masks[Math.floor(rng() * masks.length)];
+  const nextDag = deck(dag, rng);
+  const nextNacht = deck(nacht, rng);
+  const queue: WisselItem[] = [];
+  for (let i = 0; i < totaal; i++) {
+    const isDag = ((mask >> i) & 1) === 1;
+    queue.push({ id: isDag ? nextDag() : nextNacht(), dag: isDag });
+  }
+  return { queue, flipEvery, flips };
+}
+
+/** Every way the turns can fall in a round of `n` with these knobs, as WisselRun plays it:
+ *  the first turn after `every` right sorts, a later one `gap` after the turn before (the
+ *  gap one longer, ≤ 5, when the first sort after that turn was wrong), never one that
+ *  leaves fewer than two animals. Each plan lists the queue index where the rule turns. */
+export function turnPlans(n: number, every: number, flips: number): number[][] {
+  const e = Math.max(2, every), most = Math.max(1, flips);
+  const out: number[][] = [];
+  const grow = (at: number[], gap: number): void => {
+    const last = at[at.length - 1];
+    if (at.length >= most || n - (last + gap) < 2) { out.push(at); return; }
+    // the first sort after `last` right (the gap stays) or a switch error (one longer)
+    const gaps = new Set([gap, Math.min(5, gap + 1)]);
+    for (const g of gaps) {
+      if (n - (last + g) < 2) out.push(at);
+      else grow([...at, last + g], g);
+    }
+  };
+  if (n - e < 2) out.push([]);
+  else grow([e], e);
+  // (two branches may end alike: keep each plan once)
+  return [...new Map(out.map((p) => [p.join(), p])).values()];
+}
+
+const fairCache = new Map<string, number[]>();
+
+/** The day/night patterns of a round as bit masks (bit i set: the i-th animal is a day
+ *  animal), with ceil(n/2) day animals and a day and a night animal in every stretch of every
+ *  turn plan. A kind with one animal only (`soloDag`/`soloNacht`) never comes twice in a row
+ *  when a fair pattern allows it. Computed once per round shape. */
+function fairMasks(n: number, every: number, flips: number, soloDag: boolean, soloNacht: boolean): number[] {
+  const key = `${n}/${every}/${flips}/${soloDag ? 1 : 0}${soloNacht ? 1 : 0}`;
+  const hit = fairCache.get(key);
+  if (hit) return hit;
+  const days = Math.ceil(n / 2);
+  const plans = turnPlans(n, every, flips);
+  const bit = (m: number, i: number): number => (m >> i) & 1;
+  const both = (m: number, from: number, to: number): boolean => {
+    let d = 0;
+    for (let i = from; i < to; i++) d += bit(m, i);
+    return d > 0 && d < to - from;
+  };
+  const counted: number[] = [];
+  const fair: number[] = [];
+  for (let m = 0; m < 1 << n; m++) {
+    let d = 0;
+    for (let i = 0; i < n; i++) d += bit(m, i);
+    if (d !== days) continue;
+    counted.push(m);
+    if (plans.every((at) => [0, ...at].every((from, j) => both(m, from, j < at.length ? at[j] : n)))) fair.push(m);
+  }
+  const pool = fair.length ? fair : counted; // (a round too short to be fair: as it comes)
+  const twice = (m: number): boolean => {
+    for (let i = 1; i < n; i++) {
+      const a = bit(m, i - 1), b = bit(m, i);
+      if (a === b && ((a === 1 && soloDag) || (a === 0 && soloNacht))) return true;
+    }
+    return false;
+  };
+  const spread = pool.filter((m) => !twice(m));
+  const out = spread.length ? spread : pool;
+  fairCache.set(key, out);
+  return out;
 }
 
 /** Draw animals from `ids` like cards from a shuffled deck: each once before any comes
- *  again (the deck is shuffled anew when it runs out). */
+ *  again (the deck is shuffled anew when it runs out, never starting with the one just
+ *  drawn: the same animal never comes twice in a row from one deck). */
 function deck(ids: readonly string[], rng: () => number): () => string {
   let bag: string[] = [];
+  let last: string | undefined;
   return () => {
     if (!bag.length) {
       bag = [...ids];
@@ -75,33 +153,12 @@ function deck(ids: readonly string[], rng: () => number): () => string {
         const j = Math.floor(rng() * (i + 1));
         [bag[i], bag[j]] = [bag[j], bag[i]];
       }
+      // (the bag is drawn from its end)
+      if (bag.length > 1 && bag[bag.length - 1] === last) [bag[0], bag[bag.length - 1]] = [bag[bag.length - 1], bag[0]];
     }
-    return bag.pop()!;
+    last = bag.pop()!;
+    return last;
   };
-}
-
-/** The items in a random order with never the same animal twice in a row (whenever the
- *  mix allows it: no animal fills more than half the queue). Each next item is drawn at
- *  random from the ones that keep the rest placeable. */
-function spread(items: readonly WisselItem[], rng: () => number): WisselItem[] {
-  const left = [...items];
-  const out: WisselItem[] = [];
-  /** can `rest` still be laid out with no two alike in a row, after one `last`? */
-  const placeable = (rest: readonly WisselItem[], last: string | undefined): boolean => {
-    const n = rest.length;
-    const count = new Map<string, number>();
-    for (const it of rest) count.set(it.id, (count.get(it.id) ?? 0) + 1);
-    for (const [id, c] of count) if (c > (id === last ? Math.floor(n / 2) : Math.ceil(n / 2))) return false;
-    return true;
-  };
-  while (left.length) {
-    const last = out[out.length - 1]?.id;
-    const ok = left.map((_, i) => i).filter((i) => left[i].id !== last && placeable(left.filter((_, j) => j !== i), left[i].id));
-    const from = ok.length ? ok : left.map((_, i) => i); // (a mix that cannot be spread: as it comes)
-    const i = from[Math.floor(rng() * from.length)];
-    out.push(left.splice(i, 1)[0]);
-  }
-  return out;
 }
 
 /** The two place names in a rule line "Dag-dier → X. Nacht-dier → Y." */
