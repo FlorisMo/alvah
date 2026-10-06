@@ -454,11 +454,22 @@ const YEARLING_SOUTH: readonly Spot[] = [{ x: -31.0, z: -25.6 }, { x: -33.0, z: 
 export const YEARLING_LOG_M = 0.5;
 export function yearlingWay(w: Way, from: Spot, to: Spot): Spot[] {
   if (w.field === 'S') return from.z > to.z ? [...YEARLING_SOUTH] : [...YEARLING_SOUTH].reverse();
+  return roundLog(from, to);
+}
+
+/** How far (m) every walk of the family keeps from the log's box (run 7 fix: a piglet or
+ *  the yearling walked through it, or slid along it with half its body over it). */
+export const FAMILY_LOG_M = YEARLING_LOG_M;
+
+/** The way from `from` to `to` round the mossy log at the wallow: straight when the leg keeps
+ *  clear of it, else round its nearer end — a point past each end, out from the log by its
+ *  half-width and a pig's width; the one that keeps both legs clear and walks least (none
+ *  that does: straight, and the world's solid slides it round). Every family walk at the mud
+ *  goes this way (frisling.ts `goRound`, the yearling's `yearlingWay`). */
+export function roundLog(from: Spot, to: Spot): Spot[] {
   const log = wallowLog();
-  const clear = (a: Spot, b: Spot): boolean => legGap(log, a, b) >= YEARLING_LOG_M + 0.1;
+  const clear = (a: Spot, b: Spot): boolean => legGap(log, a, b) >= FAMILY_LOG_M + 0.1;
   if (clear(from, to)) return [];
-  // round the log's nearer end: a point past each end, out from the log by its half-width
-  // and a pig's width; the one that keeps both legs clear and walks least
   const b = log.box!;
   const ends = [-1, 1].flatMap((e) => [-1, 1].map((sd) => {
     const c = Math.cos(b.rot), s = Math.sin(b.rot);
@@ -467,6 +478,25 @@ export function yearlingWay(w: Way, from: Spot, to: Spot): Spot[] {
   }));
   const ok = ends.filter((p) => clear(from, p) && clear(p, to)).sort((p, q) => (dist(from, p) + dist(p, to)) - (dist(from, q) + dist(q, to)));
   return ok.length ? [ok[0]] : [];
+}
+
+/** Two piglets' chase round the mud after the reunion, seen from `me`: an arc round its far
+ *  side (across the picture, never at the lens) and back, at the mud's rim — drawn in toward
+ *  the mud where the log lies on it, so every leg keeps `FAMILY_LOG_M` off the log (run 7
+ *  fix: the arc ran straight through it). */
+export function chaseRing(me: Spot): Spot[] {
+  const log = wallowLog();
+  const far = headingTo(WALLOW_AT, me) + Math.PI;
+  const at = (d: number, r: number): Spot => ({ x: WALLOW_AT.x + Math.sin(far + d) * r, z: WALLOW_AT.z + Math.cos(far + d) * r });
+  const arc = [-1.5, -0.75, 0, 0.75, 1.5].map((d) => {
+    let r = 2.2;
+    while (r > 0.9 && obstacleGap(log, at(d, r).x, at(d, r).z) + log.box!.pad < FAMILY_LOG_M + 0.25) r -= 0.1;
+    return at(d, r);
+  });
+  const there = [...arc, ...arc.slice(0, -1).reverse()];
+  const out: Spot[] = [there[0]];
+  for (let i = 1; i < there.length; i++) out.push(...roundLog(there[i - 1], there[i]), there[i]);
+  return out;
 }
 /** The least gap (m) between a straight leg and the log's box (not its pad). */
 export function legGap(log: Obstacle, a: Spot, b: Spot): number {

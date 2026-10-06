@@ -52,7 +52,7 @@ import { Sightings, spawnBird, flight, type Bird } from './frisling.finds';
 import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
   frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, outSpotOf, bagView, BAG_REACH,
-  zeugStare, zeugView, walkOnSpot, yearlingSideOf, yearlingWay, wallowLog, WALLOW_FRAME, WALLOW_LOG, NEST_R,
+  zeugStare, zeugView, walkOnSpot, yearlingSideOf, yearlingWay, wallowLog, WALLOW_FRAME, WALLOW_LOG, NEST_R, roundLog, chaseRing,
   larkLandings,
 } from './frisling.places';
 import { groundHides } from '../../world/surprises-math';
@@ -183,6 +183,9 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const lost = A.lost;
   const layout = FAMILY_LAYOUTS[v.family].poses;
   const settings = store.get().settings;
+  // the cut fence is his clue once he has won here (Content.cluesFound reads `voltooid`):
+  // read before the reunion marks this play's win
+  const clueKnown = !!store.get().voltooid.frisling;
   const listener = (): { x: number; z: number; yaw: number } => listenerOf(k.world.camera);
   const call = (id: string, a: Actor, reach?: number): void => { if (settings.geluid) Sound.callAt(id, a.x, a.z, listener(), reach); };
   const me = (): { x: number; z: number; speed: number } => { const m = k.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
@@ -518,13 +521,13 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     magpieBack();
     call('piep', lost);
     void sow.lookAt(() => ({ x: lost.x, z: lost.z, speed: 0 }));
-    await lost.go(after.x, after.z, { speed: 'trot', face: headingTo(after, sow) });
+    await goRound(lost, after, { speed: 'trot', face: headingTo(after, sow) });
     void sow.sniff(lost.x, lost.z, 2.6);
     call('knor-blij', sow);
     // his brothers and sisters come to sniff him too
     for (const p of [A.p1, A.p2, A.p3]) {
       const spot = toward(lost, p, 0.65);
-      void p.go(spot.x, spot.z, { speed: 'trot', face: headingTo(spot, lost) });
+      void goRound(p, spot, { speed: 'trot', face: headingTo(spot, lost) });
     }
     await k.wait(2.6);
     void lost.sniff(sow.x, sow.z, 2);
@@ -533,15 +536,18 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   k.stats.reunion_gap = Math.round(dist(lost, sow) * 100) / 100;
   // a calm beat with the family together before the raaf's card comes over them (now and
   // then two of the piglets chase each other round the mud)
-  if (surprise.fork('jagen').chance(0.5)) await chase(A.p2, A.p3);
+  if (surprise.fork('jagen').chance(0.5)) await chase('p2', 'p3');
   else await k.wait(1.4);
   // 15 · the raaf: a group of pigs (after the reunion, before the reward); under its
   // card the clue drops: the cut fence past the wallow fades in
   home.revealClue();
   await k.fact(2);
-  // 16 · one calm look at it (the clue card names it next, with the reward)
-  const gap = clueGap();
-  await k.look({ x: gap.x, z: gap.z, y: k.ctx.groundY(gap.x, gap.z) + 0.1 }, c.hek);
+  // 16 · one calm look at it (the clue card names it next, with the reward) — on his first
+  // win only: on a replay the fence is a clue he found long ago, and no card names it
+  if (!clueKnown) {
+    const gap = clueGap();
+    await k.look({ x: gap.x, z: gap.z, y: k.ctx.groundY(gap.x, gap.z) + 0.1 }, c.hek);
+  }
 
   /* ------------------------------------------- finds and small surprises ---- */
 
@@ -570,8 +576,15 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     if (!a) return;
     rubbing = null;
     const pose = a === A.sow ? layout.sow : layout.yearling;
-    if (dist(a, pose) > 0.3) void a.go(pose.x, pose.z, { speed: 'walk' }).then((ok) => { if (ok) atHome(a, pose); });
+    if (dist(a, pose) > 0.3) void goRound(a, pose, { speed: 'walk' }).then((ok) => { if (ok) atHome(a, pose); });
     else atHome(a, pose);
+  }
+
+  /** A walk at the mud, round the mossy log (frisling.places `roundLog`: never through it,
+   *  never a slide along it), then to the spot. Resolves as `Actor.go` does. */
+  async function goRound(a: Actor, to: Spot, opts: { speed?: 'walk' | 'trot' | number; face?: number } = {}): Promise<boolean> {
+    for (const p of roundLog(a, to)) if (!(await a.go(p.x, p.z, { speed: opts.speed }))) return false;
+    return a.go(to.x, to.z, opts);
   }
 
   /** The magpie (rare): rides on the sow's back, hops about and pecks at her bristles; it
@@ -829,20 +842,25 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   }
   function hideButterflies(): void { for (const q of flutter) q.b.root.visible = false; }
 
-  /** Two piglets chase each other round the mud, then root on (after the reunion). */
-  async function chase(a: Actor, b: Actor): Promise<void> {
-    // (an arc round the far side of the mud and back: across the picture, never at the lens)
-    const far = headingTo(P.wallow, k.ranger()) + Math.PI;
-    const arc = [-1.5, -0.75, 0, 0.75, 1.5].map((d) => ({ x: P.wallow.x + Math.sin(far + d) * 2.2, z: P.wallow.z + Math.cos(far + d) * 2.2 }));
-    const ring = [...arc, ...arc.slice(0, -1).reverse()];
+  /** Two piglets chase each other round the mud, then trot home and root on (after the
+   *  reunion). */
+  async function chase(ka: 'p2' | 'p3', kb: 'p2' | 'p3'): Promise<void> {
+    // (an arc round the far side of the mud and back: across the picture, never at the lens,
+    // drawn in where the log lies on it: frisling.places `chaseRing`)
+    const ring = chaseRing(k.ranger());
+    const a = A[ka], b = A[kb];
     k.stats.jagen = 1;
     call('piep', a);
     const run = async (x: Actor, lag: number): Promise<void> => {
       await k.wait(lag);
-      for (const p of ring) await x.go(p.x, p.z, { speed: 'trot' });
+      for (const p of ring) if (!(await x.go(p.x, p.z, { speed: 'trot' }))) return;
     };
     await Promise.race([Promise.all([run(a, 0), run(b, 0.5)]), k.wait(6)]);
-    for (const x of [a, b]) x.root(x.x, x.z, 0.4);
+    // home to their own places (round the log), and root there
+    for (const key of [ka, kb]) {
+      const x = A[key], pose = layout[key];
+      void goRound(x, pose, { speed: 'walk' }).then((ok) => { if (ok) atHome(x, pose); });
+    }
   }
 
   /* ---------------------------------------------------- the calm moments ---- */

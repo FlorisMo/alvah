@@ -18,7 +18,7 @@ import {
   cluePosts, clueGap, bootPrints, CLUE_FRAME, WAYS, WAY_IDS, FAMILY_LAYOUTS, nookAt, decoyAt, placesFor, useWay, wallowLog,
   wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, outSpotOf, bagView, sideBySideView, BAG_REACH, type WayId, type Way, type WayView,
   zeugStare, zeugView, ZEUG_STARE_M, NEST_R, ZEUG_STEP_M, walkOnSpot, yearlingSideOf, yearlingWay, legGap, YEARLING_LOG_M,
-  larkLandings, LARK_LAND, LENS_BACK, NOOK_CLEAR_PX, searchEyeOf, POSE_TURN,
+  larkLandings, LARK_LAND, LENS_BACK, NOOK_CLEAR_PX, searchEyeOf, POSE_TURN, roundLog, chaseRing, FAMILY_LOG_M,
 } from './frisling.places.ts';
 import { fitGlimpse, lensAxis, looksSize, pigletBack, shareFor, BACK_GRID, LOOKS_REF, PIGLET_TOP } from './frisling.window.ts';
 import { WALK_ON_M } from '../beats/walk-math.ts';
@@ -369,8 +369,6 @@ const project = (p: { x: number; z: number }, y: number, lens: { cam: THREE.Vect
   screenOf({ x: p.x, y: heightAt(p.x, p.z) + y, z: p.z }, lens.cam, lens.look, FOV, W, H);
 
 const LYING_H = lyingHeight(SIZE.frisling.h, LEG_SHARE.frisling);
-/** Every glimpse the knobs may ask for (every band, and the contracts' default). */
-const GLIMPSES = [...new Set([1, 2, 3, 4, 5, 6].map((b) => knobsFor('zoeken', b).glimpse).concat([0.38, 0.32, 0.27, 0.23, 0.2, 0.16]))];
 
 for (const id of WAY_IDS) {
   const w = WAYS[id];
@@ -738,6 +736,59 @@ test('the yearling trots out to him at the field and back round the log (every l
           for (const p of legs) for (const q of cluePosts()) assert.ok(dist(p, q) > 1, 'off the fence');
         }
       }
+    }
+  }
+});
+
+test('the family never walks through the mossy log: the chase round the mud, the reunion, the walks home', () => {
+  // (run 7 fix: Alvah saw a piglet run through the log in three endings: the chase's arc
+  // ran straight through it, and a walk that slid along its solid laid half a body over it)
+  const log = wallowLog();
+  const W = P.wallow;
+  const legs = (from: { x: number; z: number }, to: { x: number; z: number }): number => {
+    const way = [from, ...roundLog(from, to), to];
+    let g = Infinity;
+    for (let i = 1; i < way.length; i++) g = Math.min(g, legGap(log, way[i - 1], way[i]));
+    return g;
+  };
+  const after = Object.fromEntries(FRISLING_RESIDENTS.map((r) => [r.key, r.after!]));
+  const piglets = ['p1', 'p2', 'p3'] as const;
+  // the chase, from wherever he stands round the mud: every leg off the log, at the mud
+  for (let i = 0; i < 24; i++) {
+    for (const r of [3.5, 5, 6.5]) {
+      const me = { x: W.x + Math.sin((i * Math.PI) / 12) * r, z: W.z + Math.cos((i * Math.PI) / 12) * r };
+      const ring = chaseRing(me);
+      for (let j = 1; j < ring.length; j++) assert.ok(legGap(log, ring[j - 1], ring[j]) >= FAMILY_LOG_M, `the chase seen from ${i * 15}° passes ${legGap(log, ring[j - 1], ring[j]).toFixed(2)} m from the log`);
+      for (const q of ring) {
+        assert.ok(dist(q, W) <= 3.2, 'the chase stays at the mud');
+        for (const c of cluePosts()) assert.ok(dist(q, c) > 1, 'off the fence');
+      }
+      // and home from anywhere on it, round the log, to every piglet's place in every layout
+      for (const q of ring) for (const lay of FAMILY_LAYOUTS) for (const key of piglets) {
+        assert.ok(legs(q, lay.poses[key]) >= FAMILY_LOG_M, `home from the chase to ${lay.id}/${key}`);
+      }
+    }
+  }
+  // the reunion: the lost one trots from his side to his mother, round the log; his brothers
+  // and sisters come to sniff him from their places
+  for (const id of WAY_IDS) {
+    const w = WAYS[id];
+    for (const me of [w.wallowTalk, walkOnSpot(w, w.wallowTalk)]) {
+      const left = atLocal({ x: me.x, z: me.z, heading: headingTo(me, W) }, -1.1, 0.35);
+      assert.ok(legs(left, after.lost) >= FAMILY_LOG_M, `${id}: the lost one's trot home passes the log`);
+    }
+  }
+  for (const lay of FAMILY_LAYOUTS) {
+    for (const key of piglets) {
+      const p = lay.poses[key];
+      const spot = { x: after.lost.x + (p.x - after.lost.x) * 0.65 / dist(p, after.lost), z: after.lost.z + (p.z - after.lost.z) * 0.65 / dist(p, after.lost) };
+      assert.ok(legs(p, spot) >= FAMILY_LOG_M, `${lay.id}/${key}: the way to sniff him passes the log`);
+      // after the mission the world walks them home straight: from the sniff, and from their place
+      assert.ok(legGap(log, spot, after[key]) >= FAMILY_LOG_M, `${lay.id}/${key}: home from the sniff passes the log`);
+    }
+    for (const [key, p] of Object.entries(lay.poses)) {
+      if (lay.id === 'boom' && key === 'sow') continue; // (she rubs on it: she walks off it)
+      assert.ok(legGap(log, p, after[key]) >= FAMILY_LOG_M, `${lay.id}/${key}: the walk home after the mission passes ${legGap(log, p, after[key]).toFixed(2)} m from the log`);
     }
   }
 });
