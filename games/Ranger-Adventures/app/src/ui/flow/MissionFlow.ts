@@ -48,6 +48,7 @@ import { AdventureHud } from './AdventureHud';
 import { newPlay, nextPlaySeed, type Play } from '../../core/play';
 import { rollRare } from '../../core/discover';
 import { ONTDEKKINGEN, ontdekkingenVan, type Ontdekking } from '../../content/ontdekkingen';
+import { planFacts, type Feit } from '../../core/veldnotitie';
 import { lastMoodAt, lastMoodsAt, playMood, type MoodId } from '../../render3d/Moods';
 import { providePlay } from '../../core/devhook';
 import { revealDiscovery, revealsWaiting, setRevealGate } from '../hud/Reveal';
@@ -81,7 +82,7 @@ let missionPauseEl: HTMLElement | null = null;
  *  its "wist je dat" fact — the raaf tells the fact right after the step, so the
  *  game's own found-card never says it first (the raaf used to repeat it). */
 function stepForView(step: Step): Step {
-  const { feit: _feit, feitDier: _feitDier, ...skin } = step.skin;
+  const { feit: _feit, feitDier: _feitDier, meerFeiten: _meer, ...skin } = step.skin;
   const copy = skin.copy
     ? Object.fromEntries(Object.entries(skin.copy).map(([k, v]) => [k, typeof v === 'string' ? deviceText(v) : v]))
     : undefined;
@@ -170,7 +171,10 @@ export function showBriefing(mission: Mission): void {
     if (store.get().voltooid[mission.id]) world.residents.setState(mission.id, 'after');
   };
   const jargon = store.get().settings.jargon;
-  const lines = (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
+  // run 7 (words-ree): a mission he has finished is played again on a short card — its
+  // title and its one short line ("kort") — never the whole ~30-word note he heard before
+  const again = !!store.get().voltooid[mission.id] && !!mission.kort;
+  const lines = again ? [mission.kort ?? ''] : (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
   const shown = lines.flatMap(zinnen); // one sentence a line: every line on the page ≤ 7 words
 
   // Bram's field note: his portrait and name, the mission's picture and title, the lines
@@ -244,8 +248,10 @@ async function runMission(mission: Mission, drawn: Drawn): Promise<void> {
   const raceStop = <T>(p: Promise<T>): Promise<T | 'STOP'> => Promise.race([p, stopped]);
   mountMissionPause();
   setRevealGate(() => false); // run 7: no reveal over a classic mission (its cards, its games)
-  // the raaf counts its facts (1/3, 2/3, 3/3), not the steps
-  const facts = mission.stappen.filter((st) => st.skin.feit).length;
+  // the raaf counts the facts THIS play shows (1/3, 2/3, 3/3), not the steps (run 7: one
+  // unread fact a step, none once its pool is read)
+  const factPlan = factsOf(mission, play);
+  const facts = factPlan.size;
   let factN = 0;
   // The world holds still for the WHOLE mission (2D floor included): the ranger stays
   // at the marker, the step owns the camera, and between two steps no marker tag or
@@ -307,10 +313,11 @@ async function runMission(mission: Mission, drawn: Drawn): Promise<void> {
     // run 7: into the history with the play and the view (the classic 3D stage, or the 2D floor)
     store.logBeat(step.ef as Engine, result, { missionId: mission.id, view: mode === '3d' && world ? 'stage' : '2d', play });
     played.push(step.ef as Engine);
-    if (step.skin.feit) {
+    const feit = factPlan.get(i);
+    if (feit) {
       // W6.3b: playing in the world pins the fact as a collectible veldnotitie.
-      store.collectVeldnotitie(Content.veldnotitieId(mission.id, i));
-      const fact = await raceStop(showFact(step, ++factN, facts));
+      store.collectVeldnotitie(feit.id);
+      const fact = await raceStop(showFact(feit, ++factN, facts));
       if (fact === 'STOP' || stopRequested) { abandonMission(); return; }
     }
   }
@@ -361,7 +368,8 @@ async function runAdventure(mission: Mission, adv: Adventure, drawn: Drawn): Pro
   const stopped = new Promise<'STOP'>((res) => { missionStop = () => res('STOP'); });
   mountMissionPause();
   const signal = beginActivityScope();
-  const facts = mission.stappen.filter((st) => st.skin.feit).length;
+  const factPlan = factsOf(mission, drawn.play);
+  const facts = factPlan.size;
   let factN = 0;
   let clueId: string | null = null;
   let finale = false;
@@ -382,10 +390,11 @@ async function runAdventure(mission: Mission, adv: Adventure, drawn: Drawn): Pro
       reveal: (o, opts) => revealDiscovery(o, opts),
       revealsWaiting: () => revealsWaiting(),
       fact: async (i) => {
-        const st = mission.stappen[i];
-        if (!st.skin.feit) return;
-        store.collectVeldnotitie(Content.veldnotitieId(mission.id, i)); // W6.3b: a veldnotitie
-        await showFact(st, ++factN, facts);
+        // run 7 (words-ree): this play's unread fact for the step, or no card at all
+        const feit = factPlan.get(i);
+        if (!feit) return;
+        store.collectVeldnotitie(feit.id); // W6.3b: a veldnotitie
+        await showFact(feit, ++factN, facts);
         clearOverlays();
       },
       reunion: async (play, holdS) => {
@@ -606,12 +615,20 @@ function raafNaam(): string | null {
   return c.rescued ? c.naam?.trim() || HUT.jeRaaf : null;
 }
 
+/** Run 7 (words-ree): the facts THIS play shows, step by step — one he has not read yet
+ *  per step (the step's `feit` and its `meerFeiten`), drawn from the play's own `feit`
+ *  fork; a step whose facts he has all read shows no card. */
+function factsOf(mission: Mission, play: Play): Map<number, Feit> {
+  return planFacts(mission.id, mission.stappen, store.get().veldnotities, play.fork('feit').rng);
+}
+
 /** W6.3a: the "Wist je dat" beat between two steps. Once the raaf is rescued (and named)
  *  it is the raaf who tells it ("Kroa vertelt · 1/3"); before that nobody pretends to:
- *  "Wist je dat? · 1/3" (a raaf you never met cannot talk to you). */
-function showFact(step: Step, n: number, total: number): Promise<void> {
+ *  "Wist je dat? · 1/3" (a raaf you never met cannot talk to you). Run 7: `n/total` counts
+ *  the cards this play shows. */
+function showFact(f: Feit, n: number, total: number): Promise<void> {
   return new Promise((resolve) => {
-    const feit = String(step.skin.feit ?? '');
+    const feit = f.tekst;
     const raaf = raafNaam();
     const el = card(
       `<div class="card card--narrow fact${raaf ? ' fact--raaf' : ''}">` +

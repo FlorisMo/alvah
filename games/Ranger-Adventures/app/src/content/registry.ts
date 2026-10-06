@@ -7,6 +7,7 @@
 
 import { AREA_VELUWE as RAW_VELUWE, ANIMALS as RAW_ANIMALS } from './veluwe';
 import type { Area, Animal, Mission, Step, Verhaalboog, Clue, Hoofdstuk } from './types';
+import { factPool } from '../core/veldnotitie';
 
 const AREA_VELUWE = RAW_VELUWE as unknown as Area;
 const ANIMALS = RAW_ANIMALS as unknown as Record<string, Animal>;
@@ -93,7 +94,8 @@ export const Content = {
   // ---- veldnotities (W6.3b: collectible "Wist je dat" facts) --------------
   /**
    * Every "Wist je dat"-fact in the area as a collectible veldnotitie, in
-   * mission-then-step declaration order. The id is stable (`<missionId>:<step>`)
+   * mission-then-step declaration order (run 7: a step's whole pool, its first fact
+   * `<missionId>:<step>`, the ones after it `<missionId>:<step>.<n>`). The id is stable
    * so the persisted collected-set (a plain id map in the ranger namespace)
    * never drifts from the content — the same pure derive-from-content shape as
    * the clue board. `dier` labels the note (feitDier → skin.dier → '').
@@ -104,11 +106,12 @@ export const Content = {
     const out: { id: string; dier: string; tekst: string }[] = [];
     for (const m of a.missies) {
       m.stappen.forEach((s, i) => {
-        const feit = s.skin.feit;
-        if (!feit) return;
+        // run 7 (words-ree): every fact of the step's pool, its first under the old id
+        const pool = factPool(m.id, i, s.skin);
+        if (!pool.length) return;
         const dierId = String(s.skin.feitDier ?? s.skin.dier ?? '');
         const dier = Content.animal(dierId)?.naam ?? dierId;
-        out.push({ id: `${m.id}:${i}`, dier, tekst: String(feit) });
+        for (const f of pool) out.push({ id: f.id, dier, tekst: f.tekst });
       });
     }
     return out;

@@ -49,6 +49,10 @@ export interface Skin {
   doel?: { x: number; y: number };
   distractors?: Distractor[];
   feit?: string;
+  /** run 7 (words-ree, additive): more true "Wist je dat" facts for this step: each play
+   *  shows one he has not read yet (`feit` among them), none once he read them all
+   *  (core/veldnotitie.ts `planFacts`); each is its own veldnotitie (`<mission>:<step>.<n>`) */
+  meerFeiten?: string[];
   feitDier?: string;
   dieren?: string[];
   /** run 7 (simon, additive): the animals that MAY call (`engines/simon.ts simonCast`): the

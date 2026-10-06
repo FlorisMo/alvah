@@ -230,6 +230,8 @@ function readingCorpus(): Entry[] {
       const c = st.skin?.copy ?? {};
       for (const k of Object.keys(c)) push(`${m.id}.step${si}.${k}`, c[k]);
       push(`${m.id}.step${si}.feit`, st.skin?.feit);
+      // run 7 (words-ree): the step's other facts (one a play, drawn one sentence a line)
+      (st.skin?.meerFeiten ?? []).forEach((f: string, j: number) => push(`${m.id}.step${si}.meerFeiten[${j}]`, f));
       // a choice is a button: one line
       (st.skin?.encounters ?? []).forEach((e: any) => (e.opties ?? []).forEach((o: any, oi: number) => push(`${m.id}.step${si}.${e.id}.optie[${oi}]`, o.label, true)));
       // run 7 (words-ree): a moment's question, its good words and what a wrong act did are
