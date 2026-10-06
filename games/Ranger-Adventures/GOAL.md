@@ -41,7 +41,17 @@ single bug, dead end or confusing moment**:
 After that: the other nine missions and the remaining mini-games (simon, wisselen, roep)
 reach the same bar. Since run 6 the three missions met next (the reekalf, the wildcamera,
 the eekhoorn) are adventures in the world too, so the first four use all five
-breinkrachten; the six after them are still staged mini-game patches.
+breinkrachten. Since run 7 the ven, De oversteek and Het stille zand are adventures as
+well; the three after them (De nachtronde, De vos en zijn buren, De winterronde) are
+still staged mini-game patches.
+
+**And he wants to play it again** (run 7, Floris: "fun enough, and different enough each
+time, that he keeps coming back"). Every play of an adventure is drawn fresh from one seed
+(where the animal hides, the way there, the order of the calm moments, the light, small
+surprises), and that variety never makes a breinkracht harder. Difficulty moves only with
+his own level per breinkracht, the same in the world and on the 2D floor; up is shown
+calmly, down is silent. What he finds goes into a veldgids, spread over a few sessions of
+now-and-then play: no points, streaks, timers or "come back tomorrow".
 
 ## Priorities
 

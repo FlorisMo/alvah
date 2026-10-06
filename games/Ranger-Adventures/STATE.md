@@ -4,6 +4,176 @@
 > it was verified. Goal and steps: [GOAL.md](GOAL.md).
 > ✅ works · 🟡 works with problems · ❌ blocks the player
 
+## 2026-10-06 14:55: after run 7 (run7/integration; every check ran on 2b43aa5, and only docs changed after it; played by hand on a fresh save + screenshots looked at)
+
+**The golden path is ALL GREEN, and every adventure is now a different little expedition
+each time he plays it: it grows with him and leaves something new to find.** Seven of the ten
+missions are adventures in the world: the four from run 6 and, new, *De kikker in het
+ven*, *De oversteek* and *Het stille zand*. The last three (*De nachtronde*, *De vos en zijn
+buren*, *De winterronde*) are still staged mini-game patches. All checks ran on 2b43aa5
+(2026-10-06, 13:25-14:02): `npm run gate`: "# pass 1074 # fail 0", then "4 passed
+(19.8s)". `npm run golden`: "ALL GREEN: the golden path plays start to finish" (1 passed,
+4.5 min). `e2e/missions.spec.ts` (all ten missions at their real markers, plus the
+practised, body, 2D, reduced-motion and missiebord cases): "20 passed (26.9m)", with no
+quality, triangle or draw-call soft failures. Deploy smoke the CI way (`CI=1 npm run
+e2e:smoke`): "4 passed (1.6m)". iPad engine (`npm run e2e:webkit`): "4 passed (24.6s)".
+Root `npm run build`: "[build] Complete!" (21 pages). Run again on the final tree (docs
+only since 2b43aa5), 14:49: the gate printed "# pass 1074 # fail 0", then "4 passed
+(20.0s)"; the root build "[build] Complete!" (21 pages).
+
+Played by the final agent at 1280×800 with real keys and mouse (each beat's play hint,
+never a win hook), on one fresh save: the frisling, reekalf, wildcamera, eekhoorn and ven
+in story order, then the frisling and the eekhoorn twice more each, then the veldgids and
+three new visits. 9 plays, 0 page errors, draw calls ≤ 137, triangles ≤ 0.79M:
+
+| # | Step | Status | What a player experiences |
+|---|------|--------|---------------------------|
+| 1 | Opening screen | ✅ | *Begin* after 4.9 s. The very first visit is the golden hour. Every later visit has its own light (ochtendnevel, zonnig, bewolkt, gouden uur, schemer), never the last one twice: three reloads in a row gave mist, sun, dusk. |
+| 2 | Make your ranger | ✅ | Unchanged. Red hair and the blue jacket are measured on the 3D ranger. |
+| 3 | Walk the world | ✅ | Walk 2.2 m/s. Shift runs 4.2 m/s, and now it looks like running (a lean, pumping arms, dust on sand). Free roam has small surprises: a buzzard gliding low, a woodpecker drumming, a cuckoo in the mist, now and then a stag or a badger. Each one is a veldgids row. Distant animals read as brown fur in every light, never as black cut-outs. |
+| 4 | Jeep / helicopter | ✅ | Unchanged (15.4 m in 3 s; lands 0 m from the pad centre). |
+| 5 | Go to mission 1 | ✅ | The chip and the marker. The mission starts after 2 clicks. |
+| 6 | Mission 1 games | ✅ | *De verdwaalde frisling*, a new expedition every play (below). Golden won it in 139 s, with draw calls ≤ 138. |
+| 7 | Finish mission | ✅ | The reward card says what grew ("Je breinkrachten groeien.", "Je Echokracht groeit."). A drop is never shown. The first win drops the cut-fence clue; a replay skips the fence look he already saw. Each fact card comes from a pool of three per step, never one he has read. |
+| 8 | Back in the world | ✅ | The next mission is offered. Story order: frisling, reekalf, wildcamera, eekhoorn, ven, oversteek, stille zand, nachtronde. A finished mission replays from its ring with a short card: its title, one line and *Ga op pad*. |
+
+What changes every play, how it grows and what there is to find (seen in my plays unless
+marked "spec"):
+
+- **De verdwaalde frisling** (zoeken · corsi · rustkracht, 2.5-3.5 min). *Varies:* the
+  squeak leads one of three ways (wei, steen, berk; never the same way twice in a row) to
+  that way's bracken stand. The piglet lies in one of five nooks with his striped flank to
+  the lens, never in the middle. In my three plays: berk, 184 px off the middle, golden
+  hour; steen, 142 px, overcast; wei, 173 px, golden hour. The look-alikes, the family's
+  layout at the mud and the order of the five calm moments are drawn per play (advzp, advpz,
+  avdzp). No answer cards are left: hands still (aaien, voeren), walk slowly with the tired
+  piglet (dragen), feet still at the sow's stare (zeug), walk on when the path is free
+  (pad). *Grows:* zoeken went from level 1 to 4 to 5 over my three plays (less of him shows,
+  the hint comes later, the prints are fainter). The corsi route grew 4 → 5 → 6 over 2-3
+  rounds, the holds 3.5 → 5 → 5.5 s. *Finds (7):* the sow, the yearling, the piglet, the
+  woodlark, the rubbing log, the bed of bitten bracken, and the rare magpie on the sow. My
+  save had 5 of 7 after three plays.
+- **Het reekalf in het gras** (zoeken · rustkracht, about 2 min). *Varies:* one of three
+  grass stands round the copse (never one of the last two plays'), each with its own path,
+  search side and hide. The calf lies in one of four spots, never in the middle (221-232 px
+  off it). The three calf moments come in a drawn order, and the pool lies on the way in or
+  on the way out. The search lens hangs about 3.7-3.9 m up, with the boy small at the
+  picture's edge (the owner's camera fix). *Body:* hands still while the calf peeps (aai),
+  feet still while it sniffs his boots (geur), a step back with ↓ when it totters toward
+  him (oppakken), round the pool, still in the watch, and walking away himself once the
+  mother is back. *Grows:* less of the calf and more brown look-alikes; holds go from 4 to
+  7 s with more temptations; the doe stops to listen up to three times. *Finds (7):* the
+  doe, the calf, a woodlark, a buzzard, a cuckoo, a sapling a roebuck rubbed, and the rare
+  twins.
+- **De wildcamera** (wisselen · simon, about 2.5 min). *Varies:* which 3 of 4 day animals
+  and 3 of 4 night animals come, and from which side. Each one walks on and stands still
+  before its card. The night's four callers stand in new spots, the dawn's light changes,
+  and the snare lies at one of three spots with its own two landmarks (never the last play's).
+  *Body:* no buttons. He takes the camera off its stump, straps it to the pine, walks into
+  its fan for a photo of himself, flips the night's photos, and finds the snare by
+  comparing the man's photo with the wood. Every stretch between two rule turns has a day
+  AND a night animal, so clicking one place every time never counts as easy. *Grows:* the
+  echo starts at 2, at 3 once 2 came easily, at 4 on a practised save, and grows to 7 in one
+  night. The aim round grows from 6 photos and one turn to 8 photos and two. *Finds (6):*
+  the badger, the fox, his own photo, a nose at the lens, and two rares: the fox with cubs
+  and the white roe.
+- **De verstopte nootjes** (corsi · simon, 3-4 min). *Varies:* the way through the pines
+  (middle, north or south), the hide tree, the nest, the gnawed cones, the den, the antics,
+  a second hide about 1 in 3, one small surprise, the moss field's mirror image, three
+  neighbours from 18 trios, and the ending (in my plays: buries, grooms, eats). *Grows:* in my
+  three plays the echo went 3-5 (level 2), 3-6 over four rounds (level 3), 4-7 (level 4); the
+  acorns went 4-5, then 5-6. *Finds (10):* the squirrel, the jay, both woodpeckers, the
+  nuthatch (from a later visit), the nest, the gnawed cones, the oak seedling (free roam,
+  later), and two rares: the dark-brown squirrel and the young one. My save had 6 of 10
+  after three plays and no rare yet.
+- **De kikker in het ven** (new; zoeken · rustkracht, 1.5-2 min). He follows the frogs by
+  ear along the north bank: run and they fall silent, stand still and they call ("Sta stil.
+  Luister."). He keeps his distance from the snake basking on the path, walks round the
+  quaking moss and walks on when the dry path is free. Then he stands still at a cove and
+  finds the brown frog at the water's edge; it sings, the ven answers, and it plops back.
+  *Varies:* the cove, the nook (never near the middle: 294 px off it in my play, 155 px in
+  the spec), the order of the three moments, the light (never one of the last two plays'),
+  the duck family and the small life. *Finds (7):* the frog, the snake, the duck with her
+  ducklings, a dragonfly, the heath blue, a blue feather, and the rare blue frog. My first
+  play found 5 of 7.
+- **De oversteek** (new, spec; corsi · rustkracht, 3-4 min). Behind the screen at the
+  ecoduct he remembers the lead animal's way over the sand patches, keeps still for a
+  curious young one and for a group coming, and steps aside to let a family over. The
+  groups, their order and the light change every play; the fox comes at mist or dusk.
+  6 finds, including the rare badger.
+- **Het stille zand** (new, spec; zoeken · wisselen, 2.5-3 min). He follows a car's tyre
+  tracks, sees a nightjar fake a broken wing, finds her mate among look-alikes (134 px off
+  the middle), guards the burrow and the open sand while visitors come (the rule turns at
+  dusk), and steps back for a look at her eggs. 6 finds, including the rare wing claps; the
+  woodlark comes on a later visit.
+
+Across every game:
+- **One seed per play** (logged with every beat; `?dev=1&seed=N` replays it). Variety
+  never sets difficulty. Only his level per breinkracht does (`core/skill.ts`, 1-6, with a
+  floor that rises), and the 2D floor reads the same knobs and plays the same order and
+  summaries (construct parity; the ree's 2D order is the one exception, below).
+- **Every beat goes into a bounded history**: level, span or score, seed, variant, and what
+  its judgement read. Grown-ups read it in Instellingen → Groei.
+- **The veldgids** (Pauze → *Open je veldgids*, and at the hut): a page per place plus
+  *Overal op de Veluwe*, 56 rows. Each find shows its real picture; the rest are grey
+  shapes with a read-aloud hint, and rares have gold dashed frames. A rare never comes on a
+  home's first play or right after one; then it has a low chance, and it is sure by the 6th
+  won play (the owner's ruling of 2026-10-05: spread over a few sessions). A run-6 save
+  opens with the four rescued animals already in.
+- **No line on screen is longer than 7 words**, and the facts come from pools (40 new ones,
+  each also a veldnotitie).
+- **Within budget at the world level:** far fields, props and ducklings are drawn as
+  simpler copies. Free roam's worst views went from 1.13M triangles to 0.81-0.86M.
+
+How verified: the checks above. I looked at golden's 38 screenshots and at the
+missions.spec shots, and at the screenshots of my own 9 plays (the search pictures, calm
+moments, reunions and reward cards), the veldgids's ten pages, and three visits' moods.
+
+Still open (for the next run):
+- **Owner calls.** Enter at a finished mission's ring starts the next mission (the child
+  B6 ruling), and there is no *Nog een keer* on the reward card; with replay as the theme,
+  both are worth a fresh look. Harder often means longer: my third eekhoorn play took
+  254 s, and a cap per echo beat would change the simon tables of every echo home. Some
+  growth steps change nothing he plays (corsi bands 2-4, simon 2-3, the eekhoorn's two
+  mouthfuls); the owner kept the curve. From the reunion to the reward, the frisling's ending
+  runs about 19 s when the piglets' chase fires.
+- **Discoveries.** The frisling, ree and ven pages still fill most of their page on the
+  first play (the ven: 5 of 7). Only their rare spacing changed. A rare that was rolled but
+  not seen does not reset its counter. Once *Overal* is full, free roam repeats the same
+  two calls. Het stille zand has no find bound to a mood.
+- **Veldgids art.** Glyph icons instead of pictures, the yearling reusing the sow's
+  portrait, 'De vos met jongen' showing a single fox, 'De neus op de foto' always showing
+  the boar, the duck pale, the nightjar's generic icon.
+- **Frisling.** The follow's prints read as pale specks. The berk stand's birch is a dark
+  post at the top right. The fence-clue look glides over the family, and the sow can sit
+  cut off at the bottom edge. Draw calls reach 145 on berk.
+- **Ree.** Stand C's twin bed lies on open heath. The 2D floor plays the ree's cards in
+  content order with no variant, and its header reads "Terug naar de groep". The
+  end-of-walk card stop (0.8-0.9 s) has no play hint.
+- **Wildcamera.** A near bramble and fern stand in front of the thicket's animal spot, so
+  day animals sent there at night are photographed behind leaves. The night's stage shapes
+  repeat across plays. The jay and nightjar visitors are 25-35 px tall. The man's photo is
+  always 05:52 in the same blue dawn. The 2D floor names 'hinde' and 'edelhert' in the plain
+  variant.
+- **Eekhoorn.** The found view sometimes shows the squirrel's back (2 of 6 in its lane). At
+  the den look a sliver of the ranger's hair sits at the picture's edge (my second play).
+  The jay's own cache reads at about 15 px. The callers' view keeps one composition every
+  play.
+- **New adventures.** De oversteek is watched from the same screen every play, and no
+  animal crosses the deck itself (that needs a walkable deck: a world build). Het stille
+  zand's pictures show the helicopter pad, the jeep and the hut. The drift sand's beat
+  order is the same every play. The nightjar's legs hang in flight.
+- **Moods** read as tints near the ground (mist mostly shows far off). After a ree play in
+  another mood, the sun stays at the play's height until the next briefing cut.
+- **Kit.** A reveal card and a mission's line can talk over each other. In headless Chrome
+  `speechSynthesis` can stay "speaking" for 84-182 s, holding back the reveal cards; check
+  the cancel→speak sequence on the owner's Chrome and the iPad.
+- **Harness, not the game.** Under heavy load golden's title soft check and its hair-colour
+  read can fail. Golden's lead-home note reads about 0 m when the tired walk takes the lead.
+  missions.spec can read the ree's lens mid-glide. The full `npm run e2e` (about 25 min) was not
+  run. iPad touch and reduced motion were covered by `e2e:webkit` and the spec's
+  reduced-motion case, not played by hand.
+
 ## 2026-10-01 14:00: after run 6 (run6/integration, code at fca89f3; played by hand on a fresh save + screenshots looked at)
 
 **The golden path is ALL GREEN, and the first four missions are now games played in the
