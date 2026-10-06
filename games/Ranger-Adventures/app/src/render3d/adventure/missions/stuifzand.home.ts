@@ -34,7 +34,7 @@ import { calmGate } from '../../ProceduralMotion';
 import { SIZE } from '../../AnimalScale';
 import { Seen, boxOf } from './ven.finds';
 import {
-  ANTHILL, BURROW, GAPS_FROM, HOL_JUNIPER, MISSION, NESTS, NEST_IDS, OPEN, PASSES, PRESSED_H, SETTLE, STOP, TAG_AT, ZONES, ZWALUW_H, ZWALUW_LEN,
+  ANTHILL, ANTHILL_NEAR, BURROW, GAPS_FROM, HOL_JUNIPER, MISSION, NESTS, NEST_IDS, OPEN, PASSES, PRESSED_H, SETTLE, STOP, TAG_AT, ZONES, ZWALUW_H, ZWALUW_LEN,
   allClumps, approachOf, COVER_SEED, dist, gapsTo, headingTo, lineOf, nestNowOf, pointAt, routeOf, RUT, RUT_W, rutAlpha, slotsOf,
   type Line, type NestId, type Pass, type ViewSpec, type ZandLaid,
 } from './stuifzand.places';
@@ -681,7 +681,8 @@ export class ZandHome implements HomeDressing {
       () => ({ cam: env.view!() ?? new THREE.PerspectiveCamera(), w: 1280, h: 800, me: this.me }),
       (id) => { env.discover?.(id); },
     ) : null;
-    this.seen?.watch({ id: 'stuifzand.mierenhoop', box: () => (this.anthill ? boxOf(this.anthill) : null), px: 40, secs: 1, within: 9, when: () => !this.playing });
+    // (his once he walks right up to it, as in a play: a find for the curious)
+    this.seen?.watch({ id: 'stuifzand.mierenhoop', box: () => (this.anthill ? boxOf(this.anthill) : null), px: 40, secs: 1, within: ANTHILL_NEAR, when: () => !this.playing });
 
     this.layLooks(null);
     this.setState('before');

@@ -104,6 +104,10 @@
 }
 .vg-hear .ic { width: 20px; height: 20px; }
 
+/* an animal he knows from another page, still to find here: its picture softened (the
+   place line under it says where it is met on this page) */
+.vg-entry.is-known .vg-img { opacity: 0.5; filter: grayscale(0.55); }
+
 /* a rare one: a soft gold rim (still to find: a dashed one, the place for something special) */
 .vg-entry.is-rare { border-color: rgba(214, 160, 30, 0.55); border-style: dashed; }
 .vg-entry.is-rare.is-found { border-style: solid; border-color: var(--spel-sun); box-shadow: 0 0 0 3px rgba(245, 194, 59, 0.3); }

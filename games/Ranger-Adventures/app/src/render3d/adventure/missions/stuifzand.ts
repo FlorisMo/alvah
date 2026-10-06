@@ -47,13 +47,15 @@ import { searchBeat } from '../beats/search';
 import { aimBeat, type AimWorld } from '../beats/aim';
 import { listenerOf } from '../../world/Residents';
 import { isRunning } from '../actors-math';
+import { WALK_SPEED } from '../../../core/input';
 import { SIZE } from '../../AnimalScale';
 import { Seen, boxOf } from './ven.finds';
 import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
 import { Nightjar, Lifted, ZandHome, zandBody } from './stuifzand.home';
 import {
-  ARRIVE, BURROW, GUARD_STAND, GUARD_VIEW, GUESTS, HOL_JUNIPER, LEAVE, MISSION, NESTS, OFF_PATH_S, PRESSED_H, SETTLE, STOP, VARIANT_KEY,
-  DISPLAY_UP, ZAND_HOME, ZWALUW_LEN, approachOf, closeViewOf, displayOf, displayYaw, dist, endSpot, endViewOf, femaleAt, flushOf, gapsOf, gapsTo, GAPS_FROM, headingAt, headingTo, larkFrom, lastVariants, maleAt,
+  ARRIVE, BURROW, GUARD_STAND, GUARD_VIEW, GUESTS, HER_REACT, HOL_JUNIPER, LEAVE, MISSION, NESTS, OFF_PATH_S, PRESSED_H, SETTLE, STOP, VARIANT_KEY,
+  ANTHILL_NEAR, nestBackOf, nestBackVia, wayRound,
+  DISPLAY_UP, ZAND_HOME, ZWALUW_LEN, approachOf, closeViewOf, displayOf, displayYaw, dist, endViewOf, femaleAt, flushOf, gapsOf, gapsTo, GAPS_FROM, headingAt, headingTo, larkFrom, lastVariants, maleAt,
   pointAt, project, setNestNow, slotsOf, zandClearings, zandLayout,
   type Edge, type Pass, type ViewSpec, type ZandLaid,
 } from './stuifzand.places';
@@ -68,8 +70,17 @@ const DUSK: MoodId = 'schemer';
 const SEEN_PX = 40;
 /** One new find's card (s), and the longest a calm moment holds on for cards still waiting. */
 const CARD_S = (REVEAL_SHOW_MS + REVEAL_GAP_MS) / 1000;
-/** How fast (m/s) each visitor of the guard place walks in, to its place and out. */
-const PACE: Readonly<Record<string, number>> = { ree: 1.5, eekhoorn: 2.0, das: 1.15, zwijn: 1.2 };
+/** How fast (m/s) each visitor of the guard place walks in, to its place and out: brisk, so
+ *  each walks in from the picture's edge in about 4-5 s (it took 8-10). */
+const PACE: Readonly<Record<string, number>> = { ree: 2.0, eekhoorn: 2.4, das: 1.8, zwijn: 1.8 };
+/** The woodlark rises at least this long (s, at his walking pace) before the walk along the
+ *  tracks ends in the flush: its song and its card come in a calm walk, never cut by it.
+ *  Where the tracks leave no such room (or he ran past it), it rises on his walk to the
+ *  juniper instead. */
+const LARK_LEAD_S = 6.5;
+/** The stretch of the tracks (m) the woodlark may rise in (a few strides: a step or two of
+ *  his can never jump over it). */
+const LARK_SPAN = 2.5;
 
 /** Is something being said now (a call never sounds over a spoken line)? */
 function speaking(): boolean {
@@ -165,12 +176,17 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
 
   /* 2 · he follows the tracks, carefully; where the wind blew sand over them he looks for
      where they go on; a woodlark may rise and sing over the sand */
+  let larkDone = laid.lark === null;
   {
     const gaps = home.laid?.gaps ?? [];
-    let told = false, inGap = -1, larkDone = laid.lark === null;
-    const larkAt = OFF_PATH_S + (ap.passS - OFF_PATH_S) * 0.35;
+    let told = false, inGap = -1;
     const via: Spot[] = [];
     const from = project(route, k.ranger()).s;
+    // (where it may rise: a third of the way over the sand, but never later than LARK_LEAD_S
+    // of walking before the flush, nor in his first steps: a stretch of LARK_SPAN m at least,
+    // else none on the tracks)
+    const latest = project(route, ap.approach).s - LARK_LEAD_S * WALK_SPEED;
+    const larkAt = Math.max(from + 2, Math.min(OFF_PATH_S + (ap.passS - OFF_PATH_S) * 0.35, latest - LARK_SPAN));
     for (let s = Math.max(1, from + 2); s < ap.passS - 3.2 - 0.8; s += 3) via.push(pointAt(route, s));
     await k.walk({
       name: 'sporen', to: ap.approach, r: ap.approach.r, line: c.volg, doel: c.chipSporen, cue: c.cueSporen, glyph: 'tyre',
@@ -185,9 +201,10 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
           else if (inGap >= 0 && g < 0 && at.s > gaps[inGap].s + gaps[inGap].len + 0.4) { inGap = -2; k.say(c.volg); }
         }
         // the woodlark: once he is a third of the way over the sand, it rises ahead of him
-        if (!larkDone && at.s > larkAt && !isRunning(me)) {
+        // (never within LARK_LEAD_S of the flush: then on his walk to the juniper)
+        if (!larkDone && at.s > larkAt && at.s <= latest && !isRunning(me)) {
           const p = larkFrom(me, me.heading, laid.lark!);
-          if (p) { larkDone = true; void lark(k, home, p); }
+          if (p) { larkDone = true; k.stats.lark_walk = 1; void lark(k, home, p); }
         }
       },
     });
@@ -217,7 +234,20 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
   await k.fact(0);
 
   /* 6-7 · he guards the place by the juniper as the evening falls (wisselen) */
-  await k.walk({ name: 'struik', to: GUARD_STAND, r: GUARD_STAND.r, line: c.naarStruik, doel: c.chipStruik, glyph: 'boot', quiet: { line: c.rustig } });
+  {
+    const start = k.ranger();
+    await k.walk({
+      name: 'struik', to: GUARD_STAND, r: GUARD_STAND.r, line: c.naarStruik, doel: c.chipStruik, glyph: 'boot', quiet: { line: c.rustig },
+      // (a woodlark that had no calm room on the tracks rises now, ahead of him, as he walks)
+      tick: () => {
+        if (larkDone) return;
+        const me = k.ranger();
+        if (dist(me, start) < 2.5 || dist(me, GUARD_STAND) < 4 || isRunning(me)) return;
+        const p = larkFrom(me, me.heading, laid.lark!);
+        if (p) { larkDone = true; k.stats.lark_walk = 2; void lark(k, home, p); }
+      },
+    });
+  }
   await guardLook(k);
   await guard(k, home, A, laid);
 
@@ -226,12 +256,32 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
   // (the male, far over the sand since the flush, comes back to rest by his branch: he flies
   // in from behind the lens as the boy walks back, never toward it)
   he.group.visible = false;
-  const stand = nest.stands[laid.side];
-  let heBack = false;
+  // (to where he gives her room, on the guard's side of the scrape; the chip and a perfect
+  // player go round her where the straight way would pass near her)
+  const back = nestBackOf(laid.nest);
+  const herAt = { x: spot.x, z: spot.z };
+  const settings = store.get().settings;
+  let heBack = false, startled = false, reacted = false;
   await k.walk({
-    name: 'nest', to: stand, r: 0.8, line: c.naarNest, doel: c.chipNest, glyph: 'boot', quiet: { line: c.rustig },
+    name: 'nest', to: back, r: 0.7, line: c.naarNest, doel: c.chipNest, glyph: 'boot', quiet: { line: c.rustig },
+    via: nestBackVia(laid.nest, laid.spot), way: (me) => wayRound(me, back, herAt),
     tick: () => {
-      if (heBack || dist(k.ranger(), stand) > 6) return;
+      // he walks right at her anyway: she sits up, looks at him and churrs softly (calmly:
+      // she stays on her eggs); once he gives her room she presses flat again
+      const dHer = dist(k.ranger(), herAt);
+      if (!startled && dHer < HER_REACT) {
+        startled = reacted = true;
+        k.stats.her_react = (k.stats.her_react ?? 0) + 1;
+        she.pressFlat(false);
+        void she.lookAt(() => ({ ...k.ranger(), speed: 0 }), 1.8);
+        if (settings.geluid && !speaking()) Sound.callAt('nachtzwaluw', she.x, she.z, listenerOf(k.world.camera), 12, 0.3);
+        k.say(c.rustig);
+      } else if (startled && dHer > HER_REACT + 0.9) {
+        startled = false;
+        she.pressFlat(true);
+        k.say(c.naarNest);
+      }
+      if (heBack || dist(k.ranger(), back) > 6) return;
       heBack = true;
       const cam = k.world.camera.position;
       const behind = { x: cam.x + (cam.x - nest.c.x) * 0.4, z: cam.z + (cam.z - nest.c.z) * 0.4 };
@@ -242,6 +292,8 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
     },
   });
   if (!heBack) { he.place(nest.roost.x, nest.roost.z, nest.roost.yaw); he.group.visible = true; he.pressFlat(true); }
+  // (she turned her head to him: settled back on her eggs the way she lay)
+  if (reacted) { she.place(spot.x, spot.z, spot.yaw); she.idle(); she.pressFlat(true); }
   await nestEnd(k, home, laid, she, he);
 }
 
@@ -512,8 +564,9 @@ function sink(k: AdventureKit, a: Lifted, by: number, secs: number): Promise<boo
 async function nestEnd(k: AdventureKit, home: ZandHome, laid: ZandLaid, she: Nightjar, he: Nightjar): Promise<void> {
   const c = k.copy;
   const settings = store.get().settings;
-  // (he steps back beside the lens's way in: out of its picture, he gives her room)
-  const back = endSpot(laid.nest, laid.side);
+  // (he steps back beside the lens's way in, on the guard's side: out of its picture, he
+  // gives her room — the walk back ended there)
+  const back = nestBackOf(laid.nest);
   await k.walkRanger(back.x, back.z, 0.04);
   k.beat = 'look:nest';
   const unhint = k.hint(() => null); // (a perfect player looks)
@@ -610,7 +663,8 @@ function watchFinds(k: AdventureKit, home: ZandHome): void {
     (id) => { k.discover(id); k.stats[`seen_${id.slice(id.indexOf('.') + 1)}`] = Math.round(k.now); },
   );
   const anthill = home.group.getObjectByName('stuifzand-anthill');
-  seen.watch({ id: 'stuifzand.mierenhoop', box: () => (anthill ? boxOf(anthill) : null), px: SEEN_PX, secs: 1, within: 9, when: () => /^walk:/.test(k.beat) });
+  // (his once he walks right up to it: a find for the curious, never one every walk passes)
+  seen.watch({ id: 'stuifzand.mierenhoop', box: () => (anthill ? boxOf(anthill) : null), px: SEEN_PX, secs: 1, within: ANTHILL_NEAR, when: () => /^walk:/.test(k.beat) });
   k.onTick((dt) => seen.tick(dt));
 }
 

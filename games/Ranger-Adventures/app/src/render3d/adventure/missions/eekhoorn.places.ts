@@ -29,6 +29,7 @@ import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { atLocal, dist, headingTo, segDist, uniformLocal, type Frame } from '../places.ts';
 import { ANTIC_KINDS, barkRadius, dashPath, lineClear, trunkFadeUpright, trunkOutline, trunkUpright, type AnticKind, type Upright } from '../squirrel-math.ts';
 import type { TreeStub } from '../../world/Forest.ts';
+import { ontdekking } from '../../../content/ontdekkingen.ts';
 
 /** The eekhoorn marker: the bos anchor it has always had (the test checks it). */
 export const MARKER: Spot = { x: 25.419167959680543, z: -41.89111958682353 };
@@ -1514,8 +1515,9 @@ export function drawDay(play: Forks, o: { route: RouteId; buren: Trio; mood?: st
  *  came in neither of the last two, with at least two neighbours another than last time
  *  where the trios allow it; run 7 (ek-day): the squirrel's day (`drawDay`; `ctx`: the play's
  *  mood and rare, as the briefing drew them). `recent`: the last plays' variants, newest
- *  first. */
-export function drawEekhoornPlay(play: Forks, recent: readonly Drawn[] | Drawn | null, ctx: { mood?: string; rare?: string | null } = {}): EekhoornPlay {
+ *  first. `ctx.n` (the home's play number): a neighbour of a later visit (its row's `vanaf`,
+ *  content/ontdekkingen.ts: the nuthatch) never comes before it. */
+export function drawEekhoornPlay(play: Forks, recent: readonly Drawn[] | Drawn | null, ctx: { mood?: string; rare?: string | null; n?: number } = {}): EekhoornPlay {
   const lasts: readonly Drawn[] = recent === null ? [] : Array.isArray(recent) ? recent : [recent as Drawn];
   const route = freshPick(play.fork('route'), ROUTE_IDS, lasts.map((l) => l.route));
   const veldFork = play.fork('veld');
@@ -1523,7 +1525,8 @@ export function drawEekhoornPlay(play: Forks, recent: readonly Drawn[] | Drawn |
   const veldSeed = veldFork.int(1, 9999);
   const same = (a: Trio, b: Trio): boolean => SLOTS.every((s) => a[s] === b[s]);
   const differ = (a: Trio, b: Trio): number => SLOTS.filter((s) => a[s] !== b[s]).length;
-  const all = legalTrios();
+  const later = (id: string): boolean => { const v = ontdekking(`eekhoorn.${id}`)?.vanaf; return ctx.n !== undefined && !!v && ctx.n < v; };
+  const all = legalTrios().filter((t) => !SLOTS.some((sl) => later(t[sl])));
   const wide = lasts.length ? all.filter((t) => differ(t, lasts[0].buren) >= 2) : all;
   const buren = freshPick(play.fork('buren'), wide.length ? wide : all, lasts.map((l) => l.buren), same);
   // (its finds: each from a fork of its own, so they never move a draw above)

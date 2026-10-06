@@ -7,8 +7,11 @@
  * name, a soft gold rim when it is a rare one, and a small "nieuw" tag until he has seen it
  * here once. A thing still out there is the same picture as a grey shape with one hint line
  * ("Wie tikt er op een boom?") and a speaker: a pointer resting on a tile, a key's focus or
- * a tap says its words. A row of dots is a picture of how much of the page he found (never
- * "3/7"). No currency, no counter, no timer: just what is still out there.
+ * a tap says its words. An animal still to find here that he knows from another page (the
+ * buzzard he met over the meadow, on 'Overal') shows its picture softened, with where it is
+ * met on this page ("Hij cirkelt hoog boven de hei."): never a plain grey unknown. A row of
+ * dots is a picture of how much of the page he found (never "3/7"). No currency, no
+ * counter, no timer: just what is still out there.
  *
  * Keys: ◀ ▶ (and the arrow keys) turn the page, round and round (never a dead end); Enter
  * and Esc go back. Big targets (the arrows 64 px, a tile ~190 px). It reads itself aloud
@@ -19,7 +22,7 @@ import './veldgids.css';
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Content } from '../../content/registry';
-import { ONTDEKKINGEN, naamVan, type OntdekSoort } from '../../content/ontdekkingen';
+import { ONTDEKKINGEN, OOK_HIER, naamVan, type OntdekSoort } from '../../content/ontdekkingen';
 import { VELDGIDS } from '../../content/copy';
 import { card, kicker, esc } from '../flow/session';
 import { icon, type IconName } from '../icons';
@@ -59,9 +62,16 @@ function capital(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** The words a tile says: its name when found, else its hint. */
+/** The words a tile says: its name when found; where it is met here when he knows the
+ *  animal from another page; else its hint. */
 function tileWords(e: GidsEntry): string {
-  return e.found ? capital(naamVan(e.o, store.get().settings.jargon)) : e.o.hint;
+  if (e.found) return capital(naamVan(e.o, store.get().settings.jargon));
+  return (e.elders && OOK_HIER[e.o.id]) || e.o.hint;
+}
+
+/** Does the tile show the real picture (found here, or softened: known from another page)? */
+function showsPicture(e: GidsEntry): boolean {
+  return e.found || e.elders;
 }
 
 /**
@@ -153,7 +163,7 @@ export function showVeldgids(back: () => void): void {
     void portrait(model).then((pic) => {
       if (!pic || !b.isConnected) return;
       const box = b.querySelector<HTMLElement>('.vg-pic');
-      if (box) box.innerHTML = imgHtml(e.found ? pic.found : pic.shadow);
+      if (box) box.innerHTML = imgHtml(showsPicture(e) ? pic.found : pic.shadow);
     });
   };
 
@@ -193,11 +203,11 @@ export function showVeldgids(back: () => void): void {
 /** One tile: its picture (the drawn icon until the real one is made), the "nieuw" tag,
  *  its name or its hint (with a speaker: it can be heard). A button: tapped it speaks. */
 function tileHtml(e: GidsEntry, nieuw: boolean): string {
-  const cls = ['vg-entry', e.found ? 'is-found' : 'is-missing', e.rare ? 'is-rare' : '', e.foto ? 'is-foto' : '', nieuw && e.found ? 'is-new' : '']
+  const cls = ['vg-entry', e.found ? 'is-found' : 'is-missing', e.elders ? 'is-known' : '', e.rare ? 'is-rare' : '', e.foto ? 'is-foto' : '', nieuw && e.found ? 'is-new' : '']
     .filter(Boolean).join(' ');
   const words = tileWords(e);
   const ready = e.o.model ? portraitNow(e.o.model) : null;
-  const pic = ready ? imgHtml(e.found ? ready.found : ready.shadow) : `<span class="vg-ic">${icon(e.o.icon ?? SOORT_ICON[e.o.soort])}</span>`;
+  const pic = ready ? imgHtml(showsPicture(e) ? ready.found : ready.shadow) : `<span class="vg-ic">${icon(e.o.icon ?? SOORT_ICON[e.o.soort])}</span>`;
   return (
     `<button type="button" class="${cls}" data-id="${esc(e.o.id)}" aria-label="${esc(words)}">` +
     `<span class="vg-pic">${pic}</span>` +
