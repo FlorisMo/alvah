@@ -26,6 +26,7 @@
 
 import type { Play } from '../../../core/play.ts';
 import type { MoodRule } from '../../Moods.ts';
+import { komtNog } from '../../../content/ontdekkingen.ts';
 import {
   CALLER_SLOTS, SLOT_CLASH, SLOT_IDS, SNARE_IDS, STOPS_OF, type Side, type SlotId, type SnareId, type StopId,
 } from './wildcamera.places.ts';
@@ -266,8 +267,10 @@ export function drawSnare(play: Play, last: SnareId | null = null): SnareId {
 
 /** Draw a play: `queueLength` visitors for the aim round, the night's `cast`; `recent`
  *  the last plays' night notes (`lastNights`); `lastSnare` the spot of the play before
- *  (`lastSnare`). */
+ *  (`lastSnare`). The nose at the lens is a later night's surprise (its row's `vanaf`,
+ *  content/ontdekkingen.ts): never on the home's first play (`play.n`). */
 export function drawWildcameraPlay(play: Play, opts: { queueLength: number; cast: readonly string[]; recent?: readonly string[]; lastSnare?: SnareId | null; neusDrought?: number; evening?: string | null; recentLights?: readonly PlayLight[] }): WildcameraPlay & { snare: SnareId; dawn: Dawn; neus: NeusId | null } {
+  const neus = drawNeus(play, opts.neusDrought ?? 0); // (always drawn: its fork's stream stays put)
   return {
     seed: play.seed,
     arrivals: drawArrivals(play, opts.queueLength),
@@ -275,7 +278,7 @@ export function drawWildcameraPlay(play: Play, opts: { queueLength: number; cast
     clockStart: Math.round(play.fork('wc-clock').between(17 * 60 + 20, 18 * 60 + 10)),
     snare: drawSnare(play, opts.lastSnare ?? null),
     dawn: drawDawn(play, { evening: opts.evening ?? null, recent: opts.recentLights ?? [] }),
-    neus: drawNeus(play, opts.neusDrought ?? 0),
+    neus: komtNog('wildcamera.neus', play) ? neus : null,
   };
 }
 
