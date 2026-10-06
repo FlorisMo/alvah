@@ -7,8 +7,9 @@
  * after a short while of walking, the next at least APART_S after the last one began and
  * REST_S after it went. Which one comes is drawn from the session's seed: the ones he has
  * not met yet first (so a new player meets new things), never the same twice in a row, a
- * rare one now and then (a seeded chance, and surely after RARE_PITY_W surprises without
- * one) but only in its own light (the stag in the mist or at dusk, the badger at dusk).
+ * rare one now and then (a low seeded chance, and surely after RARE_PITY_W surprises
+ * without one) but only in its own light (the stag in the mist or at dusk, the badger at
+ * dusk), and at most one rare a visit (RARE_PER_VISIT: something special stays special).
  * One he has not met yet comes before any he knows: the director waits for a place for it
  * (FRESH_WAIT_S at most), so a return visit meets something new. It stands inside his
  * picture (a bird met by its call may sit anywhere within hearing: its call turns him),
@@ -114,9 +115,12 @@ export function firstAt(fork: Play): number {
 /* ------------------------------------------------------------ which one ---- */
 
 /** Surprises met without a rare one, after which the next that fits the light is rare. */
-export const RARE_PITY_W = 3;
+export const RARE_PITY_W = 6;
 /** The chance a rare one comes first otherwise (when one fits the light). */
-export const RARE_P_W = 0.25;
+export const RARE_P_W = 0.1;
+/** At most this many rare ones a visit (owner, 2026-10-05: one misty session met the stag
+ *  six times): once one came, the visit's other surprises are the common ones. */
+export const RARE_PER_VISIT = 1;
 
 export interface Choice {
   mood: MoodId;
@@ -126,7 +130,8 @@ export interface Choice {
   sinceRare: number;
   /** the last surprise (never twice in a row) */
   last: SurpriseId | null;
-  /** the ones already out there this visit (they come last: a visit meets new things first) */
+  /** the ones already out there this visit (they come last: a visit meets new things first;
+   *  a rare one among them: no other rare comes this visit) */
   shown?: readonly SurpriseId[];
   onFoot: boolean;
   reduced: boolean;
@@ -142,14 +147,15 @@ export function fits(s: SurpriseSpec, c: Pick<Choice, 'mood' | 'onFoot' | 'reduc
 
 /**
  * The order to try them in for the next surprise (the first that can be placed comes):
- * a rare one first when one fits and the pity rule or the seeded chance says so; then the
- * ones he has not met yet, shuffled; then the rest, shuffled; the ones already out there
- * this visit last; never the last one. The rare ones never come otherwise. Deterministic
- * per fork.
+ * a rare one first when one fits, this visit had none yet (RARE_PER_VISIT) and the pity
+ * rule or the seeded chance says so; then the ones he has not met yet, shuffled; then the
+ * rest, shuffled; the ones already out there this visit last; never the last one. The rare
+ * ones never come otherwise. Deterministic per fork.
  */
 export function surpriseOrder(c: Choice, fork: Play, specs: readonly SurpriseSpec[] = SURPRISES): SurpriseSpec[] {
   const ok = specs.filter((s) => s.id !== c.last && fits(s, c));
-  const rares = ok.filter((s) => s.rare);
+  const raresSoFar = (c.shown ?? []).filter((id) => specs.find((s) => s.id === id)?.rare).length;
+  const rares = raresSoFar >= RARE_PER_VISIT ? [] : ok.filter((s) => s.rare);
   const lucky = fork.chance(RARE_P_W); // (always drawn: the stream stays put)
   const rareFirst = rares.length > 0 && (c.sinceRare >= RARE_PITY_W || lucky);
   const commons = ok.filter((s) => !s.rare);

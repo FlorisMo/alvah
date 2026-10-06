@@ -406,26 +406,26 @@ test('ree-discover: the home\'s veldgids rows — the mother, four small things,
   for (const o of rows) assert.ok(o.hint.split(/\s+/).length <= 7, `${o.id}: its hint is ≤ 7 words`);
 });
 
-test('ree-discover: the twins come within three won plays of a fresh save (the pity rule), by its seed', () => {
+test('ree-discover: the twins come on the 2nd to 6th won play of a fresh save (core/discover: never the first, the pity rule), by its seed', () => {
   const twins = ONTDEKKINGEN.find((o) => o.id === `${MISSION}.tweeling`)!;
-  let lucky = 0;
+  let early = 0;
   for (let base = 1; base <= 300; base++) {
-    // a fresh save: plays base, base+1, base+2, each won, nothing rare found before
+    // a fresh save: plays base, base+1, ..., each won, nothing rare found before
     let count = 0, got = -1;
-    for (let n = 0; n < 3 && got < 0; n++) {
+    for (let n = 0; n < 6 && got < 0; n++) {
       const pl = newPlay(MISSION, base + n, n + 1);
       const r = rollRare({ home: MISSION, play: pl, table: ONTDEKKINGEN, found: {}, counts: { [MISSION]: count }, mood: 'ochtendnevel' });
-      if (r) { assert.equal(r.id, twins.id, 'the home\'s rare is the twins'); got = n; }
+      if (r) { assert.equal(r.id, twins.id, 'the home\'s rare is the twins'); got = n + 1; }
       count = nextRareCount(count, { won: true, gotRare: !!r });
     }
-    assert.ok(got >= 0, `seed ${base}: no twins in three plays`);
-    if (got === 0) lucky += 1;
+    assert.ok(got >= 2 && got <= 6, `seed ${base}: the twins on play ${got}`);
+    if (got <= 3) early += 1;
     // in every mood the ree plays in
     for (const mood of ['ochtendnevel', 'zonnig', 'bewolkt', 'gouden-uur'] as const) {
-      assert.ok(rollRare({ home: MISSION, play: newPlay(MISSION, base, 3), table: ONTDEKKINGEN, found: {}, counts: { [MISSION]: 2 }, mood }), mood);
+      assert.ok(rollRare({ home: MISSION, play: newPlay(MISSION, base, 6), table: ONTDEKKINGEN, found: {}, counts: { [MISSION]: 5 }, mood }), mood);
     }
   }
-  assert.ok(lucky > 60 && lucky < 160, `the twins came on the first play by luck ${lucky} of 300 times`);
+  assert.ok(early > 40 && early < 150, `the twins came by the third play by luck ${early} of 300 times`);
 });
 
 test('ree-discover: her listening pauses never say the same line twice in one watch', () => {
