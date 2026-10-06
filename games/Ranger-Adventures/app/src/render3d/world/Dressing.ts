@@ -22,7 +22,7 @@ import type { Labels } from './Labels';
 import { enableCast, naturaliseConcrete, proceduralTotem } from './props';
 import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies, type TreeStub } from './Forest';
 import { PlantField, heatherGeometry, plantMaterial, tuftGeometry, type PlantSpot } from './Plants';
-import { lodGeometries, lodMaterial } from '../Lod';
+import { lodGeometries, lodMaterial, withFarCopy } from '../Lod';
 import { heathCover } from '../GroundDetail';
 import { groundMaterial } from '../GroundMaterial';
 import { PADS, PAD_RADIUS } from './Vehicles';
@@ -896,6 +896,8 @@ export class Dressing {
         // casts a hero shadow; low ground detail (mushrooms/fern/foxglove/reeds)
         // does not. The tight ranger-following frustum still culls to the closest.
         if (spec.collide > 0) enableCast(prepped);
+        // (run 7 fix, the triangle budget: from afar its simpler copy, as the forest's trees)
+        withFarCopy(prepped, `${model}@${spec.h}`);
         const totem = group.children.find((c) => c.userData.totem);
         if (totem) group.remove(totem);
         group.add(prepped);

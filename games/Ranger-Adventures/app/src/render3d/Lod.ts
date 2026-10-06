@@ -104,3 +104,68 @@ export function lodMaterial(): THREE.MeshStandardMaterial {
   }
   return sharedMat;
 }
+
+/* ---------------------------------------------------- a prop's far copy ---- */
+
+/** Run 7 fix (triangle budget): a home's prop (a stump, a log, a bush of the thicket, the
+ *  camera on its stump) is drawn as its simplified copy beyond `far` m from the lens and as
+ *  itself again within `near` m — as the forest does its trees. Each prop GLB is 9-14k
+ *  triangles; from another home 20-45 m off a dozen of them cost ~150k (playtest
+ *  2026-10-05: up to 1.13M in free roam at the ven's marker, the budget 1M). */
+export const PROP_DETAIL = { near: 16, far: 18, tris: 1200, tone: 0.86, min: 3000 } as const;
+
+/** The switch the renderer drives: it calls `update(camera)` on every LOD it draws. */
+class PropLod extends THREE.LOD {
+  far = false;
+  private readonly at = new THREE.Vector3();
+  private readonly me = new THREE.Vector3();
+  private readonly real: THREE.Object3D;
+  private readonly simple: THREE.Object3D;
+  constructor(real: THREE.Object3D, simple: THREE.Object3D) {
+    super();
+    this.real = real; this.simple = simple;
+    this.name = 'prop-lod';
+    this.add(real, simple);
+    simple.visible = false;
+  }
+  update(camera: THREE.Camera): void {
+    const d = camera.getWorldPosition(this.at).distanceTo(this.getWorldPosition(this.me));
+    const far = this.far ? d > PROP_DETAIL.near : d > PROP_DETAIL.far;
+    if (far === this.far) return;
+    this.far = far;
+    this.real.visible = !far;
+    this.simple.visible = far;
+  }
+}
+
+/**
+ * Give a prop made by `prepModel` (`root`: its wrapper, which the home places) a far copy:
+ * the model and its simplified, vertex-coloured copy (`lodGeometries`) under one switch
+ * inside the wrapper, so whatever the home does to the wrapper (place it, turn it, scale
+ * it, fade it, hide it) holds for both. The copy is never hit by a ray (the model is, as
+ * before). A light model (under `PROP_DETAIL.min` triangles) is left as it is. Returns the
+ * root.
+ */
+export function withFarCopy(root: THREE.Object3D, key: string): THREE.Object3D {
+  let tris = 0;
+  root.traverse((o) => {
+    const g = (o as THREE.Mesh).isMesh ? (o as THREE.Mesh).geometry : null;
+    if (g) tris += (g.index ? g.index.count : g.attributes.position?.count ?? 0) / 3;
+  });
+  if (tris < PROP_DETAIL.min || root.children.length !== 1) return root;
+  const [geo] = lodGeometries(key, root, [PROP_DETAIL.tris]);
+  if (!geo) return root;
+  if (!geo.userData.toned) {
+    const col = geo.attributes.color as THREE.BufferAttribute;
+    for (let i = 0; i < col.array.length; i++) (col.array as Float32Array)[i] *= PROP_DETAIL.tone;
+    geo.userData.toned = true;
+  }
+  const copy = new THREE.Mesh(geo, lodMaterial().clone());
+  copy.name = 'prop-far';
+  copy.castShadow = false;
+  copy.receiveShadow = false;
+  copy.raycast = () => {};
+  const real = root.children[0];
+  root.add(new PropLod(real, copy));
+  return root;
+}

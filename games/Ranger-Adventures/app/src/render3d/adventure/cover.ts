@@ -29,7 +29,7 @@ const _c = new THREE.Color();
  * drooping at its tip — the "little table" a stand of bracken is made of. Vertex-
  * coloured (a brown-green stalk, fresh green leaflets yellowing to their tips).
  */
-export function frondGeometry(seed = 1): THREE.BufferGeometry {
+export function frondGeometry(seed = 1, far = false): THREE.BufferGeometry {
   const rnd = stream(seed * 977 + 13);
   const P: number[] = [], N: number[] = [], C: number[] = [], I: number[] = [];
   const push = (x: number, y: number, z: number, c: THREE.Color, ny = 0.9): number => {
@@ -56,7 +56,9 @@ export function frondGeometry(seed = 1): THREE.BufferGeometry {
   const R = (t: number): { x: number; y: number; z: number } => ({
     x: 0, y: top.y + 0.24 * t - 0.26 * t * t, z: top.z + 0.58 * t,
   });
-  const N_PAIRS = 9;
+  // (run 7 fix, `far`: the copy drawn from afar — fewer pinnae, a lobe or two each, as
+  // broad, the same colours: ~1/12 of the triangles, the same frond 12 m off)
+  const N_PAIRS = far ? 6 : 9;
   for (let i = 0; i < N_PAIRS; i++) {
     const t = 0.05 + 0.9 * (i / (N_PAIRS - 1));
     const p0 = R(t);
@@ -67,12 +69,12 @@ export function frondGeometry(seed = 1): THREE.BufferGeometry {
       let dx = side * 0.86, dy = -0.1 - 0.12 * t, dz = 0.45;
       const dl = Math.hypot(dx, dy, dz); dx /= dl; dy /= dl; dz /= dl;
       // its little leaflets (pinnules) along it, pairs of soft lobes: bracken's lace
-      const lobes = Math.max(2, Math.round(5 * (1 - t * 0.6)));
+      const lobes = far ? (t < 0.5 ? 2 : 1) : Math.max(2, Math.round(5 * (1 - t * 0.6)));
       for (let j = 0; j < lobes; j++) {
         const f0 = j / lobes, f1 = (j + 1) / lobes;
         const q0 = { x: p0.x + dx * len * f0, y: p0.y + dy * len * f0 - 0.02 * f0 * f0, z: p0.z + dz * len * f0 };
         const q1 = { x: p0.x + dx * len * f1, y: p0.y + dy * len * f1 - 0.02 * f1 * f1, z: p0.z + dz * len * f1 };
-        const lw = 0.03 * (1 - f0 * 0.7) * (1 - t * 0.5);
+        const lw = 0.03 * (1 - f0 * 0.7) * (1 - t * 0.5) * (far ? 1.9 : 1);
         const mid = { x: (q0.x + q1.x) / 2, y: (q0.y + q1.y) / 2, z: (q0.z + q1.z) / 2 };
         const col = _c.copy(leaf0).lerp(leaf1, Math.min(1, f0 * 0.8 + t * 0.4)).multiplyScalar(tint).clone();
         // a lobe on either side of the pinna's midrib (the width runs along the rachis)
@@ -85,8 +87,9 @@ export function frondGeometry(seed = 1): THREE.BufferGeometry {
     }
   }
   // the rachis itself: a thin strip, so the pinnae hang off something
-  for (let k = 0; k < 5; k++) {
-    const t0 = k / 5, t1 = (k + 1) / 5;
+  const RACHIS = far ? 2 : 5;
+  for (let k = 0; k < RACHIS; k++) {
+    const t0 = k / RACHIS, t1 = (k + 1) / RACHIS;
     const q0 = R(t0), q1 = R(t1), rw = 0.006 * (1 - t0 * 0.6);
     const a = push(q0.x - rw, q0.y, q0.z, stalk1), b = push(q0.x + rw, q0.y, q0.z, stalk1);
     const c = push(q1.x - rw, q1.y, q1.z, leaf0), d = push(q1.x + rw, q1.y, q1.z, leaf0);
@@ -107,7 +110,7 @@ export function frondGeometry(seed = 1): THREE.BufferGeometry {
  * leaves (green at the root, straw at the tip) with a few taller flower stalks whose
  * heads are a dusky purple-brown (it is purple moor-grass).
  */
-export function moorGrassGeometry(seed = 1, blades = 52): THREE.BufferGeometry {
+export function moorGrassGeometry(seed = 1, blades = 52, widen = 1): THREE.BufferGeometry {
   const rnd = stream(seed * 131 + 7);
   const root = new THREE.Color('#4e5c2a'), mid = new THREE.Color('#7f8a40'), tip = new THREE.Color('#d1bf82');
   const stalk = new THREE.Color('#9a8a5a'), head = new THREE.Color('#6e4a5c');
@@ -138,7 +141,7 @@ export function moorGrassGeometry(seed = 1, blades = 52): THREE.BufferGeometry {
   };
   for (let i = 0; i < blades; i++) {
     const a = (i / blades) * Math.PI * 2 + rnd() * 0.7;
-    blade(a, 0.02 + rnd() * 0.08, 0.6 + rnd() * 0.4, 0.22 + rnd() * 0.32, 0.018 + rnd() * 0.01, root, mid, tip);
+    blade(a, 0.02 + rnd() * 0.08, 0.6 + rnd() * 0.4, 0.22 + rnd() * 0.32, (0.018 + rnd() * 0.01) * widen, root, mid, tip);
   }
   // the flower stalks: fewer, taller, nearly upright, a dark head
   const stalks = 4 + Math.floor(rnd() * 3);
@@ -174,6 +177,40 @@ interface Motion {
 const WIND = 0.022;      // the breeze (rad), a slow breathing sway
 const PUSH_R = 0.42;     // an animal pushes stems within this far aside (m)
 
+/** Run 7 fix (triangle budget): a field the lens is further than `far` m from (from the
+ *  nearest edge of its ground) draws its simpler copy — the same plants with fewer leaflets
+ *  and blades, the same colours and places — and its own again within `near` m. Every
+ *  search, hold and close picture stands far inside `near`; from another home 25-45 m off a
+ *  field of 200 plants cost ~150k triangles at full detail (playtest 2026-10-05: up to
+ *  1.13M in free roam at the ven's marker, the budget 1M). */
+export const COVER_DETAIL = { near: 10, far: 12 } as const;
+
+/** The switch between a field's own plants and its simpler copy: the renderer calls
+ *  `update(camera)` on every LOD it draws, each frame, before its children. */
+class CoverLod extends THREE.LOD {
+  far = false;
+  private readonly at = new THREE.Vector3();
+  private readonly centre: THREE.Vector3;
+  private readonly radius: number;
+  private readonly nearSet: THREE.Object3D;
+  private readonly farSet: THREE.Object3D;
+  constructor(centre: THREE.Vector3, radius: number, nearSet: THREE.Object3D, farSet: THREE.Object3D) {
+    super();
+    this.centre = centre; this.radius = radius; this.nearSet = nearSet; this.farSet = farSet;
+    this.name = 'cover-lod';
+    this.add(nearSet, farSet);
+    farSet.visible = false;
+  }
+  update(camera: THREE.Camera): void {
+    const d = Math.max(0, camera.getWorldPosition(this.at).distanceTo(this.centre) - this.radius);
+    const far = this.far ? d > COVER_DETAIL.near : d > COVER_DETAIL.far;
+    if (far === this.far) return;
+    this.far = far;
+    this.nearSet.visible = !far;
+    this.farSet.visible = far;
+  }
+}
+
 export interface CoverFieldOpts {
   parent: THREE.Object3D;
   groundY(x: number, z: number): number;
@@ -195,6 +232,9 @@ export class CoverField {
   private readonly geos: THREE.BufferGeometry[] = [];
   /** the stems as grown (a glimpse window opened for one spot is closed again: `reset`) */
   private readonly built: readonly Stem[];
+  /** run 7 fix: the simpler copies drawn from afar, and the switch (`COVER_DETAIL`) */
+  private readonly farMeshes: THREE.InstancedMesh[] = [];
+  private readonly lod!: CoverLod;
   private dirty = true;
   private idleFor = 0;
   private readonly _m = new THREE.Matrix4();
@@ -221,12 +261,20 @@ export class CoverField {
       (this.byClump[stem.clump] ??= []).push(idx);
       if (look.tint) (this.where[idx] as { tint?: THREE.Color }).tint = new THREE.Color().setRGB(look.tint[0], look.tint[1], look.tint[2]);
     });
-    // the meshes: one per kind of plant, every stem one instance
+    // the meshes: one per kind of plant, every stem one instance; and their simpler copy
+    // from afar (run 7 fix: `COVER_DETAIL`), drawn from the very same instances
     const geoOf: Record<PlantKind, () => THREE.BufferGeometry> = {
       frond: () => frondGeometry(o.seed),
       tussock: () => moorGrassGeometry(o.seed),
       heath: () => heatherGeometry(o.seed, 110),
     };
+    const farOf: Record<PlantKind, () => THREE.BufferGeometry> = {
+      frond: () => frondGeometry(o.seed, true),
+      tussock: () => moorGrassGeometry(o.seed, 10, 2.2),
+      heath: () => heatherGeometry(o.seed, 36),
+    };
+    const nearSet = new THREE.Group(), farSet = new THREE.Group();
+    nearSet.name = 'cover-near'; farSet.name = 'cover-far';
     for (const kind of ['frond', 'tussock', 'heath'] as PlantKind[]) {
       const list = this.stems.map((s, i) => (s.kind === kind ? i : -1)).filter((i) => i >= 0);
       if (!list.length) continue;
@@ -243,10 +291,31 @@ export class CoverField {
       });
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       this.kinds.set(kind, { mesh, stems: list });
-      this.group.add(mesh);
+      nearSet.add(mesh);
+      // the copy from afar: its own simpler plant, the near mesh's instances and colours (one
+      // buffer: every rustle and part moves both), never hit by a ray (the near one is)
+      const fg = farOf[kind]();
+      this.geos.push(fg);
+      const far = new THREE.InstancedMesh(fg, mesh.material, list.length);
+      far.name = `cover-${kind}-far`;
+      far.instanceMatrix = mesh.instanceMatrix;
+      if (mesh.instanceColor) far.instanceColor = mesh.instanceColor;
+      far.castShadow = false;
+      far.receiveShadow = false;
+      far.raycast = () => {};
+      this.farMeshes.push(far);
+      farSet.add(far);
     }
     this.writeAll(0);
     for (const k of this.kinds.values()) { k.mesh.computeBoundingSphere(); k.mesh.computeBoundingBox(); }
+    for (const f of this.farMeshes) { f.computeBoundingSphere(); f.computeBoundingBox(); }
+    // (the field's ground: the middle of its stems, out to the furthest plus a frond's reach)
+    const centre = new THREE.Vector3();
+    for (const st of this.stems) centre.add(this._p.set(st.x, st.y, st.z));
+    if (this.stems.length) centre.multiplyScalar(1 / this.stems.length);
+    const radius = this.stems.reduce((r, st) => Math.max(r, Math.hypot(st.x - centre.x, st.z - centre.z)), 0) + 1;
+    this.lod = new CoverLod(centre, radius, nearSet, farSet);
+    this.group.add(this.lod);
     o.parent.add(this.group);
   }
 
@@ -406,9 +475,13 @@ export class CoverField {
     for (const k of this.kinds.values()) k.mesh.instanceMatrix.needsUpdate = true;
   }
 
+  /** Run 7 fix: is the field drawn as its simpler copy now (the lens far from it)? */
+  get far(): boolean { return this.lod.far; }
+
   dispose(): void {
     this.group.removeFromParent();
     for (const k of this.kinds.values()) k.mesh.dispose();
+    for (const f of this.farMeshes) f.dispose();
     for (const g of this.geos) g.dispose();
   }
 }

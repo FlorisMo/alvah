@@ -26,6 +26,7 @@ import type { Spawned, SpawnOpts } from '../play/types';
 import type { HomeSpec, HomeState, ResidentPose, ResidentSpec } from '../adventure/types';
 import { Actor, type ActorEnv } from '../adventure/actors';
 import { FarRest, restFar } from '../play/fade';
+import { withFarCopy } from '../Lod';
 import type { MoveLimits, Obstacle } from '../CharacterController';
 import { Sound } from '../../core/sound';
 import { store } from '../../core/state';
@@ -205,8 +206,15 @@ export class Residents {
       details.push(d);
       return d.group;
     };
+    // (run 7 fix, the triangle budget: every prop a home sets out is drawn as its simpler
+    // copy from afar, as the forest draws its trees — Lod.ts `withFarCopy`)
+    const spawnPlant = async (id: string, height: number): Promise<Spawned | null> => {
+      const s = await this.env.spawnPlant(id, height);
+      if (s && id !== 'gras') withFarCopy(s.root as THREE.Object3D, `${id}@${height.toFixed(3)}`);
+      return s;
+    };
     const dressing = build ? build({
-      parent: group, groundY: this.env.groundY, spawnModel: this.env.spawnModel, spawnPlant: this.env.spawnPlant,
+      parent: group, groundY: this.env.groundY, spawnModel: this.env.spawnModel, spawnPlant,
       obstacles: this.env.obstacles, lensFor: this.env.lensFor, detail,
       discover: (id) => this.finder?.(id) ?? false, view: () => this.lens,
     }) : null;

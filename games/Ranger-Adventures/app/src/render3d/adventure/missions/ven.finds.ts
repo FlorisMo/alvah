@@ -35,6 +35,7 @@ import { store } from '../../../core/state';
 import { dist, headingTo, stream } from '../places';
 import { WATER_LEVEL } from '../../Biomes';
 import { SIZE } from '../../AnimalScale';
+import { lodGeometries, lodMaterial } from '../../Lod';
 import { BAYS, FROG_H, type BayId, type FrogSpot } from './ven.places';
 import {
   DRAGONFLY_RANGE, DRAGONFLY_Y, DUCK_LOOPS, DUCK_SPEED, DUCKLING_GAP, DUCKLING_LEAD, DUCKLING_STRAY, DUCKLINGS, FREE_DUCKS, seenStep,
@@ -51,6 +52,10 @@ const DUCKLING_SINK = 0.32;
 /** The ducks rest beyond this far from their loop (m): from the marker (~24 m) they show. */
 const DUCKS_NEAR = 36;
 const DUCKS_FAR = 42;
+/** Beyond this far (m) from the lens the ducklings are drawn as a simpler copy (its
+ *  triangles): ~3 px each there, 8k triangles each as near. */
+const DUCKLING_FAR = 16;
+const DUCKLING_FAR_TRIS = 400;
 /** A dragonfly's dart (m/s) and how long it hovers between darts (s). */
 const DART_V = 3.2;
 const HOVER_S: readonly [number, number] = [0.8, 2.4];
@@ -104,6 +109,11 @@ export class VenLife3d {
   private mother: THREE.Object3D | null = null;
   private ducklings: THREE.InstancedMesh | null = null;
   private duckMesh: THREE.Matrix4 = new THREE.Matrix4();
+  /** run 7 fix (the triangle budget): the ducklings as drawn near and their simpler copy from
+   *  afar (8k triangles each as near; a few pixels each from beyond `DUCKLING_FAR`) */
+  private duckNear: { geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[] } | null = null;
+  private duckFar: { geometry: THREE.BufferGeometry; material: THREE.Material } | null = null;
+  private duckIsFar = false;
   private ducks: VenLife['ducks'] = { ...FREE_DUCKS };
   /** where she is along her loop (m) */
   private s = 0;
@@ -170,6 +180,15 @@ export class VenLife3d {
       inst.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0);
       this.duckGroup.add(inst);
       this.ducklings = inst;
+      // (its simpler copy from afar: the duckling baked and simplified in its model's frame,
+      // put in the mesh's frame the instances place, coloured from its own texture)
+      const [lod] = lodGeometries(`eendje@${DUCKLING_H}`, r, [DUCKLING_FAR_TRIS]);
+      if (lod) {
+        const geo = lod.clone().applyMatrix4(this.duckMesh.clone().invert());
+        this.duckNear = { geometry: m.geometry, material: m.material };
+        this.duckFar = { geometry: geo, material: lodMaterial().clone() };
+        this.made.push(this.duckFar);
+      }
     });
     // the dragonflies: one instanced mesh (a play shows them)
     const geo = dragonflyGeometry();
@@ -392,6 +411,18 @@ export class VenLife3d {
   update(dt: number, reduced: boolean, me: { x: number; z: number } | null, cam: THREE.Camera | null): void {
     this.clock += dt;
     this.updateDucks(dt, reduced);
+    // (from afar the ducklings are drawn as their simpler copy)
+    const d = this.ducklings;
+    if (d && cam && this.duckNear && this.duckFar && d.boundingSphere) {
+      const away = cam.position.distanceTo(d.boundingSphere.center);
+      const far = this.duckIsFar ? away > DUCKLING_FAR - 2 : away > DUCKLING_FAR;
+      if (far !== this.duckIsFar) {
+        this.duckIsFar = far;
+        const use = far ? this.duckFar : this.duckNear;
+        d.geometry = use.geometry;
+        d.material = use.material;
+      }
+    }
     // in free roam she chats to her ducklings now and then: a soft "kwak kwak", heard within
     // ~20 m (in a play the frogs' chorus is the sound he follows: she keeps quiet then)
     this.quackIn -= dt;
