@@ -35,7 +35,7 @@ import { sessionSeed } from '../../core/play';
 import { isMood, parseMoodParam, sessionMood, type MoodId } from '../../render3d/Moods';
 import { Vector3 } from 'three';
 import {
-  pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, WORLDBEAT_ANIMAL_M, type WorldBeat,
+  pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, animalClearlyInView, type WorldBeat,
 } from '../../core/worldbeat';
 import { setScreen, setMissionView, provideTitleReady } from '../../core/devhook';
 import { mountReadAloud, readScreenAloud, sentenceSegments } from '../ReadAloud';
@@ -431,18 +431,12 @@ function animalInView(world: World): string | null {
   const p = world.pos();
   if (!p) return null;
   const cam = world.camera;
-  // (well inside the mood's clear air: half the distance its fog begins at, ≥ 22 m in
-  // every mood, so never a shape in the mist)
-  const clear = MOODS[world.mood().now].fogNear * 0.5;
+  // (well inside the mood's clear air, near, in the middle band: core/worldbeat.ts)
+  const fogNear = MOODS[world.mood().now].fogNear;
   for (const a of world.ambientState()) {
-    // close enough to SEE: a roe deer ~12 m off, a squirrel only a few metres (about 36 px
-    // tall on a 1280×800 screen at the fixed 55° lens: h × 21 m)
-    const reach = Math.min(WORLDBEAT_ANIMAL_M, a.h * 21, clear);
-    if (a.id.startsWith('bird-') || Math.hypot(a.x - p.x, a.z - p.z) > reach) continue;
+    if (a.id.startsWith('bird-')) continue;
     const v = new Vector3(a.x, cam.position.y - 2, a.z).project(cam);
-    // in the middle band of the picture (never at its edges or up at its top), and above
-    // the low beat card that will name it
-    if (v.z < 1 && Math.abs(v.x) < 0.6 && v.y > -0.3 && v.y < 0.5) {
+    if (animalClearlyInView({ dist: Math.hypot(a.x - p.x, a.z - p.z), h: a.h, x: v.x, y: v.y, front: v.z < 1 }, fogNear)) {
       const id = a.id.split('-')[1]; // animal-vos-fox → vos
       return id ? Content.animal(id)?.naam ?? id : null; // wildzwijn → "wild zwijn"
     }
