@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import { heightAt as groundY, biomeAt } from '../../Biomes.ts';
 import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import { fitFrame } from '../../play/frame-fit.ts';
-import { dist, offCentre } from '../places.ts';
+import { dist, offCentre, segDist } from '../places.ts';
 import { backPoints, growStems, visibleShare } from '../cover-math.ts';
 import { fitWindow } from './ree.window.ts';
 import { knobsFor } from '../../../core/skill.ts';
@@ -34,7 +34,7 @@ import { ecoductClearings } from './ecoduct.places.ts';
 import {
   ANTHILL, ARRIVE, BOAR_LOOP, BURROW, GUARD_STAND, GUARD_VIEW, GUESTS, HOL_JUNIPER, ZAND_RESIDENTS, headingTo, LEAVE, MARKER, NESTS, NEST_IDS, OPEN, PASSES, PRESSED_H, ROE_LOOP,
   SETTLE, SOLIDS, STOP, TAG_AT, ZAND_HOME, ZAND_PLACES, ZONES, ZWALUW_LEN, ON_PATH, OFF_PATH_S, PAD,
-  COVER_SEED, DISPLAY_UP, FLUSH_BEFORE, GAPS_FROM, allClumps, approachOf, closeViewOf, displayOf, displayYaw, endSpot, endViewOf, headingAt, larkFrom, pointAt, clearOfSolids, flushOf, gapsOf, gapsTo, lastVariants, lineDist, offPath, readVariant, routeOf, rutAlpha, setNestNow, slotsOf, zandClearings, zandLayout,
+  COVER_SEED, DISPLAY_UP, FLUSH_BEFORE, GAPS_FROM, HER_ROOM, HER_REACT, ANTHILL_NEAR, BACK_SIDE, nestBackOf, nestBackVia, wayRound, allClumps, approachOf, closeViewOf, displayOf, displayYaw, endSpot, endViewOf, headingAt, larkFrom, pointAt, clearOfSolids, flushOf, gapsOf, gapsTo, lastVariants, lineDist, offPath, readVariant, routeOf, rutAlpha, setNestNow, slotsOf, zandClearings, zandLayout,
   type ViewSpec,
 } from './stuifzand.places.ts';
 import type { Spot } from '../types.ts';
@@ -490,4 +490,76 @@ test('the home: its places table, its home follows the nest the pair lives at, i
   assert.ok(rows.length >= 5, `≥ 5 things to discover (${rows.length})`);
   assert.ok(rows.some((r) => r.soort === 'zeldzaam'), 'a rare one');
   assert.ok(rows.some((r) => r.geholpen), 'the animal the mission helps');
+});
+
+/* ------------------------------------------- fix-discovery-homes (2026-10-05) ---- */
+
+/** A child who walks where the chip's arrow points (or the hint: the same way), 0.1 m a
+ *  step, from `from` to the nest's back spot: the nearest he comes to her, and whether he
+ *  got there. */
+function followChip(from: Spot, back: Spot, her: Spot): { nearest: number; there: boolean } {
+  let me = { ...from }, nearest = dist(me, her);
+  for (let i = 0; i < 900; i++) {
+    if (dist(me, back) < 0.7) return { nearest, there: true };
+    const aim = wayRound(me, back, her) ?? back;
+    const d = dist(me, aim) || 1;
+    me = { x: me.x + ((aim.x - me.x) / d) * 0.1, z: me.z + ((aim.z - me.z) / d) * 0.1 };
+    nearest = Math.min(nearest, dist(me, her));
+  }
+  return { nearest, there: false };
+}
+
+test('the walk back at dusk keeps ≥ 1.5 m from her, for every nest, side and spot: its end, its line, its chip', () => {
+  assert.equal(BACK_SIDE, 'l', 'he comes back on the guard\'s side of the scrape');
+  assert.ok(HER_REACT < HER_ROOM, 'she only reacts when he leaves the way');
+  for (const n of NEST_IDS) {
+    const back = nestBackOf(n);
+    assert.ok(dist(back, GUARD_STAND) < dist(endSpot(n, 'r'), GUARD_STAND), `nest ${n}: the guard\'s side is the near side`);
+    NESTS[n].spots.forEach((her, j) => {
+      for (const side of PASSES) {
+        const where = `nest ${n}${side} spot ${'ab'[j]}`;
+        assert.ok(dist(back, her) >= HER_ROOM + 0.2, `${where}: the walk ends ${dist(back, her).toFixed(2)} m from her`);
+        // the line a perfect player walks (golden's hint) from where he stood guard
+        const line = [GUARD_STAND, ...nestBackVia(n, j as 0 | 1), back];
+        const near = Math.min(...line.slice(1).map((q, i) => segDist(her, line[i], q)));
+        assert.ok(near >= HER_ROOM, `${where}: the walk back passes ${near.toFixed(2)} m from her`);
+        // a child who follows the chip's arrow, from where he stood guard and from anywhere
+        // round the scrape he may have wandered to
+        const starts: Spot[] = [GUARD_STAND, NESTS[n].stands[side], ...Array.from({ length: 16 }, (_, k) => ({ x: her.x + Math.sin(k * Math.PI / 8) * 4, z: her.z + Math.cos(k * Math.PI / 8) * 4 }))];
+        for (const st of starts) {
+          const f = followChip(st, back, her);
+          assert.ok(f.there, `${where} from ${at(st)}: the chip brings him there`);
+          assert.ok(f.nearest >= Math.min(HER_ROOM - 0.05, dist(st, her)), `${where} from ${at(st)}: following the chip he passes ${f.nearest.toFixed(2)} m from her`);
+        }
+      }
+    });
+  }
+  // (the old way: straight to the search stand on the car's side passed her at 0.12 m)
+  assert.ok(segDist(NESTS[2].spots[1], GUARD_STAND, NESTS[2].stands.r) < 0.5, 'the line the old walk took');
+});
+
+test('the anthill is his only once he walks right up to it: no walk of the story passes that near', () => {
+  assert.ok(ANTHILL_NEAR <= 3.2);
+  for (const n of NEST_IDS) for (const side of PASSES) {
+    const a = approachOf(n, side);
+    assert.ok(lineDist(ANTHILL, a.route.pts) > ANTHILL_NEAR + 0.3, `${n}${side}: the tracks keep off it`);
+    // to the juniper from where he searched, and back to the nest
+    assert.ok(segDist(ANTHILL, NESTS[n].stands[side], GUARD_STAND) > ANTHILL_NEAR + 0.2, `${n}${side}: the walk to the juniper keeps off it (${segDist(ANTHILL, NESTS[n].stands[side], GUARD_STAND).toFixed(2)} m)`);
+    for (const j of [0, 1] as const) {
+      const line = [GUARD_STAND, ...nestBackVia(n, j), nestBackOf(n)];
+      for (let i = 1; i < line.length; i++) assert.ok(segDist(ANTHILL, line[i - 1], line[i]) > ANTHILL_NEAR + 0.2, `${n} spot ${j}: the walk back keeps off it`);
+    }
+  }
+});
+
+test('the woodlark over the sand is a later visit\'s song: never his first play here', () => {
+  let later = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    assert.equal(zandLayout({ ...newPlay('stuifzand', seed, 1), fork: newPlay('stuifzand', seed, 1).fork, n: 1 }).lark, null, `seed ${seed}`);
+    const p2 = newPlay('stuifzand', seed, 2);
+    if (zandLayout(p2).lark) later += 1;
+    // (the rest of the play is drawn as before: the lark's own fork)
+    assert.equal(zandLayout(newPlay('stuifzand', seed, 1)).variant, zandLayout(newPlay('stuifzand', seed, 2)).variant);
+  }
+  assert.ok(later > 140 && later < 220, `from his second visit about three plays in five (${later}/300)`);
 });
