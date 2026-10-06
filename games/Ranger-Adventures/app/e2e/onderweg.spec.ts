@@ -13,18 +13,25 @@ import { keySteer } from './helpers';
  *   RANGER_PORT=<port> npx playwright test e2e/onderweg.spec.ts --project=chromium
  *
  * Reached for real, like a player: the beat comes on every WORLDBEAT_EVERY-th finished
- * mission of a session (replays count) once he has walked on, so this plays mission 1
- * (De verdwaalde frisling) three times at its marker with real clicks ("Speel nog eens"),
+ * mission of a session (replays count) once he has walked on, so this plays a short
+ * mission (De winterronde) three times at its marker with real clicks ("Speel nog eens"),
  * walks on toward an animal he can see, and answers the impulse beat ("Een vos loopt
  * weg. Wat doe jij?") with → ← Enter. Three more plays bring the direction beat
  * ("Welke kant is je volgende missie?"): ← ↑ → light up "Naar links", "Rechtdoor" and
  * "Naar rechts", and Esc walks on. The dev hook is only READ; `winStep()` is never called.
  * Screenshots: test-results/onderweg/NN-<name>.png.
+ *
+ * Run 7: it played mission 1 (De verdwaalde frisling) six times; the frisling became a
+ * longer expedition every play (2.5-4 min), so six plays outran the test's 20 minutes. Any
+ * finished mission counts toward the beat, so it plays the shortest one, and the next
+ * mission the beat asks about is then the story's first (the frisling, not yet done).
  */
 
 test.use({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
 
-const FIRST = AREA_VELUWE.missies[0];
+const FIRST = AREA_VELUWE.missies.find((m) => m.id === 'herstel')!;
+/** The mission the game offers next while FIRST is the only one done: the story's first. */
+const NEXT = AREA_VELUWE.missies[0];
 type Skin = { encounters?: { vraag: string; opties: { label: string; goed: boolean }[] }[] };
 
 let shotN = 0;
@@ -46,14 +53,14 @@ const lit = (page: Page): Promise<string | null> => page.evaluate(() => {
   return b?.classList.contains('wb-opt') ? b.querySelector('.wb-label')?.textContent ?? null : null;
 });
 
-/** One play of mission 1 from its marker to back on patrol, with real clicks: the 3D
+/** One play of FIRST from its marker to back on patrol, with real clicks: the 3D
  *  targets where a perfect player clicks, the choice the content marks goed, the cards'
  *  way on. `again`: "Speel nog eens" (the quiet chip under "Volgende: …"). */
 async function playFirst(page: Page, again: boolean): Promise<void> {
   const titel = FIRST.titel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   if (again) {
-    // run 6: the frisling's adventure ends at the family's wallow, a few steps from its
-    // marker: he walks back to the marker to play it again
+    // (an adventure ends a few steps from its marker, a classic mission at it: he walks
+    // back to the marker to play it again)
     const m = (await R<(P2 & { missionId: string })[]>(page, 'r.markers()')).find((x) => x.missionId === FIRST.id)!;
     await walkTo(page, m, { stopDist: 1.5, timeout: 60_000, until: (sn) => sn.near === FIRST.id });
   }
@@ -89,7 +96,7 @@ async function playFirst(page: Page, again: boolean): Promise<void> {
     if (await act.isVisible().catch(() => false)) { await act.click().catch(() => {}); await sleep(page, 400); continue; }
     await sleep(page, 250);
   }
-  throw new Error(`mission 1 never led back to patrol (visible: ${await visibleButtons(page)})`);
+  throw new Error(`${FIRST.id} never led back to patrol (visible: ${await visibleButtons(page)})`);
 }
 
 /** Walk like a player (the arrow keys) toward `goal` until within `stop` m, the Onderweg
@@ -189,7 +196,7 @@ test('Onderweg is answered with the arrow keys and Enter, Esc walks on @onderweg
   for (let i = 0; i < WORLDBEAT_EVERY; i++) { await playFirst(page, true); await sleep(page, 800); }
   // walk 12 m away from the next mission, then back toward it: once he has walked 15 m
   // with it ahead of him, the beat asks which way it is
-  const next = (await R<(P2 & { missionId: string })[]>(page, 'r.markers()')).find((m) => m.missionId === AREA_VELUWE.missies[1].id)!;
+  const next = (await R<(P2 & { missionId: string })[]>(page, 'r.markers()')).find((m) => m.missionId === NEXT.id)!;
   const from = await R<P2>(page, 'r.pos()');
   const away = Math.hypot(from.x - next.x, from.z - next.z) || 1;
   const out = { x: from.x + ((from.x - next.x) / away) * 12, z: from.z + ((from.z - next.z) / away) * 12 };

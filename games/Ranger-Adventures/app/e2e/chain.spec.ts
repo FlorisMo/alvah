@@ -4,7 +4,7 @@ import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 /**
  * Two-mission chain E2E (WORLD-PLAN W2.3). Proves the world-first loop end to
  * end: from the open plek the ranger opens the case-board hub, plays a full
- * zoeken-mission IN-PLACE (`missionView === '3d'`, world never torn down),
+ * classic mission IN-PLACE (`missionView === '3d'`, world never torn down),
  * returns to patrol, then walks back to the board and starts a SECOND mission —
  * all without a single lodge visit. Both missions persist a `BeatSummary`
  * (skill `trials` climb inside the shared `alvah-ef-v1` blob) and both resolve
@@ -24,7 +24,9 @@ import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
  *
  * Run 6: De verdwaalde frisling, Het reekalf, De wildcamera and De verstopte nootjes play
  * as in-world adventures (their own real-input tests: golden, missions.spec); `winStep()`
- * resolves the classic in-place steps, so this spec plays classic missions.
+ * resolves the classic in-place steps, so this spec plays classic missions. Run 7: the
+ * ven, the oversteek and Het stille zand are adventures too, so it plays De winterronde
+ * and De nachtronde (the classic missions left; no classic one plays zoeken any more).
  */
 
 interface Hook {
@@ -146,29 +148,29 @@ test('chain: two world-first missions back to back, no lodge visit, both 3D + pe
   await enterWorld(page);
   const before = await skillTrials(page);
 
-  // ---- MISSION 1: a full zoeken-mission (zoeken + dagnacht) from the hub ----
+  // ---- MISSION 1: a full classic mission (corsi + dagnacht) from the hub ----
   await walkToBoard(page);
-  await startMissionFromBoard(page, 'ven'); // De kikker in het ven: zoeken + dagnacht
+  await startMissionFromBoard(page, 'herstel'); // De winterronde: corsi + dagnacht
   await completeMissionInPlace(page);
   await shot(page, 'chain-mission1-reward');
   await returnToPatrol(page);
   expect(await hook(page, (r) => r.screen), 'never dropped to the lodge').not.toBe('lodge');
 
   const afterOne = await skillTrials(page);
-  expect(afterOne.zoeken ?? 0, 'mission 1 persisted a zoeken BeatSummary').toBeGreaterThan(before.zoeken ?? 0);
+  expect(afterOne.corsi ?? 0, 'mission 1 persisted a corsi BeatSummary').toBeGreaterThan(before.corsi ?? 0);
   expect(afterOne.dagnacht ?? 0, 'mission 1 persisted a dagnacht BeatSummary').toBeGreaterThan(before.dagnacht ?? 0);
 
   // ---- MISSION 2: walk back to the hub and start a second mission in-place ----
   await walkToBoard(page);
-  await startMissionFromBoard(page, 'stuifzand'); // Het stille zand: zoeken first
+  await startMissionFromBoard(page, 'nachtronde'); // De nachtronde: simon first
   await expect
     .poll(() => hook(page, (r) => r.missionView), { timeout: 20_000, message: 'second mission resolves 3D' })
     .toBe('3d');
-  // play its first (zoeken) beat → a fresh BeatSummary persists for mission 2.
+  // play its first (simon) beat → a fresh BeatSummary persists for mission 2.
   await hook(page, (r) => r.winStep());
   await expect
-    .poll(() => skillTrials(page).then((t) => t.zoeken ?? 0), { timeout: 15_000, message: 'mission 2 persisted a BeatSummary' })
-    .toBeGreaterThan(afterOne.zoeken ?? 0);
+    .poll(() => skillTrials(page).then((t) => t.simon ?? 0), { timeout: 15_000, message: 'mission 2 persisted a BeatSummary' })
+    .toBeGreaterThan(afterOne.simon ?? 0);
   expect(await hook(page, (r) => r.pos()), 'world survives the second launch').not.toBeNull();
   expect(await hook(page, (r) => r.screen), 'still no lodge visit').not.toBe('lodge');
   await shot(page, 'chain-mission2-3d');

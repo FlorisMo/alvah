@@ -4,7 +4,7 @@ import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 /**
  * W6.3b — the collectible veldnotitie. Playing a mission IN THE WORLD pins each
  * "Wist je dat"-fact as a veldnotitie on the case-board (prikbord), persisted in
- * the ranger namespace. This walks the ven mission from its marker, plays
+ * the ranger namespace. This walks a classic mission from its marker, plays
  * it (its fact beats collect the notes), returns to patrol, then opens the
  * prikbord from the pause hub and asserts a collected veldnotitie is pinned —
  * with its real fact text and a non-zero count — and that it round-tripped to
@@ -15,8 +15,9 @@ import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
  * so only input modality is shortcut, never runtime state.
  *
  * Run 6: De verdwaalde frisling plays as an in-world adventure (real-input tests: golden,
- * missions.spec); `winStep()` resolves the classic in-place steps, so this plays De kikker
- * in het ven.
+ * missions.spec); `winStep()` resolves the classic in-place steps, so this plays a classic
+ * mission. Run 7: De kikker in het ven, played here before, is an adventure now, so it plays
+ * De winterronde.
  */
 
 interface Hook {
@@ -119,8 +120,8 @@ test('veldnotitie: an in-world fact is pinned to the prikbord and persisted', as
   collectPageErrors(page, errors);
 
   await enterWorld(page);
-  await walkToMarker(page, 'ven');
-  await startFromMarker(page, 'ven');
+  await walkToMarker(page, 'herstel');
+  await startFromMarker(page, 'herstel');
   await playToReward(page);
   await returnToPatrol(page);
 

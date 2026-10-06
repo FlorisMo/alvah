@@ -7,15 +7,16 @@ import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
  * dat? · 1/2". Rescued and named in the hut (Pauze → "Help de jonge raaf"), the raaf
  * tells it: `.fact--raaf`, kicker "Kroa vertelt · 1/2", the fact read aloud.
  *
- * Navigation reuses the proven friction/W6.1 marker path: walk to the ven
- * marker, open the veldnotitie with Space, play in place. ven carries fact
+ * Navigation reuses the proven friction/W6.1 marker path: walk to the winterronde's
+ * marker, open the veldnotitie with Space, play in place. It carries fact
  * beats between its beats. Winning steps uses
  * the dev-only `__ranger.winStep()` hook — the variant runs its OWN genuine
  * resolve path, so only input modality is shortcut, never runtime state.
  *
  * Run 6: De verdwaalde frisling plays as an in-world adventure (real-input tests: golden,
- * missions.spec); `winStep()` resolves the classic in-place steps, so this plays De kikker
- * in het ven, which carries a fact beat after each of its two steps.
+ * missions.spec); `winStep()` resolves the classic in-place steps, so this plays a classic
+ * mission with a fact beat after each of its two steps. Run 7: De kikker in het ven, played
+ * here before, is an adventure now, so it plays De winterronde.
  */
 
 interface Hook {
@@ -117,8 +118,8 @@ test('raaf fact: "Wist je dat?" until the raaf is rescued, then the raaf tells i
   collectPageErrors(page, errors);
 
   await enterWorld(page);
-  await walkToMarker(page, 'ven');
-  await startFromMarker(page, 'ven');
+  await walkToMarker(page, 'herstel');
+  await startFromMarker(page, 'herstel');
   await expect
     .poll(() => hook(page, (r) => r.missionView), { timeout: 20_000, message: 'mission resolves 3D in-place' })
     .toBe('3d');
@@ -139,7 +140,7 @@ test('raaf fact: "Wist je dat?" until the raaf is rescued, then the raaf tells i
   await expect(page.locator('.explore-hud')).toBeVisible();
 
   // play it again at the marker: now Kroa tells the fact
-  await page.getByRole('button', { name: /Speel nog eens: De kikker in het ven/ }).click();
+  await page.getByRole('button', { name: /Speel nog eens: De winterronde/ }).click();
   await page.getByRole('button', { name: 'Ga op pad' }).click();
   await firstFact(page);
   const raafFact = page.locator('.fact--raaf');

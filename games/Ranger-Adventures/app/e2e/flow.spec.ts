@@ -261,20 +261,32 @@ test('a mission picked on the missiebord is played at its own marker, by the wat
   expect(at.near).toBe('ven');
   expect(dist(at.p!, await markerOf(page, 'ven')), 'the ven mission starts away from the ven').toBeLessThan(2.4);
   await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 5_000, message: 'Enter on "Ga op pad" was swallowed by the lifting veil' }).not.toBeNull();
-  await sleep(page, 3_000); // the stage's one calm reframe
-  // "Zoek de kikker bij het water": framed straight ahead, the ven in view — not swung
-  // ~200° round to the dry heath behind him (parent B6)
-  const yaw0 = at.c!.yaw, yaw1 = (await snap(page)).c!.yaw;
-  const turn = Math.abs(Math.atan2(Math.sin(yaw1 - yaw0), Math.cos(yaw1 - yaw0))) * 180 / Math.PI;
-  expect(turn, 'the lens swung away from where he looked').toBeLessThan(40);
-  const water = await page.evaluate(() => {
+  // the ven in view all along — never swung ~200° round to the dry heath behind him (parent
+  // B6). Run 7: the ven is an adventure; it opens with one calm look across the water (the
+  // lens glides a few metres aside toward the cove the frogs call from, holds, and comes
+  // straight back behind him), so the water is read through that look, and the view is back
+  // where he looked once his first walk begins.
+  const water = (): Promise<number> => page.evaluate(() => {
     const w = (window as unknown as { __stage?: { world?: { limits?: { blocked?: (x: number, z: number) => boolean } } } }).__stage?.world;
     const r = (window as unknown as { __ranger?: { screenOf(x: number, y: number, z: number): { onScreen: boolean } | null } }).__ranger;
     let on = 0;
     for (let x = 28; x <= 64; x += 2) for (let z = -37; z <= -1; z += 2) if (w?.limits?.blocked?.(x, z) && r?.screenOf(x, -1.4, z)?.onScreen) on++;
     return on;
   });
-  expect(water, 'the ven is not in the picture of "Zoek de kikker bij het water"').toBeGreaterThan(10);
+  const turnFrom = (yaw: number): number => Math.abs(Math.atan2(Math.sin(yaw - at.c!.yaw), Math.cos(yaw - at.c!.yaw))) * 180 / Math.PI;
+  let least = Infinity, shotLook = false;
+  for (const t0 = Date.now(); Date.now() - t0 < 20_000;) {
+    least = Math.min(least, await water());
+    const beat = (await R<{ beat: string } | null>(page, 'r.adventure()'))?.beat ?? '';
+    if (!shotLook && turnFrom((await snap(page)).c!.yaw) > 30) { shotLook = true; await shot(page, 'frog-look-across-the-water'); }
+    if (beat.startsWith('walk:')) break;
+    await sleep(page, 200);
+  }
+  expect(least, 'the ven left the picture during the look across the water').toBeGreaterThan(10);
+  expect((await R<{ beat: string } | null>(page, 'r.adventure()'))?.beat ?? '', 'the look across the water never handed him his first walk').toMatch(/^walk:/);
+  await sleep(page, 600);
+  expect(turnFrom((await snap(page)).c!.yaw), 'the lens did not come back to where he looked').toBeLessThan(40);
+  expect(await water(), 'the ven is not in the picture as he sets off').toBeGreaterThan(10);
   await shot(page, 'frog-game-by-the-water');
 });
 

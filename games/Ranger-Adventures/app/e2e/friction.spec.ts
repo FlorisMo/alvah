@@ -6,14 +6,14 @@ import { walkTo } from './golden-lib';
  * In-world mission friction audit (WORLD-PLAN W6.1). Walks the ranger to a real
  * world MARKER, opens the veldnotitie with the interact key (Space — the laptop
  * twin of tapping "Speel mee"), and plays the mission through EVERY beat in
- * place, screenshotting each one. Three classic missions cover all five EF engines
- * from a marker entry (run 6: the frisling plays as an in-world adventure, audited by
- * golden and missions.spec):
- *   - `ven`           → zoeken → dagnacht
- *   - `ecoduct`       → corsi  → dagnacht
+ * place, screenshotting each one. The classic missions left cover four EF engines
+ * from a marker entry:
+ *   - `herstel`       → corsi  → dagnacht
  *   - `nachtronde`    → simon  → wisselen
- * Together: zoeken, corsi, dagnacht, simon, wisselen — the full EF five, each
- * driven from the open world with no lodge visit.
+ * Zoeken is played only in adventures now (run 6: the frisling, the ree; run 7: the
+ * ven, the oversteek and Het stille zand too), and an adventure is never won through
+ * `winStep()`: golden and missions.spec play each of them from its own marker with real
+ * input, so the full EF five is still driven from the open world with no lodge visit.
  *
  * The audit's job is to surface rough edges (prompt overlap, reframe jumps,
  * unreachable markers, a step that never resolves 3D). Every beat asserts
@@ -128,14 +128,13 @@ async function returnToPatrol(page: Page): Promise<void> {
   await expect(page.locator('.explore-hud'), 'back on the open plek').toBeVisible();
 }
 
-// Three missions cover the EF five from marker entries; each is its own test so a
-// full walk-to-marker + multi-beat play stays inside one Playwright timeout on
-// SwiftShader (a single test with both walks overran). Together they audit
-// zoeken/dagnacht (ven), corsi/dagnacht (ecoduct) + simon/wisselen (nachtronde). Run 6: the
-// frisling plays as an in-world adventure, audited by golden and missions.spec instead.
+// Each classic mission is its own test so a full walk-to-marker + multi-beat play stays
+// inside one Playwright timeout on SwiftShader (a single test with both walks overran).
+// Together they audit corsi/dagnacht (herstel) + simon/wisselen (nachtronde). Run 7: the
+// ven and the oversteek, audited here before, are adventures now (zoeken, corsi and
+// dagnacht with real input in golden and missions.spec), like the frisling since run 6.
 const AUDIT = [
-  { mission: 'ven', engines: 'zoeken/dagnacht', beats: 2 },
-  { mission: 'ecoduct', engines: 'corsi/dagnacht', beats: 2 },
+  { mission: 'herstel', engines: 'corsi/dagnacht', beats: 2 },
   { mission: 'nachtronde', engines: 'simon/wisselen', beats: 2 },
 ] as const;
 
