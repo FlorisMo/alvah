@@ -19,7 +19,7 @@ import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import { fitFrame } from '../../play/frame-fit.ts';
 import { obstacleGap } from '../../CharacterController.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
-import { dist, toLocal } from '../places.ts';
+import { atLocal, dist, toLocal } from '../places.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { newPlay } from '../../../core/play.ts';
 import { playDagnachtTrial } from '../../../engines/dagnacht.ts';
@@ -32,7 +32,7 @@ import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import { venClearings } from './ven.places.ts';
 import {
-  ASIDE, BACK_MAX, BED, FOX_LIGHT, BED_HALF, BED_STAND, BED_VIEW, BEFORE_HINDE, BEFORE_KALF, ECODUCT_HOME, ECODUCT_PLACES, ECODUCT_RESIDENTS, EXITS, FERN, FOX_LOOP, GROUPS,
+  ASIDE, BACK_MAX, BED, DUCT_AT, FOX_LIGHT, SCREEN_ROUND, crossesScreen, screenPath, screenWay, BED_HALF, BED_STAND, BED_VIEW, BEFORE_HINDE, BEFORE_KALF, ECODUCT_HOME, ECODUCT_PLACES, ECODUCT_RESIDENTS, EXITS, FERN, FOX_LOOP, GROUPS,
   GROVE, HIDEAWAY, HOME, MARKER, PATCH_SIZE, SCREEN, SIDES, STAND, TRAILS, AFTER_HINDE, AFTER_KALF,
   asideView, backCorner, backOff, backWay, bedSpots, crossingLine, crossingsFor, ductGap, ecoductClearings, ecoductLayout, fileBack, flipFacing, haltOf, lastVariants, leaveWay, lineDist, mouthOf, onBed, readVariant, roepSpot,
   screenObstacle, type ViewSpec,
@@ -393,8 +393,9 @@ test('a play\'s crossings: drawn from its seed, the deer always, never two alike
   for (let seed = 1; seed <= 80; seed++) {
     for (const rounds of [2, 3]) {
       for (const order of ORDERS) {
-        const l = ecoductLayout(newPlay('ecoduct', seed, 1), rounds, order);
-        assert.deepEqual(l, ecoductLayout(newPlay('ecoduct', seed, 1), rounds, order), 'deterministic');
+        // (a later evening: his first is the deer and the sow's, below)
+        const l = ecoductLayout(newPlay('ecoduct', seed, 2), rounds, order);
+        assert.deepEqual(l, ecoductLayout(newPlay('ecoduct', seed, 2), rounds, order), 'deterministic');
         assert.equal(l.crossings.length, crossingsFor(rounds));
         const kinds = l.crossings.map((c) => c.kind);
         assert.equal(kinds[kinds.length - 1], 'hert', `seed ${seed}: the hind and her calf cross last (${kinds.join()})`);
@@ -431,7 +432,7 @@ test('the fox crosses only in the mist and at dusk (its veldgids row says so); e
     for (let seed = 1; seed <= 60; seed++) {
       for (const order of ORDERS) for (const rounds of [2, 3]) {
         const last = [`hzrh-NSNN-NSNN`, `zrhh-SNSN-SNSN`];
-        const l = ecoductLayout(newPlay('ecoduct', seed, 1), rounds, order, last, mood);
+        const l = ecoductLayout(newPlay('ecoduct', seed, 3), rounds, order, last, mood);
         const kinds = l.crossings.map((c) => c.kind);
         foxes += kinds.filter((k) => k === 'vos').length;
         for (let i = 1; i < kinds.length; i++) assert.notEqual(kinds[i], kinds[i - 1], `${mood} seed ${seed}: never two alike in a row`);
@@ -472,4 +473,68 @@ test('its discoveries: four animals, the tracks, a rare badger; the red deer it 
   assert.ok(rows.some((o) => o.soort === 'zeldzaam' && o.id === 'ecoduct.das'));
   assert.ok(rows.some((o) => o.soort === 'spoor' && o.id === 'ecoduct.sporen'));
   for (const g of Object.values(GROUPS)) assert.ok(rows.some((o) => o.id === g.disc), `${g.disc} is a row`);
+});
+
+/* ------------------------------------------- fix-discovery-homes (2026-10-05) ---- */
+
+test('his first evening here: the deer and the sow with her piglets take turns (the roe and the fox come on later evenings)', () => {
+  for (let seed = 1; seed <= 80; seed++) {
+    for (const rounds of [2, 3, 4]) for (const order of ORDERS) for (const mood of ['ochtendnevel', 'schemer', 'gouden-uur'] as const) {
+      const l = ecoductLayout(newPlay('ecoduct', seed, 1), rounds, order, [], mood);
+      const kinds = l.crossings.map((c) => c.kind);
+      assert.equal(kinds.length, crossingsFor(rounds), `seed ${seed}: every crossing has its group (${kinds.join()})`);
+      assert.ok(kinds.every((k) => k === 'hert' || k === 'zwijn'), `seed ${seed} ${mood}: ${kinds.join()}`);
+      assert.ok(kinds.includes('zwijn'), 'the sow and her piglets come');
+      for (let i = 1; i < kinds.length; i++) assert.notEqual(kinds[i], kinds[i - 1], `seed ${seed}: never two alike in a row (${kinds.join()})`);
+      assert.equal(kinds[kinds.length - 1], 'hert');
+      for (const c of l.crossings) assert.ok(c.n >= GROUPS[c.kind].min && c.n <= GROUPS[c.kind].members.length);
+    }
+  }
+  // a later evening brings the roe (and the fox in its light)
+  let roes = 0, foxes = 0;
+  for (let seed = 1; seed <= 80; seed++) {
+    const kinds = ecoductLayout(newPlay('ecoduct', seed, 2), 3, ORDERS[0], [], 'schemer').crossings.map((c) => c.kind);
+    if (kinds.includes('ree')) roes += 1;
+    if (kinds.includes('vos')) foxes += 1;
+  }
+  assert.ok(roes > 40 && foxes > 20, `later evenings: the roe ${roes}/80, the fox ${foxes}/80`);
+});
+
+/** A child who walks where the chip points (0.1 m a step) from `from` to `to`: did he get there,
+ *  and did he ever stand in the screen? */
+function followScreenChip(from: Spot, to: Spot): { there: boolean; through: boolean } {
+  let me = { ...from }, through = false;
+  for (let i = 0; i < 600; i++) {
+    if (dist(me, to) < 0.6) return { there: true, through };
+    const aim = screenWay(me, to) ?? to;
+    const d = dist(me, aim) || 1;
+    const next = { x: me.x + ((aim.x - me.x) / d) * 0.1, z: me.z + ((aim.z - me.z) / d) * 0.1 };
+    if (crossesScreen(me, next, 0.05)) through = true;
+    me = next;
+  }
+  return { there: false, through };
+}
+
+test('the walks onto the sand and back behind the screen go round its end, never through it: the chip and a perfect player', () => {
+  assert.ok(crossesScreen(STAND, BED_STAND), 'the straight way onto the sand goes through the screen');
+  const onto = screenPath(STAND, BED_STAND);
+  assert.ok(onto.length >= 1 && onto.length <= 2, `round one end (${onto.length} corners)`);
+  const line = [STAND, ...onto, BED_STAND];
+  for (let i = 1; i < line.length; i++) assert.ok(!crossesScreen(line[i - 1], line[i]), `leg ${i} misses the screen`);
+  const len = line.slice(1).reduce((a, q, i) => a + dist(line[i], q), 0);
+  assert.ok(len < dist(STAND, BED_STAND) + 3.5, `a short way round (${len.toFixed(1)} m)`);
+  // its corners: clear of the screen's planks, inside the home's ground, off every group's way
+  for (const p of SCREEN_ROUND) {
+    assert.ok(obstacleGap(screenObstacle(), p.x, p.z) > 0.4, `corner ${at(p)} clear of the screen`);
+    assert.ok(ecoductClearings().some((c) => dist(c, p) <= c.r - 0.3), `corner ${at(p)} on the home's own ground`);
+    assert.ok(Math.hypot(p.x - DUCT_AT.x, p.z - DUCT_AT.z) > 10, 'far from the ecoduct');
+  }
+  // a child who follows the arrow, onto the sand from behind the screen, and back behind it
+  // from anywhere on or by the sand (where the flip left him, either aside place)
+  const starts: Spot[] = [STAND, ...SIDES.map((sd) => ASIDE[sd])];
+  for (const st of starts) { const f = followScreenChip(st, BED_STAND); assert.ok(f.there && !f.through, `onto the sand from ${at(st)}: ${JSON.stringify(f)}`); }
+  const fromSand: Spot[] = [BED_STAND, BED, ...SIDES.map((sd) => ASIDE[sd]), ...bedSpots(), atLocal(BED, 0, -3.6), atLocal(BED, 1.0, -3.9), atLocal(BED, -0.8, -4.1)];
+  for (const st of fromSand) { const f = followScreenChip(st, STAND); assert.ok(f.there && !f.through, `back behind the screen from ${at(st)}: ${JSON.stringify(f)}`); }
+  // the marker's walk to the screen never needed it
+  assert.equal(screenWay(MARKER, STAND), null);
 });

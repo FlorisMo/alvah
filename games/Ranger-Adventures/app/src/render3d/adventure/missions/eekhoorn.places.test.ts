@@ -1546,3 +1546,12 @@ test('a play\'s finds: the nest tree and the dining spot from forks of their own
     assert.equal(spots.get(id)?.size, 2, `${id}: both dining spots come`);
   }
 });
+
+test('fix-discovery-homes: a neighbour of a later visit (the nuthatch) never comes on his first play here, and comes after', () => {
+  let later = 0;
+  for (let s = 1; s <= 300; s++) {
+    assert.notEqual(drawEekhoornPlay(newPlay('eekhoorn', s, 1), null, { n: 1 }).buren.stam, 'boomklever', `seed ${s}`);
+    if (drawEekhoornPlay(newPlay('eekhoorn', s, 2), null, { n: 2 }).buren.stam === 'boomklever') later += 1;
+  }
+  assert.ok(later > 40, `from his second visit it comes (${later}/300)`);
+});

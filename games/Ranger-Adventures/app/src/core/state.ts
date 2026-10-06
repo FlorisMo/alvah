@@ -60,6 +60,7 @@ import {
 } from './persist.ts';
 import { compactVariant, type Play } from './play.ts';
 import { nextRareCount } from './discover.ts';
+import { ONTDEKKINGEN } from '../content/ontdekkingen.ts';
 import { isMood, type MoodId } from '../render3d/Moods.ts';
 
 export type Screen =
@@ -306,7 +307,7 @@ export function hydrate(parsed: Partial<GameState> | null): GameState {
     settings: loadSettings(parsed.settings),
     // run 7
     geschiedenis: Array.isArray(parsed.geschiedenis) ? parsed.geschiedenis.slice(-HISTORY_MAX) : [],
-    ontdekt: record(parsed.ontdekt),
+    ontdekt: withHelped(record(parsed.ontdekt), parsed.voltooid ?? {}),
     zeldzaam: record(parsed.zeldzaam),
     gespeeld: record(parsed.gespeeld),
     sfeer: {
@@ -314,6 +315,21 @@ export function hydrate(parsed: Partial<GameState> | null): GameState {
       sessies: typeof sfeer.sessies === 'number' && sfeer.sessies >= 0 ? Math.floor(sfeer.sessies) : 0,
     },
   };
+}
+
+/**
+ * The animals his finished missions helped are in his veldgids (content/ontdekkingen.ts
+ * `geholpen`), whatever save he comes with: a save from before the veldgids (run 6) has
+ * every mission he finished but none of their rows, and its gids showed the piglet he
+ * rescued as a grey shape. Quietly: no reveal (no `r`), still new in the gids (no `g`), so
+ * the first reveals still say where the gids is; a row already there is kept as it is.
+ */
+function withHelped(ontdekt: Record<string, Ontdekt>, voltooid: Readonly<Record<string, boolean>>): Record<string, Ontdekt> {
+  const missing = ONTDEKKINGEN.filter((o) => o.geholpen && voltooid[o.home] && !ontdekt[o.id]);
+  if (!missing.length) return ontdekt;
+  const out = { ...ontdekt };
+  for (const o of missing) out[o.id] = { t: 0, n: 1 };
+  return out;
 }
 
 function load(): GameState {

@@ -52,7 +52,7 @@ import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
 import { EcoductHome } from './ecoduct.home';
 import {
   AFTER_HINDE, AFTER_KALF, ASIDE, BACK_MAX, BED, BED_STAND, BED_VIEW, DAS, DAS_ID, DECK_LOOK, ECODUCT_HOME, EXITS, GROUPS, MISSION, STAND, TRAILS, VARIANT_KEY,
-  asideView, backCorner, backOff, backWay, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, fileBack, flipFacing, haltOf, lastVariants, leaveWay, mouthOf, onBed, roepSpot, waitOf,
+  asideView, backCorner, backOff, backWay, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, fileBack, flipFacing, haltOf, lastVariants, leaveWay, mouthOf, onBed, roepSpot, screenPath, screenWay, waitOf,
   type Crossing, type EcoductLaid, type Kind, type Side,
 } from './ecoduct.places';
 
@@ -87,6 +87,10 @@ const SEEN_PX = 40;
  *  for cards still waiting (two): they show where they belong, never spill into a next play. */
 const CARD_S = (REVEAL_SHOW_MS + REVEAL_GAP_MS) / 1000;
 const CARDS_MAX_S = 2 * CARD_S;
+
+/** How far (m) off the sand bed every animal must be before he walks onto it: a group still
+ *  leaving over it never brushes past him there. */
+const BED_CLEAR_M = 3;
 
 /** Is something being said now (a call never sounds over a spoken line)? */
 function speaking(): boolean {
@@ -384,8 +388,8 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
   const aim = { x: cam0.x + (DECK_LOOK.x - cam0.x) * f, z: cam0.z + (DECK_LOOK.z - cam0.z) * f, y: cam0.y + (DECK_LOOK.y - cam0.y) * f - 0.45 };
   await k.look(aim, c.kijk, 2.2, { turn: true, seconds: 2.2 });
 
-  /* 2 · a quiet walk to the screen */
-  await k.walk({ name: 'scherm', to: STAND, r: 0.6, line: c.naarScherm, doel: c.chipScherm, glyph: 'boot', quiet: { line: c.sst } });
+  /* 2 · a quiet walk to the screen (round its end, never through it) */
+  await k.walk({ name: 'scherm', to: STAND, r: 0.6, line: c.naarScherm, doel: c.chipScherm, glyph: 'boot', quiet: { line: c.sst }, way: (me) => screenWay(me, STAND) });
 
   /* 3 · behind the screen: the held view over the bed, the bridge's mouth and its corners */
   await k.walkRanger(STAND.x, STAND.z, 0.04);
@@ -480,7 +484,7 @@ async function story(k: AdventureKit, laid: EcoductLaid): Promise<void> {
     live.add(g);
     const isLast = rust.trial.encounters[rust.trial.encounters.length - 1].id === e.id;
     if (e.id === 'opzij') {
-      if (where === 'scherm') await toBed(k);
+      if (where === 'scherm') await toBed(k, A);
       await opzijAt(k, rust, e, g);
       where = 'opzij';
     } else if (e.id === 'stil') {
@@ -702,9 +706,28 @@ function roepView(r: Spot, y: Spot): { at: Spot; heading: number; halfW: number;
  * onto the bed, and there he sees them at his feet ("Kijk. Allemaal sporen in het zand.").
  * Now he stands right in their way.
  */
-async function toBed(k: AdventureKit): Promise<void> {
+async function toBed(k: AdventureKit, A: Readonly<Record<string, Actor>>): Promise<void> {
   const c = k.copy;
-  await k.walk({ name: 'zand', to: BED_STAND, r: BED_STAND.r, line: c.sporen, doel: c.chipZand, glyph: 'footprints' });
+  // (the last group may still be leaving over the sand — the route's show lets it run ahead:
+  // the walk, its line, its chip and its hint begin only once every animal is BED_CLEAR_M off
+  // the bed or gone; meanwhile he watches them go, and a perfect player waits too)
+  {
+    k.beat = 'wacht:zand';
+    const unhint = k.hint(() => null);
+    const t0 = k.now;
+    const clear = (): boolean => Object.values(A).every((a) => !a.group.visible || !onBed(a, BED_CLEAR_M));
+    // (he is told to wait while they go: the screen's own line)
+    if (!clear()) k.say(c.wacht);
+    try {
+      await k.until(clear, 30);
+    } finally { unhint(); }
+    k.stats.zand_wait = Math.round((k.now - t0) * 10) / 10;
+  }
+  // (round the screen's end: from behind it the straight way onto the sand goes through it)
+  await k.walk({
+    name: 'zand', to: BED_STAND, r: BED_STAND.r, line: c.sporen, doel: c.chipZand, glyph: 'footprints',
+    via: screenPath(k.ranger(), BED_STAND), way: (me) => screenWay(me, BED_STAND),
+  });
   k.lockFollow();
   k.world.stopRanger();
   // (a calm look: the tracks' card, and any other new find's still waiting, shows here)
@@ -725,7 +748,10 @@ async function toBed(k: AdventureKit): Promise<void> {
 /** Back behind the screen (a group will come, and there he keeps still). */
 async function backToScreen(k: AdventureKit): Promise<void> {
   const c = k.copy;
-  await k.walk({ name: 'terug', to: STAND, r: 0.6, line: c.terug, doel: c.chipScherm, glyph: 'boot', quiet: { line: c.sst } });
+  await k.walk({
+    name: 'terug', to: STAND, r: 0.6, line: c.terug, doel: c.chipScherm, glyph: 'boot', quiet: { line: c.sst },
+    via: screenPath(k.ranger(), STAND), way: (me) => screenWay(me, STAND),
+  });
   await k.walkRanger(STAND.x, STAND.z, 0.04);
   await k.frame(BED_VIEW, { face: STAND.heading, dip: true });
 }
