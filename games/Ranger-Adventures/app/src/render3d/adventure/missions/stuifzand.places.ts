@@ -541,7 +541,7 @@ export const ANTHILL: Spot & { h: number } = { x: 38.0, z: 35.2, h: 0.5 };
 /** It is his once he walks right up to it (this near, m, with it in his picture): a find for
  *  the curious (its veldgids hint says what to look for), never one every walk passes —
  *  every way the story walks keeps further off (pinned). */
-export const ANTHILL_NEAR = 3.0;
+export const ANTHILL_NEAR = 2.4;
 /** Where a woodlark rises from the sand and sings, as he walks (`me`, facing `heading`): ~7 m
  *  ahead of him and ~4 m to the side a play drew (`side`; the other where that is no open
  *  sand), or null where neither is. */

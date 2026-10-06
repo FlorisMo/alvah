@@ -539,12 +539,12 @@ test('the walk back at dusk keeps ≥ 1.5 m from her, for every nest, side and s
 });
 
 test('the anthill is his only once he walks right up to it: no walk of the story passes that near', () => {
-  assert.ok(ANTHILL_NEAR <= 3.2);
+  assert.ok(ANTHILL_NEAR <= 2.5, 'right up to it');
   for (const n of NEST_IDS) for (const side of PASSES) {
     const a = approachOf(n, side);
     assert.ok(lineDist(ANTHILL, a.route.pts) > ANTHILL_NEAR + 0.3, `${n}${side}: the tracks keep off it`);
     // to the juniper from where he searched, and back to the nest
-    assert.ok(segDist(ANTHILL, NESTS[n].stands[side], GUARD_STAND) > ANTHILL_NEAR + 0.2, `${n}${side}: the walk to the juniper keeps off it (${segDist(ANTHILL, NESTS[n].stands[side], GUARD_STAND).toFixed(2)} m)`);
+    assert.ok(segDist(ANTHILL, NESTS[n].stands[side], GUARD_STAND) > ANTHILL_NEAR + 0.8, `${n}${side}: the walk to the juniper keeps off it (${segDist(ANTHILL, NESTS[n].stands[side], GUARD_STAND).toFixed(2)} m)`);
     for (const j of [0, 1] as const) {
       const line = [GUARD_STAND, ...nestBackVia(n, j), nestBackOf(n)];
       for (let i = 1; i < line.length; i++) assert.ok(segDist(ANTHILL, line[i - 1], line[i]) > ANTHILL_NEAR + 0.2, `${n} spot ${j}: the walk back keeps off it`);

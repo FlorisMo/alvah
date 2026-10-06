@@ -78,6 +78,9 @@ const PACE: Readonly<Record<string, number>> = { ree: 2.0, eekhoorn: 2.4, das: 1
  *  Where the tracks leave no such room (or he ran past it), it rises on his walk to the
  *  juniper instead. */
 const LARK_LEAD_S = 6.5;
+/** The stretch of the tracks (m) the woodlark may rise in (a few strides: a step or two of
+ *  his can never jump over it). */
+const LARK_SPAN = 2.5;
 
 /** Is something being said now (a call never sounds over a spoken line)? */
 function speaking(): boolean {
@@ -180,9 +183,10 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
     const via: Spot[] = [];
     const from = project(route, k.ranger()).s;
     // (where it may rise: a third of the way over the sand, but never later than LARK_LEAD_S
-    // of walking before the flush, nor in his first steps)
+    // of walking before the flush, nor in his first steps: a stretch of LARK_SPAN m at least,
+    // else none on the tracks)
     const latest = project(route, ap.approach).s - LARK_LEAD_S * WALK_SPEED;
-    const larkAt = Math.max(from + 2, Math.min(OFF_PATH_S + (ap.passS - OFF_PATH_S) * 0.35, latest));
+    const larkAt = Math.max(from + 2, Math.min(OFF_PATH_S + (ap.passS - OFF_PATH_S) * 0.35, latest - LARK_SPAN));
     for (let s = Math.max(1, from + 2); s < ap.passS - 3.2 - 0.8; s += 3) via.push(pointAt(route, s));
     await k.walk({
       name: 'sporen', to: ap.approach, r: ap.approach.r, line: c.volg, doel: c.chipSporen, cue: c.cueSporen, glyph: 'tyre',
@@ -257,7 +261,7 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
   const back = nestBackOf(laid.nest);
   const herAt = { x: spot.x, z: spot.z };
   const settings = store.get().settings;
-  let heBack = false, startled = false;
+  let heBack = false, startled = false, reacted = false;
   await k.walk({
     name: 'nest', to: back, r: 0.7, line: c.naarNest, doel: c.chipNest, glyph: 'boot', quiet: { line: c.rustig },
     via: nestBackVia(laid.nest, laid.spot), way: (me) => wayRound(me, back, herAt),
@@ -266,7 +270,7 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
       // she stays on her eggs); once he gives her room she presses flat again
       const dHer = dist(k.ranger(), herAt);
       if (!startled && dHer < HER_REACT) {
-        startled = true;
+        startled = reacted = true;
         k.stats.her_react = (k.stats.her_react ?? 0) + 1;
         she.pressFlat(false);
         void she.lookAt(() => ({ ...k.ranger(), speed: 0 }), 1.8);
@@ -288,7 +292,8 @@ async function story(k: AdventureKit, laid: ZandLaid): Promise<void> {
     },
   });
   if (!heBack) { he.place(nest.roost.x, nest.roost.z, nest.roost.yaw); he.group.visible = true; he.pressFlat(true); }
-  if (startled) she.pressFlat(true);
+  // (she turned her head to him: settled back on her eggs the way she lay)
+  if (reacted) { she.place(spot.x, spot.z, spot.yaw); she.idle(); she.pressFlat(true); }
   await nestEnd(k, home, laid, she, he);
 }
 
