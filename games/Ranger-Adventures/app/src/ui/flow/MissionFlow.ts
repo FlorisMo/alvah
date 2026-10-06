@@ -470,9 +470,14 @@ function showReunion(mission: Mission, moment?: Promise<void>, holdS = 0): Promi
   );
   el.classList.add('explore-overlay'); // the world shows through; nothing to click here
   const textEl = el.querySelector<HTMLElement>('.reunion-text');
-  const ra = textEl ? mountReadAloud({ segments: sentenceSegments(textEl, tekst), autoStart: store.get().settings.voorlezen }) : null;
+  // run 7 (words-ree): its kicker is read too — "Missie klaar! <titel>." — then the line
+  const voor = store.get().settings.voorlezen;
+  const lead = `${MISSIE.zegKlaar} ${mission.titel}.`;
+  const ra = textEl ? mountReadAloud({ lead, segments: sentenceSegments(textEl, tekst), autoStart: voor }) : null;
   const inWorld = tellWorldMissionDone(mission.id, true);
-  const read = new Promise<void>((r) => window.setTimeout(r, REUNION_MIN_MS));
+  // (the line stays while it is read: never cut off by the reward, within the cap below)
+  const read = new Promise<void>((r) => window.setTimeout(r, REUNION_MIN_MS))
+    .then(() => (voor ? narrator.quiet(REUNION_MAX_MS) : undefined));
   // (a slow model load never holds the reward; `holdS`: an adventure's moment that still
   // shows new finds' cards may hold it that much longer)
   const cap = new Promise<void>((r) => window.setTimeout(r, (moment ? REUNION_MAX_MS + 4000 : REUNION_MAX_MS) + Math.max(0, holdS) * 1000));

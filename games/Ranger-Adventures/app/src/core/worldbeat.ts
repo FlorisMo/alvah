@@ -79,8 +79,10 @@ export function withAnimal(beat: WorldBeat, naam: string): WorldBeat {
 /** A beat never lands on the reward cards (child B14): it waits until the ranger has
  *  walked this far (m) on foot in free roam since the mission ended … */
 export const WORLDBEAT_WALK_M = 15;
-/** … and the impulse beat until a roaming animal is this close (m) and in view. */
-export const WORLDBEAT_ANIMAL_M = 18;
+/** … and the impulse beat until a roaming animal is this close (m) and clearly in view
+ *  (run 7, words-ree: 12 m, was 18 — a roe 24 m off at the picture's top edge, in the
+ *  morning mist, was named while it could not be seen). */
+export const WORLDBEAT_ANIMAL_M = 12;
 
 /** May the armed beat come now? After WORLDBEAT_WALK_M of walking; the impulse beat
  *  also needs its animal in view (else it waits). */

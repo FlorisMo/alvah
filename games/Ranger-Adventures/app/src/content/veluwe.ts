@@ -757,7 +757,8 @@ const MISSIE_WILDCAMERA = {
 /* ============================================================
    MISSIE 5 — De oversteek  (bos · ecoduct)
    Engines: corsi (volgorde van overstekers) → dagnacht (veilig oversteken)
-   verhaalHaak 'band': tyre tracks lead away from the ven (clue 3).
+   (run 7, words-ree: no clue of its own — the 'band' clue, the car's tracks, is Het
+   stille zand's: played first, De oversteek took it and the drift sand showed none.)
    Reuses existing dagnacht Subject kinds — zero engine change.
    ============================================================ */
 const MISSIE_ECODUCT = {
@@ -766,7 +767,6 @@ const MISSIE_ECODUCT = {
   landschap: 'bos',
   dier: 'edelhert',
   status: 'actief',
-  verhaalHaak: 'band',
   kort: 'Controleer het ecoduct. Steken de dieren veilig over?',
   briefing: {
     // run 7: at the real ecoduct — he watches from behind a screen who comes over the
@@ -1040,7 +1040,7 @@ const VERHAALBOOG_VELUWE = {
               titel: 'Op de foto', tekst: 'Er staat een man op. Hij zet een val. De val is nog leeg.',
               seizoenNa: 'herfst', hoofdstukNa: 3 },
     band:   { id: 'band',   soort: 'band',   hoofdstuk: 3, seizoen: 'herfst',
-              titel: 'Autosporen', tekst: 'Een auto reed weg bij het ven.',
+              titel: 'Autosporen', tekst: 'Een auto reed over het stille zand.',
               seizoenNa: 'herfst', hoofdstukNa: 3 },
   },
   // hoofdstukken (content gate; season tint per chapter)

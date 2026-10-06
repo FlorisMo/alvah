@@ -103,8 +103,12 @@
 /* run 7: each small photo is a button (a click shows it big) */
 .wc-mini {
   display: block;
-  width: 64px;
-  height: 40px;
+  /* run 7 (words-ree): a target a child's finger and the mouse hit (>= 56 px both ways) */
+  box-sizing: border-box;
+  width: 72px;
+  height: 56px;
+  min-width: var(--tap-min, 56px);
+  min-height: var(--tap-min, 56px);
   padding: 0;
   border-radius: 5px;
   border: 3px solid transparent;

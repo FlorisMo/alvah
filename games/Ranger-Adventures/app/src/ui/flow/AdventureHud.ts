@@ -55,6 +55,8 @@ export class AdventureHud {
   private readonly vignette: HTMLDivElement;
   private joystick: Joystick | null = null;
   private said = '';
+  /** run 7 (words-ree): the chip goals read aloud this play (each once) */
+  private readonly doelen = new Set<string>();
   private arrowTurn = 0;
   private actionDone: (() => void) | null = null;
 
@@ -112,7 +114,16 @@ export class AdventureHud {
     const doel = this.chip.querySelector<HTMLElement>('.wf-doel')!;
     const cue = this.chip.querySelector<HTMLElement>('.wf-cue')!;
     const glyph = this.chip.querySelector<HTMLElement>('.wf-glyph')!;
-    if (doel.textContent !== c.doel) doel.textContent = c.doel;
+    if (doel.textContent !== c.doel) {
+      doel.textContent = c.doel;
+      // run 7 (words-ree): a new goal is read aloud once this play — after the line, and only
+      // when the line on screen does not already name it ("Loop naar de schuilplek." does)
+      if (!this.doelen.has(c.doel)) {
+        this.doelen.add(c.doel);
+        const named = !this.line.hidden && this.said.toLowerCase().includes(c.doel.toLowerCase());
+        if (!named && store.get().settings.voorlezen) narrator.queue(c.doel);
+      }
+    }
     if (cue.textContent !== c.cue) cue.textContent = c.cue;
     this.chip.classList.toggle('wf-arrived', !!c.arrived);
     const sign: IconName = c.arrived ? 'target' : c.angle === null ? c.glyph ?? 'ear' : 'arrow';
