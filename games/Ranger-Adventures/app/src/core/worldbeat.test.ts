@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, WORLDBEAT_EVERY, WORLDBEAT_WALK_M,
+  animalClearlyInView, WORLDBEAT_ANIMAL_M,
   type CoarseHeading,
 } from './worldbeat.ts';
 
@@ -120,4 +121,23 @@ test('a beat waits until he has walked on, and the impulse beat until an animal 
   assert.equal(beatReady(way, WORLDBEAT_WALK_M, false), true);
   assert.equal(beatReady(impulse, WORLDBEAT_WALK_M + 5, false), false, 'no animal in view: it waits');
   assert.equal(beatReady(impulse, WORLDBEAT_WALK_M + 5, true), true);
+});
+
+test('run 7 (words-ree): the impulse card names an animal only when it is clearly in view', () => {
+  const roe = { dist: 10, h: 0.9, x: 0.1, y: 0.1, front: true };
+  const MIST = 24; // the misty morning's fog begins at 24 m (every mood: ≥ 22 m)
+  assert.equal(WORLDBEAT_ANIMAL_M, 12);
+  assert.ok(animalClearlyInView(roe, MIST), 'a roe 10 m off in the middle of the picture');
+  // the playtest's roe: 24 m off, at the picture's top edge, in the morning mist
+  assert.ok(!animalClearlyInView({ ...roe, dist: 24, y: 0.85 }, MIST));
+  assert.ok(!animalClearlyInView({ ...roe, dist: 14 }, 90), 'beyond ~12 m, even in clear air');
+  assert.ok(!animalClearlyInView({ ...roe, y: 0.85 }, 90), 'up at the top edge');
+  assert.ok(!animalClearlyInView({ ...roe, x: 0.75 }, 90), 'at a side edge');
+  assert.ok(!animalClearlyInView({ ...roe, y: -0.5 }, 90), 'under the low card');
+  assert.ok(!animalClearlyInView({ ...roe, front: false }, 90), 'behind the lens');
+  // a mood whose fog came nearer would bring the reach in with it (half its fog's start)
+  assert.ok(!animalClearlyInView({ ...roe, dist: 11 }, 20));
+  // a small animal must be nearer still (h × 21 m: a squirrel ~0.25 m tall, ~5 m)
+  assert.ok(!animalClearlyInView({ dist: 7, h: 0.25, x: 0, y: 0, front: true }, 90));
+  assert.ok(animalClearlyInView({ dist: 4.5, h: 0.25, x: 0, y: 0, front: true }, 90));
 });

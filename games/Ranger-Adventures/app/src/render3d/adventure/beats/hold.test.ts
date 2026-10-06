@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GoCore, GO_AWAY_M, HoldCore, HOLD_S, HOLD_SILENT_S, RustTempo, readSeconds } from './hold-math.ts';
+import { BACK_M, GoCore, GO_AWAY_M, HoldCore, HOLD_S, HOLD_SILENT_S, RustTempo, backSpot, readSeconds, steppedBack } from './hold-math.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { newPlay } from '../../../core/play.ts';
 import { DagnachtRun } from '../../../engines/dagnacht.ts';
@@ -310,4 +310,37 @@ test('go (run 7, the ecoduct): with `off` — he stands ON their way — going i
   for (let i = 1; i <= 400 && !v; i++) v = d.tick(i / 60, { x: 0, z: 0, speed: 0, running: false }, fam);
   assert.equal(v, 'wrong');
   assert.equal(d.why, 'stay');
+});
+
+/* ---- run 7 (words-ree): GIVE ROOM — a step back answers the moment, not time ---- */
+
+test('give room: a step back of BACK_M away from the calf is the right answer — a reach before it the wrong one, the run the same', () => {
+  const calf = { x: 0, z: 0 };
+  const from = { x: 0, z: -1.35 }; // he stands 1.35 m from it
+  // straight back, away from it
+  assert.ok(Math.abs(steppedBack(from, { x: 0, z: -1.35 - BACK_M }, calf) - BACK_M) < 1e-9);
+  // a step toward it is not back; nor is a step round it
+  assert.ok(steppedBack(from, { x: 0, z: -0.8 }, calf) < 0);
+  assert.ok(Math.abs(steppedBack(from, { x: 0.8, z: -1.35 }, calf)) < 1e-9);
+  // turned round and walked away at a slant: still back, by what it took him away
+  assert.ok(steppedBack(from, { x: 0.4, z: -2.1 }, calf) >= BACK_M);
+  // the walk hint golden backs up to: that far behind him, away from it
+  const to = backSpot(from, calf, BACK_M + 0.3);
+  assert.ok(Math.abs(to.x) < 1e-9 && Math.abs(to.z - (-1.35 - BACK_M - 0.3)) < 1e-9);
+  // the core: a reach first (choose false, once), then the step back (choose true, once)
+  const { core, run, calls } = rig();
+  core.begin(1);
+  assert.equal(core.impulse(), true);
+  core.again();
+  assert.equal(core.complete(), true, 'the step back, even while its line is read again');
+  assert.equal(core.complete(), false, 'once');
+  assert.equal(core.impulse(), false, 'answered: a click now does nothing');
+  assert.deepEqual(calls, [false, true]);
+  assert.equal(run.index, 1);
+  // a clean step back: choose(true) only
+  const r2 = rig();
+  r2.core.begin(0);
+  assert.equal(r2.core.tick(0.5), false);
+  assert.equal(r2.core.complete(), true);
+  assert.deepEqual(r2.calls, [true]);
 });

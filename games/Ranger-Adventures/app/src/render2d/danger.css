@@ -189,5 +189,6 @@
 }
 .feedback-toast.ok { background: var(--green-soft); color: var(--green); }
 .feedback-toast.gevolg { background: rgba(193, 70, 126, 0.92); color: var(--paper); }
-/* short lines: at most ~7 words on a line (child:B9) */
-.danger .feedback-toast { width: max-content; max-width: min(80%, 30ch); }
+/* short lines: one sentence a line, at most 7 words (child:B9; the view breaks them, run 7
+   words-ree), and room for a whole one so the width never breaks inside a sentence */
+.danger .feedback-toast { width: max-content; max-width: min(90%, 46ch); }

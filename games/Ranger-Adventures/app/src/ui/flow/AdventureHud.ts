@@ -20,6 +20,17 @@ import { coarsePointer } from '../hud/device';
 import { session, esc } from './session';
 import { speakButtonHtml } from '../ReadAloud';
 import { icon, type IconName } from '../icons';
+import { regels } from '../../core/readlevel';
+
+/** Put `text` in `el` as the lines a child reads it in: at sentence ends, ≤ 7 words each
+ *  (`regels`), one under the other. */
+export function showLines(el: HTMLElement, text: string): void {
+  el.replaceChildren();
+  regels(text).forEach((l, i) => {
+    if (i) el.appendChild(document.createElement('br'));
+    el.appendChild(document.createTextNode(l));
+  });
+}
 
 export interface ChipCue {
   /** what he walks to ("De big", "De modderpoel") */
@@ -44,6 +55,8 @@ export class AdventureHud {
   private readonly vignette: HTMLDivElement;
   private joystick: Joystick | null = null;
   private said = '';
+  /** run 7 (words-ree): the chip goals read aloud this play (each once) */
+  private readonly doelen = new Set<string>();
   private arrowTurn = 0;
   private actionDone: (() => void) | null = null;
 
@@ -81,7 +94,9 @@ export class AdventureHud {
     this.line.classList.toggle('adv-good', !!opts.good);
     if (text === this.said) return;
     this.said = text;
-    this.lineText.textContent = text;
+    // run 7 (words-ree): broken at sentence ends, never more than 7 words on a line on
+    // screen (a line a mission composes, "question + what to do", included); read as one
+    showLines(this.lineText, text);
     if (store.get().settings.voorlezen) {
       if (opts.queue) narrator.queue(text); else narrator.speak(text);
     }
@@ -99,7 +114,16 @@ export class AdventureHud {
     const doel = this.chip.querySelector<HTMLElement>('.wf-doel')!;
     const cue = this.chip.querySelector<HTMLElement>('.wf-cue')!;
     const glyph = this.chip.querySelector<HTMLElement>('.wf-glyph')!;
-    if (doel.textContent !== c.doel) doel.textContent = c.doel;
+    if (doel.textContent !== c.doel) {
+      doel.textContent = c.doel;
+      // run 7 (words-ree): a new goal is read aloud once this play — after the line, and only
+      // when the line on screen does not already name it ("Loop naar de schuilplek." does)
+      if (!this.doelen.has(c.doel)) {
+        this.doelen.add(c.doel);
+        const named = !this.line.hidden && this.said.toLowerCase().includes(c.doel.toLowerCase());
+        if (!named && store.get().settings.voorlezen) narrator.queue(c.doel);
+      }
+    }
     if (cue.textContent !== c.cue) cue.textContent = c.cue;
     this.chip.classList.toggle('wf-arrived', !!c.arrived);
     const sign: IconName = c.arrived ? 'target' : c.angle === null ? c.glyph ?? 'ear' : 'arrow';

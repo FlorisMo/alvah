@@ -79,8 +79,23 @@ export function withAnimal(beat: WorldBeat, naam: string): WorldBeat {
 /** A beat never lands on the reward cards (child B14): it waits until the ranger has
  *  walked this far (m) on foot in free roam since the mission ended … */
 export const WORLDBEAT_WALK_M = 15;
-/** … and the impulse beat until a roaming animal is this close (m) and in view. */
-export const WORLDBEAT_ANIMAL_M = 18;
+/** … and the impulse beat until a roaming animal is this close (m) and clearly in view
+ *  (run 7, words-ree: 12 m, was 18 — a roe 24 m off at the picture's top edge, in the
+ *  morning mist, was named while it could not be seen). */
+export const WORLDBEAT_ANIMAL_M = 12;
+
+/**
+ * Run 7 (words-ree): is a roaming animal CLEARLY in view, so the impulse card may name it?
+ * Near (≤ WORLDBEAT_ANIMAL_M, a small animal nearer: `h` × 21 m keeps it ~36 px tall on a
+ * 1280×800 screen), well inside this mood's clear air (half the distance its fog begins
+ * at), in front of the lens, and in the middle band of the picture (`x`, `y`: its place in
+ * normalised device coordinates — never at the side edges, never up at the top, and above
+ * the low card that names it). Pure.
+ */
+export function animalClearlyInView(a: { dist: number; h: number; x: number; y: number; front: boolean }, fogNear: number): boolean {
+  const reach = Math.min(WORLDBEAT_ANIMAL_M, a.h * 21, fogNear * 0.5);
+  return a.front && a.dist <= reach && Math.abs(a.x) < 0.6 && a.y > -0.3 && a.y < 0.5;
+}
 
 /** May the armed beat come now? After WORLDBEAT_WALK_M of walking; the impulse beat
  *  also needs its animal in view (else it waits). */

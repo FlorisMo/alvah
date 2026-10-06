@@ -48,7 +48,7 @@ import type { RustKnobs } from '../../../core/skill';
 import type { IconName } from '../../../ui/icons';
 import type { Place, Spot } from '../types';
 import { isRunning } from '../actors-math';
-import { GoCore, HoldCore, RustTempo, readSeconds } from './hold-math';
+import { BACK_AGAIN_S, GoCore, HoldCore, RustTempo, backSpot, readSeconds, steppedBack } from './hold-math';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -84,7 +84,13 @@ export interface StillOpts {
    *  frees it first: he may wait or walk round), and coming within `r` m of `at()` (the
    *  adder on the path) is the reach; within `warn` m `onWarn` is called once each time he
    *  comes that near (she lifts her head: a cue, no reach) */
-  room?: { at: () => Spot; r: number; warn?: number; onWarn?: () => void };
+  room?: { at: () => Spot; r: number; warn?: number; onWarn?: () => void;
+    /** run 7 (words-ree, additive): GIVE ROOM — the moment is answered by a small step
+     *  BACK of this many m (from where he stood when it began, away from `at()`), not by
+     *  time; waiting is no reach (the line comes again after a quiet while). His feet must
+     *  be free: the script frees them (under its framed lens, or the follow camera). Its
+     *  walk hint (`back`) shows golden the step. Default: none (the hold is held on time). */
+    back?: number };
   /** what the reach did, said after the animal's reaction (default: the encounter's gevolg) */
   mis?: string;
   /** shown with the line: the animal turns up (a look, a sound) */
@@ -253,7 +259,20 @@ export class ChoiceRun {
     k.check();
     k.beat = `still:${id}`;
     clearPlayHint();
-    const unhint = k.hint(() => null); // (nothing to click: a stale walk hint must not survive into it)
+    // (nothing to click: a stale walk hint must not survive into it; run 7 `room.back`: the
+    // step back, once the moment is up, as a walk a perfect player makes backing up)
+    const back = o.room?.back;
+    let from: Spot | null = null, atFrom: Spot | null = null, backing = false;
+    const stepped = (): boolean => {
+      if (!back || !from || !atFrom) return false;
+      const m = k.ranger();
+      return steppedBack(from, m, atFrom) >= back;
+    };
+    const unhint = k.hint(() => {
+      if (!back || !backing || !from || !atFrom) return null;
+      const to = backSpot(from, atFrom, back + 0.3);
+      return { id: `walk:back-${id}`, walk: { x: to.x, z: to.z, r: 0.25, back: true } };
+    });
     const settings = store.get().settings;
     const tempo = this.tempo;
     const core = new HoldCore(tempo.seconds, (goed) => { this.run.choose(goed); });
@@ -306,19 +325,50 @@ export class ChoiceRun {
         // (a stop while it is read rejects the read: the wait below unwinds the moment, so
         // the read itself must not throw a second, uncaught "adventure stopped")
         void this.readOut(o.line).then(() => { read = true; }, () => {});
-        await k.until(() => reached || read);
-        if (!reached) {
-          // the hold: as long as the tempo wants now; the animal tempts him at its moments
-          core.begin(k.now, tempo.seconds);
-          k.stats.hold_s = core.seconds;
-          const tempts = tempo.temptsFor(core.seconds);
-          let next = 0;
-          await k.until(() => {
-            while (next < tempts.length && core.seconds - core.left(k.now) >= tempts[next]) { next += 1; o.tempt?.(); }
-            return reached || core.tick(k.now);
-          });
+        if (back) {
+          // (give room: measured from where he stands as the moment begins, away from where
+          // the animal is then; a step back while the line is still read counts)
+          const m = k.ranger();
+          from = { x: m.x, z: m.z };
+          atFrom = { ...o.room!.at() };
+          backing = true;
+          await k.until(() => reached || read || stepped());
+          if (!reached && stepped()) { core.complete(); break; }
+          if (!reached) {
+            core.begin(k.now, tempo.seconds);
+            k.stats.hold_s = core.seconds;
+            let t0 = k.now, next = 0, tempts = tempo.temptsFor(core.seconds);
+            await k.until(() => {
+              while (next < tempts.length && k.now - t0 >= tempts[next]) { next += 1; o.tempt?.(); }
+              if (reached) return true;
+              if (stepped()) return core.complete();
+              // he waits: no reach, the moment only waits — after a quiet while the line
+              // comes again (read aloud), and the animal tempts him again
+              if (k.now - t0 >= core.seconds + BACK_AGAIN_S) {
+                k.say(null);
+                k.say(o.line);
+                t0 = k.now; next = 0; tempts = tempo.temptsFor(core.seconds);
+              }
+              return false;
+            });
+          }
+          if (!reached) break; // (he stepped back: held)
+          backing = false;
+        } else {
+          await k.until(() => reached || read);
+          if (!reached) {
+            // the hold: as long as the tempo wants now; the animal tempts him at its moments
+            core.begin(k.now, tempo.seconds);
+            k.stats.hold_s = core.seconds;
+            const tempts = tempo.temptsFor(core.seconds);
+            let next = 0;
+            await k.until(() => {
+              while (next < tempts.length && core.seconds - core.left(k.now) >= tempts[next]) { next += 1; o.tempt?.(); }
+              return reached || core.tick(k.now);
+            });
+          }
+          if (!reached) break; // held
         }
-        if (!reached) break; // held
         // a reach: marked once, the animal reacts, the words for it, the same moment again
         // (the next hold silently a little shorter)
         core.impulse();
@@ -340,7 +390,8 @@ export class ChoiceRun {
       unhint();
     }
     k.stats[`still_${id}`] = core.impulses;
-    tempo.held(core.seconds, core.impulses === 0);
+    // (a step back is no hold: it never sets the beat's longest hold)
+    tempo.held(back ? 0 : core.seconds, core.impulses === 0);
     o.held?.();
     if (settings.geluid) Sound.correct();
     const good = enc.uitleg ?? 'Rustig zo.';

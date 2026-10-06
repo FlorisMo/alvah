@@ -221,6 +221,7 @@ const MISSIE_FRISLING = {
           { id: 'd5', x: 86, y: 62, k: 'bush', animal: 'struik' },
         ],
         feit: 'Biggetjes dragen een gestreepte pyjama. Zo zie je ze haast niet.',
+        meerFeiten: ['Bij gevaar liggen biggen heel stil. Dan zie je ze niet.', 'Later worden biggen bruin. De strepen gaan dan weg.'],
         feitDier: 'wildzwijn',
       },
       moeilijkheid: { afleiders: 'settings', lens: 'settings' },
@@ -236,6 +237,7 @@ const MISSIE_FRISLING = {
           goed: 'Precies de goede weg!',
         },
         feit: 'Een zwijn ruikt heel goed. Zo vindt het zelf de weg terug.',
+        meerFeiten: ['Een zwijn graaft met zijn neus. Zo vindt het eikels.', 'Zwijnen lopen vaak over hetzelfde paadje. Zo maken ze een smal pad.'],
         feitDier: 'wildzwijn',
       },
       moeilijkheid: { lengte: 'settings' },
@@ -267,8 +269,8 @@ const MISSIE_FRISLING = {
             vraag: 'De big is moe. Hij loopt langzaam.',
             vraagKnap: 'De frisling is moe. Hij loopt langzaam.',
             opties: [{ label: 'Draag hem', goed: false }, { label: 'Loop rustig mee', goed: true }],
-            uitleg: 'Goed. Hij loopt zelf. Jij wijst de weg.',
-            gevolg: 'Hij schrikt en loopt weg. Hij loopt liever zelf.',
+            uitleg: 'Hij loopt zelf. Jij wijst de weg.',
+            gevolg: 'Hij schrikt en loopt weg.',
             reactie: 'flee', eikelKost: 1, terug: 0.7 },
           // run 6: at the wallow it is the family's yearling (last year's young) that
           // comes to sniff the ranger's bag
@@ -279,7 +281,7 @@ const MISSIE_FRISLING = {
             // keeps the rule, he does not match the card's text to it)
             opties: [{ label: 'Geef een koekje', goed: false }, { label: 'Hou je tas dicht', goed: true }],
             uitleg: 'Goed. Een zwijn zoekt zelf eten.',
-            gevolg: 'Nu wil hij steeds meer. Dat is niet goed.',
+            gevolg: 'Nu wil hij steeds meer. Niet voeren.',
             reactie: 'swarm', eikelKost: 3, terug: 0.6 },
           { id: 'zeug', slot: 'thuis', subject: 'wildzwijn', dier: 'wildzwijn',
             vraag: 'De moeder staat bij haar biggen.',
@@ -294,11 +296,11 @@ const MISSIE_FRISLING = {
             vraagKnap: 'Kijk, de rotte! Het pad is vrij.',
             opties: [{ label: 'Blijf staan', goed: false }, { label: 'Loop rustig door', goed: true }],
             uitleg: 'Goed zo. Geef de big de ruimte.',
-            gevolg: 'Je wacht te lang. De groep loopt verder.',
-            gevolgKnap: 'Je wacht te lang. De rotte loopt verder.',
+            gevolg: 'Je wacht te lang. Ze lopen verder.',
             reactie: 'recede', eikelKost: 0, terug: 0.8 },
         ],
         feit: 'Een groep zwijnen heet een rotte. Biggen blijven dicht bij mama.',
+        meerFeiten: ['Zwijnen rollen graag in de modder. Dat is lekker koel.', 'De oudste moeder leidt de groep.'],
         feitDier: 'wildzwijn',
       },
       moeilijkheid: { slowmo: 'settings', wissel: 'settings' },
@@ -365,8 +367,8 @@ const MISSIE_REE = {
       sst: 'Sst. Loop stil.',
       verstop: 'Verstop je bij de struik.',
       raakNiet: 'Raak het kalf niet aan.',
-      snuffelt: 'Het kalf snuffelt. Hou je handen thuis.',
-      opstaan: 'Het kalf staat op. Handen thuis.',
+      snuffelt: 'Het kalf snuffelt aan je. Sta stil.',
+      opstaan: 'Het kalf komt. Doe een stap terug.',
       eromheen: 'Loop om de poel heen.',
       chipRond: 'Om de poel',
       wacht: 'Wacht stil. Kijk naar de struiken.',
@@ -430,6 +432,7 @@ const MISSIE_REE = {
           { id: 'd5', x: 69, y: 13, k: 'bush', animal: 'struik' },
         ],
         feit: 'Een reekalf ruikt bijna nergens naar. Zo blijft het veilig verstopt.',
+        meerFeiten: ['Een reekalf heeft witte vlekken. Die lijken op zonnevlekjes.', 'Een reekalf ligt plat in het gras. Het beweegt bijna niet.'],
         feitDier: 'ree',
       },
       moeilijkheid: { afleiders: 'settings', lens: 'settings' },
@@ -480,6 +483,7 @@ const MISSIE_REE = {
             reactie: 'recede', eikelKost: 0, terug: 0.8 },
         ],
         feit: 'De moeder laat haar kalf even alleen. Zo blijft het kalf veilig.',
+        meerFeiten: ['Een ree krijgt vaak twee kalfjes. Ze liggen elk op een eigen plek.', 'Mama komt een paar keer per dag. Dan krijgt het kalf melk.'],
         feitDier: 'ree',
       },
       moeilijkheid: { slowmo: 'settings', wissel: 'settings' },
@@ -538,6 +542,7 @@ const MISSIE_NACHTRONDE = {
           goed: 'Knap onthouden!',
         },
         feit: 'In de herfst burlt het edelhert hard. Zo roept hij andere herten.',
+        meerFeiten: ['Een edelhert heeft een groot gewei. Elk jaar valt het eraf.', 'Het edelhert is het grootste Veluwse dier.'],
         feitDier: 'edelhert',
       },
       // §6.1 simon knobs: sequence length + tempo
@@ -557,6 +562,7 @@ const MISSIE_NACHTRONDE = {
           goed: 'Alle dieren op de goede plek!',
         },
         feit: 'De das slaapt overdag in zijn burcht. ’s Nachts gaat hij op pad.',
+        meerFeiten: ['De das heeft een gestreepte kop.', 'Dassen houden hun burcht heel schoon.'],
         feitDier: 'das',
       },
       // §6.1 wisselen knobs: rule-flip frequency + trial count
@@ -718,6 +724,7 @@ const MISSIE_WILDCAMERA = {
           goed: 'Alle dieren staan op de foto!',
         },
         feit: 'De das slaapt overdag in zijn burcht. ’s Nachts gaat hij op pad.',
+        meerFeiten: ['Een das graaft heel goed. Zijn burcht heeft veel gangen.', 'Een das eet graag regenwormen. Hij vindt ze met zijn neus.'],
         feitDier: 'das',
       },
       // §6.1 wisselen knobs: rule-flip frequency + trial count
@@ -739,6 +746,7 @@ const MISSIE_WILDCAMERA = {
           goed: 'Knap onthouden!',
         },
         feit: 'Een wildcamera maakt heel veel foto’s. Zo weet jij wie er leeft.',
+        meerFeiten: ['Een wildcamera ziet ook in het donker. Zijn lampje zie jij niet.', 'De camera klikt als er iets beweegt. Soms is het alleen een tak.'],
         feitDier: 'das',
       },
       moeilijkheid: { lengte: 'settings', tempo: 'settings' },
@@ -749,7 +757,8 @@ const MISSIE_WILDCAMERA = {
 /* ============================================================
    MISSIE 5 — De oversteek  (bos · ecoduct)
    Engines: corsi (volgorde van overstekers) → dagnacht (veilig oversteken)
-   verhaalHaak 'band': tyre tracks lead away from the ven (clue 3).
+   (run 7, words-ree: no clue of its own — the 'band' clue, the car's tracks, is Het
+   stille zand's: played first, De oversteek took it and the drift sand showed none.)
    Reuses existing dagnacht Subject kinds — zero engine change.
    ============================================================ */
 const MISSIE_ECODUCT = {
@@ -758,7 +767,6 @@ const MISSIE_ECODUCT = {
   landschap: 'bos',
   dier: 'edelhert',
   status: 'actief',
-  verhaalHaak: 'band',
   kort: 'Controleer het ecoduct. Steken de dieren veilig over?',
   briefing: {
     // run 7: at the real ecoduct — he watches from behind a screen who comes over the
@@ -838,6 +846,7 @@ const MISSIE_ECODUCT = {
           goed: 'Precies de goede weg!',
         },
         feit: 'Soms steken hier duizenden dieren over.',
+        meerFeiten: ['Op een ecoduct groeien struiken en gras. Zo voelt het als bos.', 'Een ecoduct is veilig. Dieren hoeven niet over de weg.'],
         feitDier: 'edelhert',
       },
       moeilijkheid: { lengte: 'settings' },
@@ -866,6 +875,7 @@ const MISSIE_ECODUCT = {
             uitleg: 'Precies. Nu kunnen ze veilig over.', gevolg: 'Je wacht te lang. Ze lopen terug.', reactie: 'recede' },
         ],
         feit: 'Ook dassen en vossen gebruiken het ecoduct.',
+        meerFeiten: ['Dieren steken vooral ’s nachts over. Dan is het rustig.', 'De Veluwe heeft veel ecoducten. Zo kunnen dieren overal komen.'],
         feitDier: 'edelhert',
       },
       moeilijkheid: { slowmo: 'settings', wissel: 'settings' },
@@ -984,6 +994,7 @@ const MISSIE_EEKHOORN = {
           goed: 'Alle nootjes gevonden!',
         },
         feit: 'De eekhoorn vergeet soms een nootje. Daar groeit dan een boom uit.',
+        meerFeiten: ['Een eekhoorn verstopt honderden nootjes. Hij onthoudt veel plekjes.', 'Een eekhoorn ruikt nootjes in de grond. Zelfs onder de sneeuw.'],
         feitDier: 'eekhoorn',
       },
       moeilijkheid: { lengte: 'settings' },
@@ -1003,6 +1014,7 @@ const MISSIE_EEKHOORN = {
           goed: 'Knap onthouden!',
         },
         feit: 'De eekhoorn slaapt niet de hele winter. Soms wordt hij wakker om te eten.',
+        meerFeiten: ['Een eekhoorn maakt boze geluidjes bij gevaar.', 'Een eekhoorn springt ver. Zijn staart helpt daarbij.'],
         feitDier: 'eekhoorn',
       },
       moeilijkheid: { lengte: 'settings', tempo: 'settings' },
@@ -1028,7 +1040,7 @@ const VERHAALBOOG_VELUWE = {
               titel: 'Op de foto', tekst: 'Er staat een man op. Hij zet een val. De val is nog leeg.',
               seizoenNa: 'herfst', hoofdstukNa: 3 },
     band:   { id: 'band',   soort: 'band',   hoofdstuk: 3, seizoen: 'herfst',
-              titel: 'Autosporen', tekst: 'Een auto reed weg bij het ven.',
+              titel: 'Autosporen', tekst: 'Een auto reed over het stille zand.',
               seizoenNa: 'herfst', hoofdstukNa: 3 },
   },
   // hoofdstukken (content gate; season tint per chapter)
@@ -1107,6 +1119,7 @@ const MISSIE_VOS = {
           goed: 'Knap onthouden!',
         },
         feit: 'De vos heeft een grote pluimstaart. Die gebruikt hij als een warme sjaal.',
+        meerFeiten: ['Een vos hoort muizen onder het gras.', 'Jonge vosjes spelen graag bij hun hol.'],
         feitDier: 'vos',
       },
       moeilijkheid: { lengte: 'settings', tempo: 'settings' },
@@ -1125,7 +1138,7 @@ const MISSIE_VEN = {
   landschap: 'ven',
   dier: 'heikikker',
   status: 'actief',
-  kort: 'Een heikikker zit verstopt bij het ven. Vind hem en blijf rustig.',
+  kort: 'Een kikker zit verstopt bij het ven. Vind hem en blijf rustig.',
   briefing: {
     // run 7: the briefing names what he already hears from the north bank: the frogs
     simpel: [
@@ -1204,7 +1217,8 @@ const MISSIE_VEN = {
           { id: 'r4', x: 84, y: 60, k: 'bush', animal: 'riet' },
           { id: 'r5', x: 60, y: 34, k: 'bush', animal: 'riet' },
         ],
-        feit: 'De heikikker zit stil bij het water. Zo zien roofvogels hem niet.',
+        feit: 'De kikker zit stil bij het water. Zo zien roofvogels hem niet.',
+        meerFeiten: ['In de lente worden sommige kikkers blauw. Dat doen de mannetjes.', 'Een kikker kan door zijn huid ademen.'],
         feitDier: 'heikikker',
       },
       moeilijkheid: { afleiders: 'settings', lens: 'settings' },
@@ -1235,6 +1249,7 @@ const MISSIE_VEN = {
             uitleg: 'Precies. Hier mag je gewoon doorlopen.', gevolg: 'Dit pad is veilig. Loop maar door.', reactie: 'recede' },
         ],
         feit: 'Een ven is een ondiepe heideplas. Heel veel kleine dieren wonen erbij.',
+        meerFeiten: ['Een ven krijgt water van de regen.', 'Libellen leggen hun eitjes in het water.'],
         feitDier: 'heikikker',
       },
       moeilijkheid: { slowmo: 'settings' },
@@ -1343,7 +1358,8 @@ const MISSIE_STUIFZAND = {
           { id: 'b1', x: 16, y: 64, k: 'bird', animal: 'roodborsttapuit' },
           { id: 's5', x: 86, y: 62, k: 'bush', animal: 'pol gras' },
         ],
-        feit: 'De nachtzwaluw legt eieren op het zand. Haar veren lijken op dorre blaadjes.',
+        feit: 'De nachtzwaluw broedt op het kale zand. Zijn veren lijken op dorre blaadjes.',
+        meerFeiten: ['Een nachtzwaluw heeft een heel brede bek. Zo vangt hij motten in de lucht.', 'Overdag rust de nachtzwaluw op de grond. ’s Nachts vliegt hij rond.'],
         feitDier: 'nachtzwaluw',
       },
       moeilijkheid: { afleiders: 'settings', lens: 'settings' },
@@ -1362,6 +1378,7 @@ const MISSIE_STUIFZAND = {
           goed: 'Alle dieren op de goede plek!',
         },
         feit: 'Overdag leven hier andere dieren. ’s Nachts weer andere.',
+        meerFeiten: ['De nachtzwaluw zingt in het donker. Het klinkt als een motortje.', 'Het zand waait hier heen en weer. Daarom groeit er weinig.'],
         feitDier: 'nachtzwaluw',
       },
       moeilijkheid: { wissel: 'settings', trials: 8 },
@@ -1413,6 +1430,7 @@ const MISSIE_HERSTEL = {
           goed: 'Precies! De kudde loopt veilig.',
         },
         feit: 'In de winter eten herten samen. Ze blijven dicht bij elkaar voor warmte.',
+        meerFeiten: ['Herten krijgen een dikke wintervacht.', 'In de winter bewegen herten weinig. Zo sparen ze hun kracht.'],
         feitDier: 'edelhert',
       },
       moeilijkheid: { lengte: 'settings' },
@@ -1429,12 +1447,13 @@ const MISSIE_HERSTEL = {
             uitleg: 'Goed. Wilde dieren zoeken zelf hun eten.', gevolg: 'Nu willen ze steeds meer. Niet voeren.', reactie: 'swarm', eikelKost: 2 },
           { id: 'hert-winter', subject: 'reekalf', dier: 'edelhert', vraag: 'Een hert kijkt je rustig aan.',
             opties: [{ label: 'Aaien', goed: false }, { label: 'Rustig kijken', goed: true }],
-            uitleg: 'Mooi rustig. Je laat hem met rust.', gevolg: 'Het hert schrikt en draaft weg. Blijf rustig.', reactie: 'flee' },
+            uitleg: 'Mooi rustig. Je laat hem met rust.', gevolg: 'Het hert schrikt en draaft weg.', reactie: 'flee' },
           { id: 'pad-winter', subject: 'pad-veilig', flip: true, vraag: 'De kudde mag verder.',
             opties: [{ label: 'Wachten', goed: false }, { label: 'Loop door', goed: true }],
             uitleg: 'Precies. Nu mag de kudde rustig verder.', gevolg: 'De weg is vrij. Loop maar door.', reactie: 'recede' },
         ],
         feit: 'Wilde dieren voeren is niet goed. Ze worden ziek van ons eten.',
+        meerFeiten: ['Brood is slecht voor wilde dieren.', 'In de winter vinden dieren zelf eten. Ze eten knoppen en schors.'],
         feitDier: 'edelhert',
       },
       moeilijkheid: { slowmo: 'settings' },

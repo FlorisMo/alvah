@@ -93,6 +93,16 @@ export class HoldCore {
     return true;
   }
 
+  /** Run 7 (words-ree, additive): the moment is answered right by another rule than time
+   *  (he gave the calf room: a step back) — `choose(true)` once, while the line is read or
+   *  the hold runs. True when it counted. */
+  complete(): boolean {
+    if (this.phase !== 'read' && this.phase !== 'hold') return false;
+    this.phase = 'held';
+    this.choose(true);
+    return true;
+  }
+
   /** Seconds of stillness still wanted (the whole hold while it has not begun). */
   left(now: number): number {
     if (this.phase === 'held') return 0;
@@ -194,6 +204,29 @@ export function offLine(p: GoSpot, line: readonly GoSpot[]): number {
     d = Math.min(d, Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t)));
   }
   return line.length === 1 ? Math.hypot(p.x - line[0].x, p.z - line[0].z) : d;
+}
+
+/* ---------------------------------------------------------------- back ---- */
+
+/** Run 7 (words-ree): GIVE ROOM — a small step back answers the moment (the calf totters
+ *  toward him; he steps back instead of picking it up). This far (m) back is a step. */
+export const BACK_M = 0.6;
+/** …and the line comes again (and the animal tempts again) after he has waited this much
+ *  longer than a hold wants (s): waiting is no reach, it only waits. */
+export const BACK_AGAIN_S = 3;
+
+/** How far (m) he has stepped BACK from `from`, away from the animal that was at `at`: his
+ *  move along the line from it (a step round it, or toward it, is not back). Pure. */
+export function steppedBack(from: GoSpot, me: GoSpot, at: GoSpot): number {
+  const dx = from.x - at.x, dz = from.z - at.z, d = Math.hypot(dx, dz);
+  if (d < 1e-6) return 0;
+  return ((me.x - from.x) * dx + (me.z - from.z) * dz) / d;
+}
+
+/** Where a step back of `m` m from `from`, away from `at`, takes him (golden's walk hint). */
+export function backSpot(from: GoSpot, at: GoSpot, m: number): GoSpot {
+  const dx = from.x - at.x, dz = from.z - at.z, d = Math.max(1e-6, Math.hypot(dx, dz));
+  return { x: from.x + (dx / d) * m, z: from.z + (dz / d) * m };
 }
 
 export const GO_AWAY_M = 4;
