@@ -283,7 +283,11 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   feet, tempt, wrong, right })` plays an encounter with the BODY instead of a card (keep your
   hands off the animal, or your feet still: a reach is the wrong answer, the same moment comes
   back; the pure core is `beats/hold-math.ts`; run 7 `room: { at, r, warn }`: keep your
-  distance — his feet stay free, coming within `r` of `at()` is the reach, the ven's adder);
+  distance — his feet stay free, coming within `r` of `at()` is the reach, the ven's adder;
+  run 7 words-ree `room.back: m` — GIVE ROOM: a step back of `m` m away from `at()` answers
+  it instead of time, its walk hint carries `back` and golden holds ↓; under a held lens
+  with his feet free the World keeps the tank keys on his own facing, the ree's calf
+  tottering toward him);
   run 7: `.go(id, { line, family, to, via, doel,
   hush, wrong, right })` plays the flip with his FEET — he walks away himself (`GoCore`: 4 m off
   at a walk and farther from the animals; standing the level's `goWaitS` or 2.5 m closer is the
@@ -411,6 +415,15 @@ mission records its helped animal (`geholpen`) quietly, and the home's rare coun
   never the home's last); the briefing cuts into it under the card, the end of the play
   crossfades back to the session's mood. A home never lights its own animals: every model
   that goes through `spawnModel` is dressed and lit like the world's.
+
+**Words on screen** (run 7, words-ree): the adventure's strip and the 2D toast show a line
+as `regels(text)` (core/readlevel.ts): broken at sentence ends, never more than 7 words a
+line, also for a line a mission composes; readlevel.test lints every encounter's vraag,
+uitleg and gevolg (+Knap) as one shown line. A step's "Wist je dat" is a small pool (its
+`feit` and `meerFeiten`, core/veldnotitie.ts `planFacts`): a play shows one he has not read
+per step, drawn from the play's `feit` fork, none once he read them all (the n/m kicker
+counts this play's cards); each fact is its own veldnotitie (`<mission>:<step>`, then
+`.1`, `.2`). A finished mission's briefing is its title and its `kort`.
 
 **Options a home may pass** (all additive, the default as before): `routeBeat({ between })`
 (the squirrel sweeps up a round's acorns before the next round shows); `callersBeat({ dieren,

@@ -605,6 +605,33 @@ export function calfView(l: ReeLayout, calf: Spot, talk: Place): ViewSpec {
   };
 }
 
+/** Run 7 (words-ree): the calf sniffing at his boots (`geur`, FEET still): from the same
+ *  side as `calfView`, lower and nearer — its head and his boots big in the picture, his
+ *  legs whole at its side (the moment is about his feet, not his face). */
+export function bootView(l: ReeLayout, calf: Spot, talk: Place): ViewSpec {
+  const v = calfView(l, calf, talk);
+  return {
+    ...v, at: toward(calf, talk, 0.3), halfW: 0.75, halfD: 0.5, tall: 0.55, pitchDeg: 34,
+    include: [{ x: talk.x, z: talk.z, h: 0.9, r: 0.2 }],
+  };
+}
+
+/** How far back (m) the give-room picture keeps room for his step: the moment asks for
+ *  `BACK_M` (beats/hold-math.ts), a child's step back may run on a little. */
+export const ROOM_BACK_M = 1.2;
+
+/** Run 7 (words-ree): the calf standing up and tottering toward him (`oppakken`, GIVE IT
+ *  ROOM): the same side as `calfView`, a little wider — he whole where he stands and where
+ *  a step back takes him, the calf between him and the grass. */
+export function roomView(l: ReeLayout, calf: Spot, talk: Place): ViewSpec {
+  const v = calfView(l, calf, talk);
+  const back = toward(talk, calf, -ROOM_BACK_M);
+  return {
+    ...v, at: toward(calf, talk, 0.15), halfW: 1.0, pitchDeg: 38,
+    include: [{ x: talk.x, z: talk.z, h: RANGER_STAND_HEIGHT, r: 0.2 }, { x: back.x, z: back.z, h: RANGER_STAND_HEIGHT, r: 0.2 }],
+  };
+}
+
 /** Leaving the calf: the lens swings round behind him as he turns away from it and takes
  *  his first quiet steps toward `next` (the way ahead in view). `at` his first steps' end. */
 export function leaveView(at: Spot, next: Spot): ViewSpec {

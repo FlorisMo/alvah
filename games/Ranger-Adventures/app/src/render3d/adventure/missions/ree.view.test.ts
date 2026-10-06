@@ -24,7 +24,7 @@ import { toward } from '../places.ts';
 import { backPoints } from '../cover-math.ts';
 import { lyingHeight, LEG_SHARE } from '../../play/pose.ts';
 import {
-  LAYOUTS, CALF_DOELEN, COPSE, THICKET, COPSE_TREES, FRINGE, POOL, STAND, calfAt, calfBolt, calfTalkOf, calfView, drinkSpot, juniperR, poolsOf,
+  LAYOUTS, CALF_DOELEN, COPSE, THICKET, COPSE_TREES, FRINGE, POOL, STAND, calfAt, calfBolt, calfTalkOf, calfView, bootView, roomView, ROOM_BACK_M, drinkSpot, juniperR, poolsOf,
   reunionPose, twinAt, twinEnd, type ViewSpec,
 } from './ree.places.ts';
 
@@ -242,6 +242,36 @@ test('by the calf: the calf big in the picture, the boy beside it, never over it
     const top = px(cam, talk.x, g + RANGER_STAND_HEIGHT, talk.z), chin = px(cam, talk.x, g + RANGER_STAND_HEIGHT - 0.3, talk.z), feet = px(cam, talk.x, g, talk.z);
     assert.ok((chin.y - top.y) / H <= 0.18, `${l.id}${i}: his head is ${(((chin.y - top.y) / H) * 100).toFixed(0)} % of the picture's height`);
     assert.ok(Math.abs((top.x + feet.x) / 2 - mid.x) > 200, `${l.id}${i}: he stands beside the calf, not in front of it`);
+  }
+});
+
+test('run 7 (words-ree): three calf moments, three pictures — by his boots lower and nearer, giving room wider with the step back in it', () => {
+  for (const l of LAYOUTS) for (const [i, d] of CALF_DOELEN.entries()) {
+    const c = calfAt(l, d);
+    const talk = calfTalkOf(l, c);
+    const g = groundY(talk.x, talk.z);
+    const side = fitLens(calfView(l, c, talk));
+    // geur (feet still): the calf big, his boots in the picture beside it, the lens lower
+    const boot = fitLens(bootView(l, c, talk));
+    const b = backOf(boot, c);
+    assert.ok(b.len >= 100, `${l.id}${i} boots: the calf is ${b.len.toFixed(0)} px long`);
+    assert.ok(b.mid.x >= 200 && b.mid.x <= W - 200 && b.mid.y >= 140 && b.mid.y <= H - 80, `${l.id}${i} boots: the calf at (${b.mid.x.toFixed(0)}, ${b.mid.y.toFixed(0)})`);
+    const feet = px(boot, talk.x, g, talk.z);
+    assert.ok(feet.x >= 40 && feet.x <= W - 40 && feet.y >= 140 && feet.y <= H - 40, `${l.id}${i} boots: his boots at (${feet.x.toFixed(0)}, ${feet.y.toFixed(0)})`);
+    assert.ok(Math.abs(feet.x - b.mid.x) > 150, `${l.id}${i} boots: his boots beside the calf, not over it`);
+    const above = (cam: THREE.Camera): number => cam.position.y - groundY(cam.position.x, cam.position.z);
+    assert.ok(above(boot) < above(side) - 0.3, `${l.id}${i} boots: the lens is lower (${above(boot).toFixed(2)} m, the side view ${above(side).toFixed(2)} m)`);
+    // oppakken (give room): he whole where he stands AND where a step back takes him, the
+    // calf still clearly there, his head under the objective line
+    const room = fitLens(roomView(l, c, talk));
+    const r = backOf(room, c);
+    assert.ok(r.len >= 75, `${l.id}${i} room: the calf is ${r.len.toFixed(0)} px long`);
+    const back = toward(talk, c, -ROOM_BACK_M);
+    for (const [what, q] of [['here', talk], ['a step back', back]] as const) {
+      const gq = groundY(q.x, q.z);
+      const f = px(room, q.x, gq, q.z), t = px(room, q.x, gq + RANGER_STAND_HEIGHT, q.z);
+      assert.ok(f.x >= 30 && f.x <= W - 30 && f.y <= H - 30 && t.y >= 110 && t.x >= 30 && t.x <= W - 30, `${l.id}${i} room: he ${what} at feet (${f.x.toFixed(0)}, ${f.y.toFixed(0)}), head (${t.x.toFixed(0)}, ${t.y.toFixed(0)})`);
+    }
   }
 });
 

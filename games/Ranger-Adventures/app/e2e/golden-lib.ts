@@ -118,8 +118,9 @@ export type Snap = { p: P2 | null; c: Cam | null; g: { grounded: boolean; cleara
   jeepNear: boolean; heliNear: boolean; screen: string; view: string | null; t: number };
 export type Hint = { id: string; x: number; y: number; onScreen: boolean; firstHit: boolean; aboveGround: boolean;
   firstHitBy: string | null; bottomGap: number | null; reachesCanvas: boolean; blocker: string | null; parts: string[];
-  /** run 6: an adventure's WALK hint — walk there with the arrow keys (nothing to click) */
-  walk?: { x: number; z: number; r: number } | null };
+  /** run 6: an adventure's WALK hint — walk there with the arrow keys (nothing to click);
+   *  run 7 (words-ree, additive) `back`: a small step back (hold ↓, see `walkTo`) */
+  walk?: { x: number; z: number; r: number; back?: boolean } | null };
 export type Seat = { id: string; x: number; y: number; z: number; gap: number; sig: string; moves?: 'player' | 'ambient' };
 export type Vehicle = { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; y: number;
   grounded: boolean; clearance: number; speed: number; fov: number; roll: number;
@@ -339,6 +340,12 @@ export async function walkTo(page: Page, goal: P2, opts: { stopDist?: number; un
   const t0 = Date.now();
   let best = Infinity; let bestAt = Date.now(); let prev: Snap | null = null; let detour = 0;
   let side = 1; let sideTries = 0; // which way he goes round a solid, and how often he tried it
+  // run 7 (words-ree, additive): the adventure's walk hint for THIS goal says `back` — a
+  // small step back facing what he gives room to (the calf tottering toward him): a player
+  // holds ↓ and backs up there, never turning round. (Nothing behind him lets him: after
+  // 2.5 s without getting nearer he walks there as to any goal.) Any other walk: as before.
+  const bh = await R<Hint | null>(page, 'r.playHint()').catch(() => null);
+  let back = !!bh?.walk?.back && Math.hypot(bh.walk.x - goal.x, bh.walk.z - goal.z) < 1e-3;
   try {
     while (Date.now() - t0 < timeout) {
       const s = await snap(page);
@@ -348,6 +355,13 @@ export async function walkTo(page: Page, goal: P2, opts: { stopDist?: number; un
       if (stopWhen && await stopWhen()) { st.res = 'until'; break; }
       const dx = goal.x - s.p.x; const dz = goal.z - s.p.z; const d = Math.hypot(dx, dz);
       if (d < stopDist) { st.res = 'arrived'; break; }
+      if (back) {
+        if (d < best - 0.05) { best = d; bestAt = Date.now(); }
+        if (Date.now() - bestAt > 2_500) { back = false; best = Infinity; bestAt = Date.now(); continue; }
+        await setKeys(new Set(['ArrowDown']));
+        await sleep(page, 100);
+        continue;
+      }
       st.samples += 1;
       if (s.g) {
         if (Math.abs(s.g.clearance) > Math.abs(st.worstClearance)) st.worstClearance = s.g.clearance;

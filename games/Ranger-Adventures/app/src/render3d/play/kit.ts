@@ -79,8 +79,10 @@ export interface PlayHint {
    *  the probe checks it sits on that.) */
   target?: THREE.Object3D;
   /** Run 6 (the adventures): a perfect player WALKS there now, with the arrow keys or
-   *  the stick, until he is within `r` m (world x/z). No `target`: nothing to click. */
-  walk?: { x: number; z: number; r: number };
+   *  the stick, until he is within `r` m (world x/z). No `target`: nothing to click.
+   *  Run 7 (words-ree, additive) `back`: a small step BACK, facing what he steps away
+   *  from (the calf tottering toward him): a player holds ↓ and backs up there. */
+  walk?: { x: number; z: number; r: number; back?: boolean };
 }
 
 let activeHint: (() => PlayHint | null) | null = null;

@@ -6,11 +6,14 @@
  * walker phoned in about a calf lying alone: lost? After one calm look at the mother, the
  * ranger follows her small prints along her trodden path (a wissel, with a bend) to a stand
  * of tall grass — and she lifts her head and slips into her cover. He finds the spotted calf
- * pressed flat in the grass (ZOEKEN), and leaves it be with his HANDS, three times, in this
- * play's order: it peeps at his boots (aai), it stretches its nose to his hand (geur), it
- * stands up wobbly and totters toward him (oppakken) — a click on it is a hand reaching: it
- * bolts a few metres and drops again (or the mother barks from her cover), and the same
- * moment comes back (RUSTKRACHT). He sneaks off himself to a hide — running gets "Sst" —
+ * pressed flat in the grass (ZOEKEN), and leaves it be three times, in this play's order,
+ * each time with another part of him (run 7, words-ree): his HANDS still while it peeps at
+ * him (aai: a click on it is a hand reaching), his FEET still while it sniffs at his boots
+ * (geur: a step key or a tap on the world is a step to it, and the mother barks from her
+ * cover), and a small step BACK while it stands up wobbly and totters toward him (oppakken:
+ * give it room — ↓ backs him up under the held picture; a click on it, or walking up to
+ * it, is a reach: it bolts a few metres and drops again). Each in its own picture; a wrong
+ * act gets its calm reaction and the same moment comes back (RUSTKRACHT). He sneaks off himself to a hide — running gets "Sst" —
  * and a wet pool lies across one of his walks, on her path to the grass or on his way to
  * the hide: round it, not through it, with his FEET. From the hide, through his
  * binoculars, the doe steps out of her cover where she went in and walks to her calf; it
@@ -34,7 +37,7 @@ import type { Adventure } from '../registry';
 import type { Actor } from '../actors';
 import type { Play } from '../../../core/play';
 import type { Residents } from '../../world/Residents';
-import type { Spot } from '../types';
+import type { Place, Spot } from '../types';
 import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
 import { buildZoekenTrial, buildSpoor } from '../../../engines/zoeken';
@@ -52,13 +55,15 @@ import { TREE_BASE_H } from '../../world/Forest';
 import { heightAt } from '../../Biomes';
 import { ReeHome } from './ree.home';
 import {
-  drawReePlay, lastReeVariants, printRuns, reeGrowth, reeSurprises, watchScript, VARIANT_KEY, SURPRISE_KEY, type CalfMoment, type ReePlay,
+  drawReePlay, lastReeVariants, printRuns, reeGrowth, reeSurprises, watchScript, CALF_MOMENTS, VARIANT_KEY, SURPRISE_KEY, type CalfMoment, type ReePlay,
   type ReeSurprises, type WatchCue,
 } from './ree.variety';
 import {
   REE_HOME, REE_LAYOUTS, REE_RESIDENTS, COPSE_TREES, CALF_DOELEN, POOL, TWIN_AFTER, reeClearings, slotTrail, calfAt, calfTalkOf, calfBolt,
-  birchWalk, calfView, drinkSpot, leaveView, poolSides, reunionPose, twinAt, twinEnd, walkVia, type PoolSpot, type ReeLayout,
+  birchWalk, bootView, calfView, drinkSpot, leaveView, poolSides, reunionPose, roomView, twinAt, twinEnd, walkVia, type PoolSpot, type ReeLayout,
+  type ViewSpec,
 } from './ree.places';
+import { BACK_M } from '../beats/hold-math';
 import { ReeFinds, findId, inPicture } from './ree.finds';
 import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
 
@@ -98,6 +103,14 @@ const REUNION_CARD_S = (REVEAL_SHOW_MS + REVEAL_GAP_MS) / 1000;
 /** The longest (s) the reunion holds on for new finds' cards still waiting: two more. */
 const REUNION_CARDS_MAX_S = 2 * REUNION_CARD_S;
 const SLIP_GONE_S = 0.5;
+/** Give it room (words-ree): walking up this near (m) to the tottering calf is a step
+ *  toward it (the reach); it stops a long arm's length (0.9 m) from him by itself. */
+const CALF_NEAR_M = 0.55;
+/** By the calf (words-ree): he stands this far (m) from it for a moment (`calfTalkOf`'s), and
+ *  when he is farther than `CALF_AGAIN_M` (he gave it room, it bolted) he comes back up to it
+ *  before the next moment. */
+const CALF_TALK_M = 1.35;
+const CALF_AGAIN_M = 1.75;
 
 /**
  * ree-discover (review r2): a new find's card recorded on a walk shows on that walk. Where
@@ -355,14 +368,23 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   // 4 · the raaf: a calf smells of almost nothing
   await k.fact(0);
 
-  // 5-7 · by the calf: leave it be, with his hands, three times (this play's order)
+  // 5-7 · by the calf: leave it be, three times in this play's order — and each time with
+  // another part of him (run 7, words-ree: three different acts, so the drawn order is felt):
+  // his HANDS still while it peeps at him (aai), his FEET still while it sniffs at his boots
+  // (geur), and a small step BACK while it totters toward him (oppakken: give it room)
   k.beat = 'calf:walk';
   const bed0 = { x: calf.x, z: calf.z };
   const talk = calfTalkOf(l, bed0);
   await k.walkRanger(talk.x, talk.z, 0.05);  // up to it, calmly, through the grass
+  /** Where he stands now (he may have stepped back), facing the calf. */
+  const standing = (): Place => { const m = k.ranger(); return { x: m.x, z: m.z, r: 0.4, heading: headingTo(m, calf) }; };
+  /** Each moment's own picture, from where the calf lies and he stands now: the close side
+   *  view (aai), lower by his boots (geur), a little wider with room behind him (oppakken). */
+  const viewOf = (id: CalfMoment, at: Spot, stand: Place): ViewSpec =>
+    id === 'geur' ? bootView(l, at, stand) : id === 'oppakken' ? roomView(l, at, stand) : calfView(l, at, stand);
   // the stems between him and it bend aside: from the close view it lies in plain sight
   // by his boots (a window in the grass for that lens, the grass round it parted)
-  const view = calfView(l, bed0, talk);
+  let view = viewOf((rust.current?.id ?? 'aai') as CalfMoment, bed0, talk);
   const uncover = (at: { x: number; z: number; yaw: number }): void => {
     const lens = k.lensFor(view).cam;
     const drawnH = home.cover.stems.map((st) => st.h);
@@ -386,9 +408,8 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
     await k.guard(calf.lie(true));
   };
   // run 7: the calf tempts him as often as the level says (`tempts`, 1 → 3 a hold), each
-  // time a little more (a peep; its head up to him; a wriggle in the grass and a peep);
-  // standing up it totters as many wobbly steps toward him as the level says (`wobble`),
-  // never nearer than a long arm's length
+  // time a little more; standing up it totters as many wobbly steps toward him as the level
+  // says (`wobble`), never nearer than a long arm's length
   let pull = 0;
   const peep = (): void => call('fiep', calf.x, calf.z);
   const later = (ms: number, fn: () => void): void => { window.setTimeout(() => { if (!k.signal.aborted) fn(); }, ms); };
@@ -398,6 +419,14 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
     if (settings.geluid) Sound.rustle();
     void calf.lookAt(me, 1.8);
   };
+  /** His boots (where its nose reaches for: the geur moment). */
+  const boots = (): { x: number; z: number; speed: number } => { const m = k.ranger(); return { x: m.x, z: m.z, speed: 0 }; };
+  // (it stretches its nose to his boots: its head low toward his feet, a sniff of the grass
+  // between them, the grass by its nose stirring)
+  const sniffBoots = (secs: number): void => {
+    void calf.lookAt(boots, secs);
+    home.cover.partAt(calf.x + (k.ranger().x - calf.x) * 0.3, calf.z + (k.ranger().z - calf.z) * 0.3, 0.35, 0.4, 60);
+  };
   const pulls: Record<'aai' | 'geur', (() => void)[]> = {
     aai: [
       () => { peep(); void calf.lookAt(me, 1.6); },
@@ -405,13 +434,21 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
       () => { wriggle(); later(350, peep); },
     ],
     geur: [
-      () => { void calf.lookAt(me, 1.8); if (settings.geluid) Sound.rustle(); },
-      () => { peep(); void calf.lookAt(me, 2.2); },
-      () => { wriggle(); later(450, peep); },
+      () => { sniffBoots(1.8); if (settings.geluid) Sound.rustle(); },
+      () => { peep(); sniffBoots(2.2); },
+      () => { wriggle(); later(450, () => sniffBoots(1.6)); },
     ],
   };
   const tempt = (id: 'aai' | 'geur') => (): void => { pulls[id][pull % pulls[id].length](); pull += 1; };
   let steps = 0;
+  /** His feet free under the held picture (give room: ↓ backs him up, a tap behind him walks
+   *  him there; the lens stays on the calf), or locked again. */
+  const feet = (free: boolean): void => {
+    const m = k.world.missionMode();
+    k.world.setMissionMode({ missionId: k.mission.id, input: free ? 'free' : 'locked', camera: 'held', focus: m?.focus });
+    if (!free) k.world.stopRanger();
+    k.ui.walking(free);
+  };
   const moments: Record<CalfMoment, () => Promise<void>> = {
     // HANDS STILL: it lies by his boots and peeps; a click on it is a hand reaching to stroke it
     aai: () => {
@@ -424,15 +461,16 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
         wrong: () => bolt(false),
       });
     },
-    // …and still, while it stretches its nose toward his hand (a click: his hand at its nose)
+    // FEET STILL: it stretches its nose to his boots and sniffs; a step key or a tap on the
+    // world is a step toward it (his scent on it)
     geur: () => {
       pull = 0;
       return rust.still('geur', {
-        line: c.snuffelt, hands: () => calf.body,
-        show: () => { void calf.lookAt(me, 2.4); },
+        line: c.snuffelt, feet: true,
+        show: () => { sniffBoots(2.4); },
         tempt: tempt('geur'),
-        // his hand at its nose: from her cover a short bark — the mother noticed; the calf
-        // presses flatter and looks toward her
+        // his step to it: from her cover a short bark — the mother noticed; the calf presses
+        // flatter and looks toward her
         wrong: async () => {
           call('ree', l.bed.x, l.bed.z);
           home.rustleGap(l, 0.12);
@@ -440,19 +478,29 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
         },
       });
     },
-    // …and still, while it gets up on wobbly legs and totters toward him, a step at a time
-    // (the level's wobbly steps), peeping: is it lost? It is not (a click on it: a hand
-    // reaching to pick it up; it startles, bolts and drops again). Held: it lies down again
-    // where it stands.
+    // GIVE IT ROOM: it gets up on wobbly legs and totters toward him, a step at a time (the
+    // level's wobbly steps), peeping: is it lost? It is not. He takes a small step back (his
+    // feet are free under the picture: ↓, or a tap behind him). A click on it is a hand
+    // reaching to pick it up, walking up to it a step toward it: it startles, bolts and
+    // drops again, and the moment comes back. Given room, it lies down again where it stands.
     oppakken: () => {
       steps = 0;
+      feet(true);
       return rust.still('oppakken', {
         line: c.opstaan ?? c.raakNiet, hands: () => calf.body,
+        room: { at: () => ({ x: calf.x, z: calf.z }), r: CALF_NEAR_M, back: BACK_M },
         show: () => { void totter(); },
         tempt: () => { if (steps < grow.wobble) void totter(); else { peep(); void calf.lookAt(me, 1.6); } },
-        wrong: () => { steps = 0; return bolt(true); },
+        wrong: async () => {
+          // (his feet stop at the reach itself; free again once the calf lies again)
+          feet(false);
+          steps = 0;
+          await bolt(true);
+          feet(true);
+        },
+        held: () => { feet(false); },
         right: async () => { await k.guard(calf.lie(true)); },
-      });
+      }).finally(() => feet(false));
     },
   };
   k.stats.calf_wobble = grow.wobble;
@@ -476,7 +524,21 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   for (let i = 0; i < 3; i++) {
     const id = rust.current?.id as CalfMoment | undefined;
     if (!id || !(id in moments)) break;
-    if (i) await k.frame(calfView(l, { x: calf.x, z: calf.z }, talk)); // (where it lies now: it may have bolted)
+    // (each moment in its own picture, where the calf lies now: it may have bolted, he may
+    // have given it room — then he comes calmly back up to it first, as he came the first
+    // time: every moment begins with it by his boots)
+    if (i) {
+      if (dist(k.ranger(), calf) > CALF_AGAIN_M) {
+        k.beat = 'calf:walk';
+        const to = toward(calf, k.ranger(), CALF_TALK_M);
+        await k.walkRanger(to.x, to.z, 0.05);
+      }
+      view = viewOf(id, { x: calf.x, z: calf.z }, standing());
+      uncover({ x: calf.x, z: calf.z, yaw: calf.yaw });
+      k.beat = `calf:frame:${id}`;
+      await k.frame(view, { face: headingTo(k.ranger(), calf) });
+    }
+    k.stats[`calf_${i}`] = CALF_MOMENTS.indexOf(id);
     await moments[id]();
   }
 
