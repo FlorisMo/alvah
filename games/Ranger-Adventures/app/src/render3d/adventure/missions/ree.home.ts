@@ -334,9 +334,12 @@ export class ReeHome implements HomeDressing {
   private wading = false;
   private wadeT = 0;
   /** ree-discover: the young birch a roebuck rubbed (one: laid where this play has it) and
-   *  its solid (he walks round it; no birch this play: radius 0) */
+   *  its solid (he walks round it). The solid is among the world's solids only while a
+   *  birch stands: a radius-0 stand-in left at the spawn was a 5 cm post of endless height
+   *  to the follow lens (CameraRig.gatherNear), which slid sideways round it on every walk
+   *  out of the spawn clearing. */
   private birch: THREE.Object3D | null = null;
-  private readonly birchSolid = { x: 0, z: 0, r: 0 };
+  private readonly birchSolid = { x: 0, z: 0, r: BIRCH.r };
 
   constructor(env: DressingEnv, distractors: readonly Distractor[]) {
     this.group.name = 'ree-home';
@@ -535,8 +538,7 @@ export class ReeHome implements HomeDressing {
     this.group.add(this.drops);
 
     /* -- ree-discover: the young birch a roebuck rubbed his antlers on (laid where a play
-       has it; none in free roam until then) -- */
-    env.obstacles.push(this.birchSolid);
+       has it, its solid with it; none in free roam until then) -- */
     // (loaded a while after the world is built, as the far copies are: the title never
     // waits for it; a play that has it lays it the moment it is there)
     setTimeout(() => { if (!this.disposed) void env.spawnPlant('prop-birch-tree', BIRCH.h).then((s) => {
@@ -610,8 +612,11 @@ export class ReeHome implements HomeDressing {
 
   /** ree-discover: the rubbed young birch where this play has it (or nowhere). */
   private placeBirch(at: Spot | null): void {
-    this.birchSolid.r = at ? BIRCH.r : 0;
-    if (at) { this.birchSolid.x = at.x; this.birchSolid.z = at.z; }
+    const i = this.env.obstacles.indexOf(this.birchSolid);
+    if (at) {
+      this.birchSolid.x = at.x; this.birchSolid.z = at.z;
+      if (i < 0) this.env.obstacles.push(this.birchSolid);
+    } else if (i >= 0) this.env.obstacles.splice(i, 1);
     if (!this.birch) return;
     this.birch.visible = !!at;
     if (at) {
