@@ -355,6 +355,7 @@ export class ChoiceRun {
           if (!reached) break; // (he stepped back: held)
           backing = false;
         } else {
+          await k.until(() => reached || read);
           if (!reached) {
             // the hold: as long as the tempo wants now; the animal tempts him at its moments
             core.begin(k.now, tempo.seconds);
