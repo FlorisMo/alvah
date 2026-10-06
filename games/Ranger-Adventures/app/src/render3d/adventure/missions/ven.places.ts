@@ -215,10 +215,21 @@ export interface ViewSpec {
  *  near it a whole boy anywhere in the picture is ≥ 300 × 250 px (his blond hair filled a
  *  lower quarter of every ven search: playtest 2026-10-05); the picture is the cove's
  *  alone, the frog's place in it the nook's. `back`: how far behind its aim the lens stands
- *  (the Stage fit on a 1280×800 screen, pinned by ven.places.test.ts); he stands `behind` m
- *  behind the lens's foot (along its heading), `side` m along the bank to the side he came
- *  down (the lens looks down past his feet: anything behind its foot is out of the picture). */
-export const COVE_LENS = { halfW: 0.95, halfD: 0.55, tall: 0.4, pitchDeg: 56, insetTop: 112, insetBottom: 28, back: 1.68, behind: 0.5, side: 1.6, turn: 0.3, aimV: 0.06 } as const;
+ *  (the Stage fit on a 1280×800 screen, pinned by ven.places.test.ts); he stands behind
+ *  the lens's foot, to the side he came down (`STAND_AT`: the lens looks down past his feet,
+ *  anything behind its foot is out of the picture). */
+export const COVE_LENS = { halfW: 0.95, halfD: 0.55, tall: 0.4, pitchDeg: 56, insetTop: 112, insetBottom: 28, back: 1.68, turn: 0.3, aimV: 0.06 } as const;
+
+/** Where he stands to search each cove from either side: `u` along the bank (cove frame),
+ *  `behind` m behind the search lens's foot — out of the picture, and his shadow out of it
+ *  too in every mood's light (the sun stands at one azimuth, low in the west: from his left
+ *  side a stand right behind the lens laid his long dusk shadow across the picture's foot,
+ *  a dark soft blob; playtest 2026-10-05). Pinned by ven.places.test.ts. */
+export const STAND_AT: Readonly<Record<BayId, Readonly<Record<Side, { u: number; behind: number }>>>> = {
+  A: { 1: { u: 1.6, behind: 0.5 }, [-1]: { u: -1.2, behind: 1.5 } },
+  B: { 1: { u: 1.6, behind: 0.5 }, [-1]: { u: -1.2, behind: 1.0 } },
+  C: { 1: { u: 1.6, behind: 0.5 }, [-1]: { u: -1.6, behind: 1.0 } },
+};
 
 /** A spot in a cove's frame: `u` across (+: his right as he faces the water), `v` toward
  *  the water from the cove's middle. */
@@ -350,14 +361,15 @@ function bay(id: BayId): Bay {
     const p = atLocal(frame, n.u, n.v);
     return { ...p, yaw: headingTo(lensNear(n.side), p) + n.turn, side: n.side, nook: i };
   });
-  // (he stands at the cove's side, `side` m along the bank, up the bank `behind` m behind
-  // the search lens's foot — out of its picture — facing the cove)
+  // (he stands at the cove's side up the bank, behind the search lens's foot — out of its
+  // picture, his shadow too: `STAND_AT` — facing the cove)
   const standOf = (side: Side): Place => {
     const h = frame.heading + turns[side];
+    const at = STAND_AT[id][side];
     const foot = atLocal({ ...atLocal(frame, 0, COVE_LENS.aimV), heading: h }, 0, -COVE_LENS.back);
-    const ahead = (v: number): number => { const q = atLocal(frame, side * COVE_LENS.side, v); return (q.x - foot.x) * Math.sin(h) + (q.z - foot.z) * Math.cos(h); };
-    const v = (-COVE_LENS.behind - ahead(0)) / (ahead(1) - ahead(0));
-    const p = atLocal(frame, side * COVE_LENS.side, v);
+    const ahead = (v: number): number => { const q = atLocal(frame, at.u, v); return (q.x - foot.x) * Math.sin(h) + (q.z - foot.z) * Math.cos(h); };
+    const v = (-at.behind - ahead(0)) / (ahead(1) - ahead(0));
+    const p = atLocal(frame, at.u, v);
     return { ...p, r: 0.7, heading: headingTo(p, atLocal(frame, 0, COVE_LENS.aimV)) };
   };
   const stands = { 1: standOf(1), [-1]: standOf(-1) } as Record<Side, Place>;

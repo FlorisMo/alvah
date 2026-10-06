@@ -39,6 +39,7 @@ import {
 } from './ven.places.ts';
 import type { Spot } from '../types.ts';
 import { listensOf } from './ven.listen.ts';
+import { MOODS, MOOD_IDS } from '../../Moods.ts';
 
 const W = 1280, H = 800, FOV = 55;
 
@@ -322,6 +323,22 @@ test('the search picture is the cove\'s alone: he stands out of it (no hair over
       const foot = atLocal({ x: view.at.x, z: view.at.z, heading: view.heading }, 0, -COVE_LENS.back);
       assert.ok(Math.hypot(foot.x - cam.position.x, foot.z - cam.position.z) < 0.06, `cove ${id} side ${side}: the lens stands ${Math.hypot(foot.x - cam.position.x, foot.z - cam.position.z).toFixed(2)} m off COVE_LENS.back`);
       assert.ok(above(b.stands[side]) >= 0.3, `cove ${id} side ${side}: he stands on the dry bank`);
+      // …and his shadow stays out of it in every mood's light (the sun at one azimuth, low in
+      // the dusk: his shadow then 4 m long), never a dark soft blob at the picture's foot
+      const inv = new THREE.Matrix4().copy(cam.matrixWorld).invert();
+      const st = b.stands[side];
+      for (const mood of MOOD_IDS) {
+        const k = MOODS[mood].keyAt;
+        const len = Math.hypot(k.x, k.z), dx = -k.x / len, dz = -k.z / len;
+        const reach = ((RANGER_STAND_HEIGHT + 0.18) * len) / k.y;
+        for (let t = 0; t <= reach; t += 0.1) for (const w of [-0.22, 0, 0.22]) {
+          const x = st.x + dx * t - dz * w, z = st.z + dz * t + dx * w;
+          const v = new THREE.Vector3(x, groundY(x, z) + 0.02, z);
+          if (v.clone().applyMatrix4(inv).z > -0.05) continue;
+          const q = v.project(cam);
+          assert.ok(Math.abs(q.x) > 1 || Math.abs(q.y) > 1, `cove ${id} side ${side} (${mood}): his shadow lies in the search picture ${t.toFixed(1)} m from his feet`);
+        }
+      }
     }
   }
 });
