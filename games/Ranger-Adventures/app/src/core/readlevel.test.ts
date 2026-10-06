@@ -23,7 +23,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  splitSentences, countWords, sentenceLengths, lintText, lintCorpus, zinnen,
+  splitSentences, countWords, sentenceLengths, lintText, lintCorpus, zinnen, regels,
   MAX_WORDS_PER_SENTENCE, type LabeledText,
 } from './readlevel.ts';
 import { AREA_VELUWE, ANIMALS } from '../content/veluwe.ts';
@@ -152,6 +152,30 @@ test('zinnen: a text is shown one sentence a line, with its punctuation', () => 
   assert.deepEqual(zinnen(''), []);
 });
 
+test('regels: a strip or a toast breaks at sentence ends, never more than 7 words a line', () => {
+  // whole sentences share a line while they fit
+  assert.deepEqual(regels('Goed. Hij loopt zelf.'), ['Goed. Hij loopt zelf.']);
+  assert.deepEqual(regels('Goed zo. Geef de big de ruimte.'), ['Goed zo. Geef de big de ruimte.']);
+  // the playtest's lines: eight and nine words side by side became two lines
+  assert.deepEqual(regels('Goed. Hij loopt zelf. Jij wijst de weg.'), ['Goed. Hij loopt zelf.', 'Jij wijst de weg.']);
+  assert.deepEqual(regels('Hij schrikt en loopt weg. Hij loopt liever zelf.'), ['Hij schrikt en loopt weg.', 'Hij loopt liever zelf.']);
+  // a line a mission composes at runtime (the ven: the question, then what to do)
+  assert.deepEqual(regels('Een slang ligt in de zon. Hou afstand.'), ['Een slang ligt in de zon.', 'Hou afstand.']);
+  // one sentence too long on its own: near-equal parts, none over 7
+  assert.deepEqual(regels('een twee drie vier vijf zes zeven acht negen.'), ['een twee drie vier vijf', 'zes zeven acht negen.']);
+  const long = Array.from({ length: 16 }, (_, i) => `w${i}`).join(' ') + '.';
+  for (const l of regels(long)) assert.ok(countWords(l) <= 7, l);
+  // punctuation alone is no word: a dash stays with its words
+  assert.deepEqual(regels('Stil — kijk daar.'), ['Stil — kijk daar.']);
+  // empty, a custom max, and every line of any text within the max
+  assert.deepEqual(regels(''), []);
+  assert.deepEqual(regels('Ja. Nee. Ja.', 2), ['Ja. Nee.', 'Ja.']);
+  for (const t of ['Kijk, de groep! Het pad is vrij.', 'Te lang gewacht. De groep loopt verder. Loop maar door.']) {
+    for (const l of regels(t)) assert.ok(countWords(l) <= MAX_WORDS_PER_SENTENCE, `${t} → ${l}`);
+    assert.equal(regels(t).join(' '), t, 'nothing lost, nothing added');
+  }
+});
+
 // ---- 2. live-corpus gate: the whole reading surface is M3/E3 -------------
 
 const MISSIONS = (AREA_VELUWE as any).missies as any[];
@@ -206,8 +230,15 @@ function readingCorpus(): Entry[] {
       const c = st.skin?.copy ?? {};
       for (const k of Object.keys(c)) push(`${m.id}.step${si}.${k}`, c[k]);
       push(`${m.id}.step${si}.feit`, st.skin?.feit);
+      // run 7 (words-ree): the step's other facts (one a play, drawn one sentence a line)
+      (st.skin?.meerFeiten ?? []).forEach((f: string, j: number) => push(`${m.id}.step${si}.meerFeiten[${j}]`, f));
       // a choice is a button: one line
       (st.skin?.encounters ?? []).forEach((e: any) => (e.opties ?? []).forEach((o: any, oi: number) => push(`${m.id}.step${si}.${e.id}.optie[${oi}]`, o.label, true)));
+      // run 7 (words-ree): a moment's question, its good words and what a wrong act did are
+      // each shown as ONE line (the adventure's strip, the card's question, the 2D toast)
+      for (const e of st.skin?.encounters ?? []) {
+        for (const k of ['vraag', 'vraagKnap', 'uitleg', 'uitlegKnap', 'gevolg', 'gevolgKnap']) push(`${m.id}.step${si}.${e.id}.${k}`, e[k], true);
+      }
     });
     // the adventure's lines (MISSIONS lane): one objective line, chip or prompt each
     for (const tier of ['simpel', 'knap']) {

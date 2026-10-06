@@ -415,6 +415,14 @@ export class CameraRig {
     return this.handoff !== null;
   }
 
+  /** Run 7 (words-ree, additive): the follow bearing along `yaw` (his heading) while an
+   *  adventure holds the lens and his feet are free: the tank keys read his own facing.
+   *  The held lens does not move; handing it back (`handOver`) sets the bearing anew. */
+  alignFollow(yaw: number): void {
+    this.followYaw = this.followTargetYaw = yaw;
+    this.orbitYaw = this.orbitTargetYaw = 0;
+  }
+
   /** A fresh start at the spawn (back from the title): the bearing straight behind a
    *  ranger heading `yaw`, no look-around. */
   reset(yaw: number): void {

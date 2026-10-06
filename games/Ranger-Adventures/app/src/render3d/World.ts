@@ -1161,6 +1161,10 @@ export class World {
       // tells the follow camera what to do (world/Player.walk → CameraRig.steer). In an
       // adventure the same walk (the keys only while its input is free), and a held
       // lens is the adventure's.
+      // run 7 (words-ree, additive): under a held lens with his feet free (the ree's step
+      // back from the calf), his keys stay his own — Up walks the way he faces, Down backs
+      // him up — never "into" a follow bearing the held lens left behind
+      if (this.mode?.camera === 'held' && this.mode.input === 'free') this.cam.alignFollow(this.ranger.rotation.y);
       const steer = this.player.walk(dt, this.cam.viewFrame());
       if (this.mode?.camera !== 'held') this.cam.steer(steer);
     }

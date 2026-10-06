@@ -19,6 +19,7 @@ import { looseRng } from '../core/play';
 import { playDagnachtTrial, DagnachtRun, type Encounter } from '../engines/dagnacht';
 import { subjectView } from './animalIcon';
 import { narrator } from '../core/narrator';
+import { regels, zinnen } from '../core/readlevel';
 import { Sound } from '../core/sound';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -171,7 +172,12 @@ export function playDanger(host: HTMLElement, step: Step, play?: Play): Promise<
     function flash(kind: 'ok' | 'gevolg', text: string): void {
       const t = document.createElement('div');
       t.className = `feedback-toast ${kind}`;
-      t.textContent = text;
+      // run 7 (words-ree): one sentence a line (never more than 7 words), so the toast
+      // never breaks inside a sentence ("Niet / voeren.")
+      zinnen(text).flatMap((z) => regels(z)).forEach((l, i) => {
+        if (i) t.appendChild(document.createElement('br'));
+        t.appendChild(document.createTextNode(l));
+      });
       field.appendChild(t);
       say(text);
       after(kind === 'ok' ? 1400 : 1900, () => t.remove());

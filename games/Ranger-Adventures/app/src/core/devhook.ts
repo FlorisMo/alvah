@@ -454,8 +454,9 @@ export type PlayHintProbe = {
    *  'CapsuleGeometry', 'SphereGeometry'... = a primitive stand-in) */
   parts: string[];
   /** run 6: a WALK hint (an adventure's walk beat): walk to (x, z) until within r m;
-   *  there is nothing to click (x, y = −1). Absent / null for a click hint. */
-  walk?: { x: number; z: number; r: number } | null;
+   *  there is nothing to click (x, y = −1). Absent / null for a click hint. Run 7
+   *  (words-ree, additive) `back`: a small step back, facing what he gives room to. */
+  walk?: { x: number; z: number; r: number; back?: boolean } | null;
 };
 
 /** One entry of `__ranger.ambient()`: a roaming animal or a gliding bird. Run 6 adds what
