@@ -5,7 +5,7 @@ import { AREA_VELUWE } from '../src/content/veluwe';
 import { followLook } from '../src/render3d/adventure/missions/frisling.grow';
 import {
   R, playSeed, replayTail, save, sleep, snap, uncovered, visibleButtons, walkTo, worldChange, worldSamples,
-  MAX_DRAW_CALLS, SEAT_TOLERANCE, type Hint, type P2, type Seat,
+  MAX_DRAW_CALLS, MAX_TRIS, SEAT_TOLERANCE, type Hint, type P2, type Seat,
 } from './golden-lib';
 
 /** Run 6: a mission's home (an adventure's family lives there, before and after). */
@@ -208,6 +208,9 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
     if (observe) await observe(adv);
     const calls = await R<number | null>(page, 'r.drawCalls()');
     if (calls !== null && calls >= MAX_DRAW_CALLS) bad.push(`draw calls ${calls} at "${adv?.beat ?? view}"`);
+    // (run 7 fix: and the triangles, every turn, so every adventure's walks are sampled)
+    const tris = await R<number | null>(page, 'r.tris()');
+    if (tris !== null && tris >= MAX_TRIS) bad.push(`triangles ${tris.toLocaleString('en')} at "${adv?.beat ?? view}"`);
     if (adv && adv.beat !== lastBeat) {
       lastBeat = adv.beat;
       lastProgress = Date.now(); // (run 7: a new beat is the play going on — two calm moments
@@ -249,6 +252,7 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
         const off = Math.hypot(h.x - 640, h.y - 400);
         log.note(`the search's target lies ${off.toFixed(0)} px from the middle of the picture`);
         if (mission.id === 'frisling') log.soft(off >= 120, `the piglet lies ${off.toFixed(0)} px from the middle of the search picture (want ≥ 120)`);
+        if (mission.id === 'ven') log.soft(off >= 120, `the frog sits ${off.toFixed(0)} px from the middle of the search picture (want ≥ 120)`);
       }
       const before = { id: h.id, text: await uiText(page), trials: JSON.stringify((await save(page))?.trials) };
       await page.mouse.click(h.x, h.y);

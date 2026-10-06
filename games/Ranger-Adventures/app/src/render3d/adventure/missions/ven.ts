@@ -174,7 +174,7 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   const calls = chorusCalls(zk.trailClarity);
   const rings = ringSize(zk.trailClarity);
   k.stats.chorus_calls = calls;
-  k.stats.listen_stops = listensOf(zk.trailLegs) + 1;
+  // (the stops on his way, the cove's own one more: counted from the way itself below)
   k.stats.look_alikes = home.laid?.decoys.length ?? 0;
   // the frogs are this script's now: their free-roam calls rest
   for (const key of Object.keys(A)) fam.voice(key, false);
@@ -264,6 +264,7 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   };
 
   const way = wayOf(laid, listensOf(zk.trailLegs));
+  k.stats.listen_stops = way.filter((st) => st.kind === 'listen').length + 1;
   for (const step of way) {
     k.check();
     if (step.kind === 'listen') {

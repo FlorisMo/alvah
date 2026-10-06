@@ -17,6 +17,11 @@ export interface DecalOpts {
   metalness?: number;
   /** a soft fade to the ground at the rim (vertex alpha) */
   feather?: boolean;
+  /** run 7 (additive): with `feather`, the fade only over this outer share of the radius (a
+   *  decal of a groundStrip: of its half-width; its ends over `ends` as before) — a crisp rim
+   *  that reads as a patch on the ground, never a blurred blob in a close picture. Left out:
+   *  the soft fade as before. */
+  edge?: number;
 }
 
 /** An ellipse `rx` × `rz` (m) at (x, z), turned `yaw`, draped over the ground. */
@@ -31,13 +36,15 @@ export function groundDecal(groundY: (x: number, z: number) => number, x: number
     return [wx, groundY(wx, wz) + 0.02 + layer * 0.012, wz];
   };
   pos.push(...at(0, 0)); alpha.push(1);
+  // (a crisp rim, `edge`: the rings inside reach 1 − edge, the last one fades over the rest)
+  const edge = o.feather && o.edge !== undefined ? Math.min(0.5, Math.max(0.01, o.edge)) : 0;
   for (let r = 1; r <= RINGS; r++) {
-    const k = r / RINGS;
+    const k = edge ? (r < RINGS ? ((1 - edge) * r) / (RINGS - 1) : 1) : r / RINGS;
     for (let i = 0; i < SEGS; i++) {
       const a = (i / SEGS) * Math.PI * 2;
       const w = 1 + (k > 0.6 ? wob * (Math.sin(a * 3 + seed) * 0.6 + Math.cos(a * 5 + seed * 2) * 0.4) * k : 0);
       pos.push(...at(Math.cos(a) * rx * k * w, Math.sin(a) * rz * k * w));
-      alpha.push(o.feather ? Math.min(1, (1 - k) * 3.5) : 1);
+      alpha.push(o.feather ? (edge ? (r < RINGS ? 1 : 0) : Math.min(1, (1 - k) * 3.5)) : 1);
     }
   }
   for (let i = 0; i < SEGS; i++) idx.push(0, 1 + i, 1 + ((i + 1) % SEGS));
@@ -97,9 +104,11 @@ export function groundStrip(groundY: (x: number, z: number) => number, line: rea
     const k = Math.min(1, Math.max(0, (s - acc[i - 1]) / seg));
     return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, dx: (b.x - a.x) / seg, dz: (b.z - a.z) / seg };
   };
-  // across: the sides fade, the middle is worn barest
-  const ACROSS = [-1, -0.62, -0.28, 0, 0.28, 0.62, 1];
-  const SIDE_A = [0, 0.8, 1, 1, 1, 0.8, 0];
+  // across: the sides fade, the middle is worn barest (run 7 `edge`: the sides fade only
+  // over that outer share of the half-width)
+  const e = o.edge !== undefined ? Math.min(0.5, Math.max(0.01, o.edge)) : 0;
+  const ACROSS = e ? [-1, -(1 - e), -0.45, 0, 0.45, 1 - e, 1] : [-1, -0.62, -0.28, 0, 0.28, 0.62, 1];
+  const SIDE_A = e ? [0, 1, 1, 1, 1, 1, 0] : [0, 0.8, 1, 1, 1, 0.8, 0];
   const rows = Math.max(2, Math.ceil(L / 0.14));
   const pos: number[] = [], col: number[] = [], idx: number[] = [];
   const base = new THREE.Color(color);
