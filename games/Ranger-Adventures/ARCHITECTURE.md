@@ -335,7 +335,10 @@ core/state.ts        save fields geschiedenis (BeatLog[], newest 400: the level,
                      gespeeld, sfeer; store.logBeat(e, summary, { missionId, view, play }),
                      level(e), knobs(e), discover(id), notePlay, rareEnd, noteSession;
                      hydrate(parsed): any older save loads, new fields defaulted
-core/discover.ts     rollRare (a seeded chance, the pity rule: a rare within ~3 won plays)
+core/discover.ts     rollRare (owner, 2026-10-05: spread over a few sessions): never a
+                     home's first play nor the play right after a rare, then a low seeded
+                     chance (RARE_P 0.12, +RARE_STEP 0.08 each won play) and surely by its
+                     6th won play (RARE_PITY 5); once all are found ~1 in 10 (RARE_P_FOUND)
 content/ontdekkingen.ts  ONTDEKKINGEN: { id '<home>.<thing>', home, soort (dier · zeldzaam ·
                      spoor · vondst · foto), naam, naamKnap?, hint (≤ 7 words), model? | icon?,
                      stemming?, geholpen? } — one block per home, each lane writes its own
@@ -476,7 +479,9 @@ beats/hold-math.ts   RustTempo: holdS from the band, −0.5 s after a reach (≥
                      two clean holds (≤ band + 1), seeded temptations (never in the first 1.1 s)
 engines/wisselen.ts  buildWisselTrial(skin, knobs, rng): sorts (skin.trials caps), flipEvery,
                      flips (a turn back to day from band 4, its gap one longer after a switch
-                     error); summary { sorts, right first time, switches, switchErrors }
+                     error); fair variety: every stretch between two turns holds a day AND
+                     a night animal, so one-place clicking is never judged easy or fine;
+                     summary { sorts, right first time, switches, switchErrors }
 core/growth.ts       growthSummary(history, skill, now): the grown-ups' Groei panel (Instellingen)
 ```
 

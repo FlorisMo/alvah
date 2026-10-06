@@ -10,6 +10,17 @@ What we're building, how it should feel, and the Design↔Code hand-off rules. R
 | 4 | [design-spec.md](design-spec.md) | The craft bible — feel, motion/feedback rules, the intended bar for quality. |
 | 5 | [3d-animals-build-plan.md](3d-animals-build-plan.md) | The Design↔Code bridge for the 3D track: who does what, phasing, **what's frozen** (3D modelling is a stand-in + target spec, not final geometry — §15), and how it hooks the existing architecture. |
 
+## Run designs (each lane lead's contract, copied in at the run's close)
+
+| File | What it is |
+|---|---|
+| [run6-missions.md](run6-missions.md), [run6-flow.md](run6-flow.md), [run6-feel.md](run6-feel.md) | Run 6: the first four missions become adventures in the world; the flow; the feel. |
+| [run7-foundation.md](run7-foundation.md) | Run 7: the contracts every game builds on (one seed per play, knobs per breinkracht, the veldgids, moods, the beat history); adaptive growth. |
+| [run7-frisling.md](run7-frisling.md), [run7-ree.md](run7-ree.md), [run7-wildcamera.md](run7-wildcamera.md), [run7-eekhoorn.md](run7-eekhoorn.md) | Run 7: each of the four adventures made different every play, growing with him, with things to discover. |
+| [run7-adventures.md](run7-adventures.md) | Run 7: the ven, De oversteek and Het stille zand as new adventures. |
+
+These are design records: where one disagrees with the code, the code and ARCHITECTURE.md win.
+
 ## mockups/
 UI-flow screenshots from the design sessions (`01-flow`, `check-*`, `*-polish`, …). Standalone
 reference images — not loaded by any code; just visual record of the intended flow.
