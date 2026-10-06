@@ -32,7 +32,7 @@ import type { Residents, ResidentGroup } from '../world/Residents';
 import type { MissionMode } from '../World';
 import { Stage, type StageSpec } from '../play/stage';
 import { makeReframe, registerPlayHint, clearPlayHint } from '../play/kit';
-import { ARRIVE_RADIUS, cue as cueAt, wayfind } from '../Wayfinding';
+import { ARRIVE_RADIUS, bearing as bearingTo, cue as cueAt, wayfind } from '../Wayfinding';
 import { isRunning, nearestAway } from './actors-math';
 import { walkPace } from '../world/Player';
 import type { Actor } from './actors';
@@ -207,6 +207,12 @@ export interface WalkOpts {
   /** the way a perfect player walks (golden's hint only): these points in turn, round
    *  what is to be walked round (the ree's pool), each until he comes within 1 m of it */
   via?: readonly Spot[];
+  /** run 7 (additive, fix-discovery-homes): where the chip's arrow points from where he is
+   *  NOW when not straight at `to` — round what he must not walk over or into (a brooding
+   *  bird, the wildlife screen) — or null: straight at `to` (the default). The metres it
+   *  shows stay those to `to` (by that point); golden's hint walks there too once `via` has
+   *  no point left. */
+  way?: (me: Spot) => Spot | null;
   /** a second way to be there, besides within `r` of `to` (the hint still walks to `to`):
    *  e.g. right up at the bark on the side the squirrel hides, not only out at the spot
    *  to see it from */
@@ -693,6 +699,8 @@ export class AdventureKit {
       if (lead && (waiting || hiding)) return { id: `walk:${o.name}:back`, walk: { x: lead.actor.x, z: lead.actor.z, r: (hiding ? lead.backM ?? LEAD_BACK_M : LEAD_BACK_M) * 0.7 } };
       const v = o.via?.[viaI];
       if (v) return { id: `walk:${o.name}:via${viaI}`, walk: { x: v.x, z: v.z, r: 0.7 } };
+      const w = o.way?.(this.ranger());
+      if (w) return { id: `walk:${o.name}:way`, walk: { x: w.x, z: w.z, r: 0.7 } };
       return { id: `walk:${o.name}`, walk: { x: to.x, z: to.z, r: r * WALK_HINT_R } };
     });
     let loud = false;
@@ -719,7 +727,11 @@ export class AdventureKit {
       const lost = waiting || (!!hiding && calmFor > LEAD_CALM_S);
       const goal = lead && lost ? lead.actor : to;
       const here = d < r || !!o.reached?.();
-      const raw = wayfind(m.x, m.z, m.heading, goal.x, goal.z);
+      // (round what is in the way: the arrow at the way's next point, the metres to the goal)
+      const round = goal === to && !here ? o.way?.(m) ?? null : null;
+      const raw = round
+        ? cueAt(bearingTo(m.x, m.z, m.heading, round.x, round.z), Math.max(ARRIVE_RADIUS, dist(m, round) + dist(round, to)))
+        : wayfind(m.x, m.z, m.heading, goal.x, goal.z);
       // (within a marker's arrive radius of the goal but not yet at this walk's own: the
       // way and the metres still, never "je bent er" while nothing happens)
       const cue = raw.arrived && !(goal === to && here) ? cueAt(raw.angle, ARRIVE_RADIUS) : raw;

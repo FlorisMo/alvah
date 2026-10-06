@@ -8,10 +8,12 @@
  * A page keeps its slots in one fixed order (an animal first, then a track, a find, a
  * photo, the rare one last), so a found thing never moves: a collection book, not a list.
  * A thing he found is `found`; one he has not looked at in the gids yet is `nieuw`. Never
- * a count on screen: the page's dots are a picture of how much of it he found.
+ * a count on screen: the page's dots are a picture of how much of it he found. An animal
+ * still to find here that he knows from another page is `elders`: its tile shows it
+ * softened, with where it is met on this page (still not found here).
  */
 
-import type { Ontdekking, OntdekSoort } from '../../content/ontdekkingen';
+import { bekendElders, type Ontdekking, type OntdekSoort } from '../../content/ontdekkingen.ts';
 
 /** The save's record of one discovery (core/state.ts `Ontdekt`): `g` once seen in the gids. */
 export interface GidsSeen { g?: 1 }
@@ -23,6 +25,8 @@ export interface GidsEntry {
   nieuw: boolean;
   rare: boolean;
   foto: boolean;
+  /** not found here, but he knows this animal from another page */
+  elders: boolean;
 }
 
 export interface GidsPage {
@@ -60,7 +64,7 @@ export function gidsPages(
         .sort((a, b) => SOORT_RANK[a.o.soort] - SOORT_RANK[b.o.soort] || a.i - b.i)
         .map(({ o }) => {
           const rec = found[o.id];
-          return { o, found: !!rec, nieuw: !!rec && !rec.g, rare: o.soort === 'zeldzaam', foto: o.soort === 'foto' };
+          return { o, found: !!rec, nieuw: !!rec && !rec.g, rare: o.soort === 'zeldzaam', foto: o.soort === 'foto', elders: !rec && bekendElders(o, found, table) };
         });
       return { home, entries, found: entries.filter((e) => e.found).length };
     });

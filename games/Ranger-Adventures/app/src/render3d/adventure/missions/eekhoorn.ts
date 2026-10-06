@@ -127,7 +127,7 @@ function lay(world: { residents: Residents }, play: Play): EekhoornPlay | null {
   const home = world.residents.dressing('eekhoorn') as EekhoornHome | null;
   if (!home) return null;
   const v = play.variant;
-  const p = drawEekhoornPlay(play, lastVariants(store.get().geschiedenis, 2), { mood: typeof v.mood === 'string' ? v.mood : undefined, rare: typeof v.rare === 'string' ? v.rare : null });
+  const p = drawEekhoornPlay(play, lastVariants(store.get().geschiedenis, 2), { mood: typeof v.mood === 'string' ? v.mood : undefined, rare: typeof v.rare === 'string' ? v.rare : null, n: play.n });
   // (its way, pattern, trio — and its day, folded in: the next play draws against it)
   play.note(VARIANT_KEY, variantOf(p));
   // (its finds: which of the way's trees carries its nest, where its gnawed cones lie)
@@ -214,8 +214,9 @@ async function meetNeighbours(k: AdventureKit, home: EekhoornHome, geluid: boole
     n.call();
     k.say(names[n.id] ?? null);
     // into his veldgids, quietly: this meeting (its light, its call, its name) is its moment —
-    // the home's own row, or the open wood's where it is a bird of the whole wood
-    const row = ontdekking(`eekhoorn.${n.id}`) ?? ontdekking(`wereld.${n.id}`);
+    // the home's own row only (a bird of the whole wood met here never fills an 'Overal'
+    // row: those are met out in the open world)
+    const row = ontdekking(`eekhoorn.${n.id}`);
     if (row) k.discover(row.id, { quiet: true });
     if (geluid) Sound.callAt(n.id, n.at.x, n.at.z, listenerOf(k.world.camera), 25, CALL_CAP[1]);
     void k.wait(Math.max(1.6, Sound.callDur(n.id, CALL_CAP[1]) + 0.4)).then(() => {

@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  SURPRISES, surpriseOrder, fits, nextAfter, firstAt, APART_S, REST_S, EXTRA_S, FIRST_AFTER, RARE_PITY_W,
+  SURPRISES, surpriseOrder, fits, nextAfter, firstAt, APART_S, REST_S, EXTRA_S, FIRST_AFTER, RARE_PITY_W, RARE_P_W, RARE_PER_VISIT,
   inCone, bearing, groundSpots, treeChoices, awayFrom, acrossFrom, SeenMeter, groundHides,
   shouldGo, robinHop, robinSpot, pxAt, tryNow, OFF_PATH_M, CONE, CONE_WIDE, ALL_ROUND, SHY_M, SEEN_PX, HEARD_M,
   FRESH_WAIT_S, AGAIN_WAIT_S, RETRY_S, ROBIN_SIDE, ROBIN_ALONG, ROBIN_SHY_M, ROBIN_HOP_M, ROBIN_FLUTTER_M,
@@ -99,22 +99,47 @@ test('a visit shows new things first: the ones out there already come last', () 
   }
 });
 
-test('rare ones: only in their own light, by a seeded chance or surely after three without one', () => {
+test('rare ones: only in their own light, by a low seeded chance or surely after RARE_PITY_W without one', () => {
   for (let seed = 1; seed <= 40; seed++) {
     const ids = surpriseOrder(choice({ mood: 'gouden-uur', sinceRare: 9 }), fork(seed)).map((s) => s.id);
     assert.ok(!ids.includes('edelhert') && !ids.includes('das'), 'no rare one in the golden hour');
   }
   for (let seed = 1; seed <= 40; seed++) {
     const first = surpriseOrder(choice({ mood: 'schemer', sinceRare: RARE_PITY_W }), fork(seed))[0];
-    assert.ok(first.rare, 'the pity rule: dusk after three, a rare one comes');
+    assert.ok(first.rare, `the pity rule: dusk after ${RARE_PITY_W}, a rare one comes`);
   }
+  assert.ok(RARE_P_W <= 0.12 && RARE_PITY_W >= 5, 'a low chance and a long pity');
   let lucky = 0;
-  for (let seed = 1; seed <= 200; seed++) if (surpriseOrder(choice({ mood: 'ochtendnevel' }), fork(seed))[0].rare) lucky += 1;
-  assert.ok(lucky > 20 && lucky < 90, `now and then by luck (${lucky}/200)`);
+  for (let seed = 1; seed <= 600; seed++) if (surpriseOrder(choice({ mood: 'ochtendnevel' }), fork(seed))[0].rare) lucky += 1;
+  assert.ok(lucky > 30 && lucky < 100, `now and then by luck (${lucky}/600)`);
   for (let seed = 1; seed <= 40; seed++) {
-    const ids = surpriseOrder(choice({ mood: 'ochtendnevel', sinceRare: 5 }), fork(seed)).map((s) => s.id);
+    const ids = surpriseOrder(choice({ mood: 'ochtendnevel', sinceRare: RARE_PITY_W }), fork(seed)).map((s) => s.id);
     assert.ok(!ids.includes('das'), 'the badger only at dusk');
     assert.equal(ids[0], 'edelhert', 'the stag in the mist');
+  }
+});
+
+test('at most one rare one a visit: once it came, it (or the other) never comes again in it', () => {
+  assert.equal(RARE_PER_VISIT, 1);
+  for (let seed = 1; seed <= 80; seed++) {
+    for (const shown of [['edelhert'], ['das'], ['buizerd', 'edelhert', 'specht']] as SurpriseId[][]) {
+      const ids = surpriseOrder(choice({ mood: 'schemer', sinceRare: 99, shown }), fork(seed)).map((s) => s.id);
+      assert.ok(!ids.includes('edelhert') && !ids.includes('das'), `seed ${seed}: no rare after ${shown.join(',')} this visit`);
+    }
+  }
+  // a long misty visit, played through the pure rules: he meets every one that comes; the
+  // stag comes once at most (it came six times in one session before)
+  for (let v = 1; v <= 200; v++) {
+    let since = 0;
+    const shown: SurpriseId[] = [];
+    let last: SurpriseId | null = null;
+    for (let i = 0; i < 30; i++) {
+      const s = surpriseOrder(choice({ mood: 'ochtendnevel', sinceRare: since, shown, last }), fork(v * 101 + i))[0];
+      shown.push(s.id);
+      last = s.id;
+      since = s.rare ? 0 : since + 1;
+    }
+    assert.ok(shown.filter((id) => id === 'edelhert').length <= 1, `visit ${v}: the stag ${shown.filter((id) => id === 'edelhert').length} times`);
   }
 });
 

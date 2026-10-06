@@ -49,18 +49,37 @@ test('a run-6 save loads: progress, skills, avatar and settings kept, the run-7 
   assert.equal(s.settings.jargon, true);
   assert.equal(s.settings.voorlezen, false);
   assert.equal(s.settings.force2d, true);
-  // run 7, defaulted
+  // run 7, defaulted (his veldgids holds the animals his finished missions helped: quietly)
   assert.deepEqual(s.geschiedenis, []);
-  assert.deepEqual(s.ontdekt, {});
+  assert.deepEqual(s.ontdekt, { 'frisling.frisling': { t: 0, n: 1 }, 'ree-niet-aanraken.reekalf': { t: 0, n: 1 } });
   assert.deepEqual(s.zeldzaam, {});
   assert.deepEqual(s.gespeeld, {});
   assert.deepEqual(s.sfeer, { laatste: null, sessies: 0 });
 });
 
+test('a run-6 save that finished the four adventures: their helped animals are found in the gids, quietly', () => {
+  const saved = { ...run6Save(), voltooid: { frisling: true, 'ree-niet-aanraken': true, wildcamera: true, eekhoorn: true } };
+  const s = hydrate(JSON.parse(JSON.stringify(saved)));
+  for (const id of ['frisling.frisling', 'ree-niet-aanraken.reekalf', 'wildcamera.das', 'eekhoorn.eekhoorn']) {
+    assert.deepEqual(s.ontdekt[id], { t: 0, n: 1 }, `${id}: found, never revealed (no card), still new in the gids`);
+  }
+  assert.equal(Object.keys(s.ontdekt).length, 4, 'only the helped ones: the rest is still out there');
+  assert.equal(s.ontdekt['frisling.zeug'], undefined);
+  // the rest of the save as before
+  assert.equal(s.skill.zoeken.level, 2.36);
+  assert.equal(s.avatar.naam, 'Bo');
+  // a later save keeps its own record of them, and a mission not finished adds nothing
+  const later = hydrate({ ...saved, ontdekt: { 'frisling.frisling': { t: 9, n: 4, g: 1, r: 1 } } });
+  assert.deepEqual(later.ontdekt['frisling.frisling'], { t: 9, n: 4, g: 1, r: 1 });
+  assert.equal(hydrate({ ...saved, voltooid: { frisling: false } }).ontdekt['frisling.frisling'], undefined);
+  // a fresh save: nothing
+  assert.deepEqual(hydrate({}).ontdekt, {});
+});
+
 test('a broken run-7 field never breaks a load', () => {
   const s = hydrate({ ...run6Save(), geschiedenis: 'x' as never, ontdekt: [1] as never, zeldzaam: null as never, sfeer: { laatste: 'storm', sessies: -3 } as never });
   assert.deepEqual(s.geschiedenis, []);
-  assert.deepEqual(s.ontdekt, {});
+  assert.deepEqual(Object.keys(s.ontdekt).sort(), ['frisling.frisling', 'ree-niet-aanraken.reekalf'], 'a broken one: only the helped animals');
   assert.deepEqual(s.zeldzaam, {});
   assert.deepEqual(s.sfeer, { laatste: null, sessies: 0 });
   assert.equal(hydrate(null).screen, 'map', 'no save: a fresh state');

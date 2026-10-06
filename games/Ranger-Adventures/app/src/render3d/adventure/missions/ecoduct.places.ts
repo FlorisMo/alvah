@@ -32,6 +32,7 @@ import { atLocal, dist, headingTo, segDist, toLocal, toward, uniformLocal, type 
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import type { Play } from '../../../core/play.ts';
 import type { MoodId } from '../../Moods.ts';
+import { komtNog } from '../../../content/ontdekkingen.ts';
 
 export const MISSION = 'ecoduct';
 
@@ -106,6 +107,57 @@ export function screenObstacle(): Obstacle {
 }
 /** Where he stands to watch: right behind the screen's middle, looking at the bed. */
 export const STAND: Place = { ...atLocal(BED, 0.15, -5.4), r: 0.6, heading: BED.heading };
+
+/**
+ * The way round the screen: a walk whose straight line would go through it (from behind it
+ * onto the sand, or back behind it from the sand) goes round one of its ends instead — the
+ * chip's arrow and a perfect player alike (an arrow-only walker stood a minute against its
+ * planks). Its four corners (`SCREEN_ROUND`: beside each end, a step before and behind it)
+ * and the shortest way between them that never crosses the screen (`screenWay`).
+ */
+const ROUND_U = SCREEN.halfW + 0.22 + 0.6;
+const ROUND_V = 0.75;
+export const SCREEN_ROUND: readonly Spot[] = [-1, 1].flatMap((su) => [-1, 1].map((sv) => atLocal(BED, 0.15 + su * ROUND_U, -4.75 + sv * ROUND_V)));
+/** Does the straight walk from `a` to `b` cross the screen (its planks and a ranger's width)? */
+export function crossesScreen(a: Spot, b: Spot, pad = 0.3): boolean {
+  const p = toLocal(BED, a), q = toLocal(BED, b);
+  const u0 = 0.15 - SCREEN.halfW - pad, u1 = 0.15 + SCREEN.halfW + pad, v0 = -4.75 - SCREEN.thick / 2 - pad, v1 = -4.75 + SCREEN.thick / 2 + pad;
+  // (the segment against the rectangle: Liang-Barsky)
+  let t0 = 0, t1 = 1;
+  const du = q.u - p.u, dv = q.v - p.v;
+  for (const [pp, qq] of [[-du, p.u - u0], [du, u1 - p.u], [-dv, p.v - v0], [dv, v1 - p.v]] as const) {
+    if (pp === 0) { if (qq < 0) return false; continue; }
+    const r = qq / pp;
+    if (pp < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+  }
+  return t0 <= t1;
+}
+/** The way from `from` to `to` round the screen: its corners in turn (none when the straight
+ *  line misses it); the shortest such way. */
+export function screenPath(from: Spot, to: Spot): Spot[] {
+  if (!crossesScreen(from, to)) return [];
+  const nodes = [from, ...SCREEN_ROUND, to];
+  const n = nodes.length, best = nodes.map(() => Infinity), prev = nodes.map(() => -1), done = nodes.map(() => false);
+  best[0] = 0;
+  for (;;) {
+    let i = -1;
+    for (let j = 0; j < n; j++) if (!done[j] && best[j] < Infinity && (i < 0 || best[j] < best[i])) i = j;
+    if (i < 0 || i === n - 1) break;
+    done[i] = true;
+    for (let j = 0; j < n; j++) {
+      if (done[j] || crossesScreen(nodes[i], nodes[j])) continue;
+      const d = best[i] + dist(nodes[i], nodes[j]);
+      if (d < best[j]) { best[j] = d; prev[j] = i; }
+    }
+  }
+  const out: Spot[] = [];
+  for (let j = prev[n - 1]; j > 0; j = prev[j]) out.unshift(nodes[j]);
+  return out;
+}
+/** Where the chip points now on a walk round the screen (null: straight at `to`). */
+export function screenWay(me: Spot, to: Spot): Spot | null {
+  return screenPath(me, to)[0] ?? null;
+}
 
 /* ------------------------------------------------------------ the marker ---- */
 
@@ -288,7 +340,7 @@ export interface EcoductLaid {
  * leaves: seeded, never three groups in a row round the same corner (the hind and her calf
  * leave onto the heath, north). How many piglets come: seeded.
  */
-export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: readonly string[], last: readonly string[] = [], mood?: MoodId): EcoductLaid {
+export function ecoductLayout(play: Pick<Play, 'fork'> & { n?: number }, rounds: number, order: readonly string[], last: readonly string[] = [], mood?: MoodId): EcoductLaid {
   const n = crossingsFor(rounds);
   const prev = last.length ? readVariant(last[last.length - 1]) : null;
   // (the first group never one of his last two plays' first groups)
@@ -302,6 +354,11 @@ export function ecoductLayout(play: Pick<Play, 'fork'>, rounds: number, order: r
   // deer right before the deer), the first never his last play's first, never the fox alone
   // where a moment needs a group
   const kinds: Kind[] = [];
+  // (a kind whose row comes on a later visit — the roe, the fox: `vanaf` — never on his
+  // first evening here: then the deer and the sow with her piglets take turns, the sow last
+  // before the deer)
+  const now = KINDS.filter((k) => k === 'hert' || komtNog(GROUPS[k].disc, { n: play.n ?? 99 }));
+  if (now.length === 2) for (let i = 0; i < n - 1; i++) kinds.push((n - 2 - i) % 2 === 0 ? now[1] : 'hert');
   for (let guard = 0; kinds.length < n - 1 && guard < 40; guard++) {
     const deck = kf.shuffle(KINDS);
     for (const k of deck) {
@@ -468,6 +525,8 @@ export function ecoductClearings(): { x: number; z: number; r: number }[] {
     for (let v = -BED_HALF.v; v <= BED_HALF.v + 1e-6; v += 1.0) out.push({ ...atLocal(BED, u, v), r: 1.0 });
   }
   out.push({ x: SCREEN.x, z: SCREEN.z, r: 1.7 }, { x: STAND.x, z: STAND.z, r: 1.2 });
+  // (the way round the screen's ends)
+  for (const p of SCREEN_ROUND) out.push({ x: p.x, z: p.z, r: 0.8 });
   for (const s of SIDES) {
     for (const line of [TRAILS[s].slice(1), EXITS[s].slice(0, 2)]) {
       for (let i = 1; i < line.length; i++) {

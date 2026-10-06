@@ -469,7 +469,7 @@ test('the light: the evening is one of three (never dusk, never the bright day),
   assert.deepEqual(lastLights([{ m: MISSION, sd: 1, va: 'mood:bewolkt,ws:1,wx:0,wn:dancvgrf' }]), [], 'a play from before the album');
 });
 
-test('the rare ones of the crossing: the fox family and the white roe, by luck or surely by the third won play', () => {
+test('the rare ones of the crossing: the fox family and the white roe, spread over his plays (never the first night, never two in a row, each by the 6th won play after the last)', () => {
   const rares = ONTDEKKINGEN.filter((o) => o.home === MISSION && o.soort === 'zeldzaam').map((o) => o.id);
   assert.deepEqual(rares.sort(), ['wildcamera.vosjes', 'wildcamera.witte-ree']);
   const rows = ONTDEKKINGEN.filter((o) => o.home === MISSION);
@@ -479,16 +479,18 @@ test('the rare ones of the crossing: the fox family and the white roe, by luck o
   for (let t = 0; t < 500; t++) {
     let count = 0, dry = 0;
     const found: Record<string, unknown> = {};
-    const kinds = new Set<string>();
-    for (let k = 0; k < 9; k++) {
-      const play = newPlay(MISSION, 7 + t * 9 + k, k + 1);
+    const at: number[] = [];
+    for (let k = 0; k < 13; k++) {
+      const play = newPlay(MISSION, 7 + t * 13 + k, k + 1);
       const r = rollRare({ home: MISSION, play, table: ONTDEKKINGEN, found, counts: { [MISSION]: count }, mood: 'bewolkt' });
-      if (r) { found[r.id] = {}; kinds.add(r.id); }
+      if (r) { found[r.id] = {}; at.push(k + 1); }
       count = nextRareCount(count, { won: true, gotRare: !!r });
       dry = r ? 0 : dry + 1;
-      if (Object.keys(found).length < 2) assert.ok(dry <= 2, `save ${t}: ${dry} won plays in a row without a rare`);
+      if (Object.keys(found).length < 2) assert.ok(dry <= 5, `save ${t}: ${dry} won plays in a row without a rare`);
     }
-    assert.equal(kinds.size, 2, `save ${t}: both rare ones within nine plays`);
+    assert.ok(at[0] >= 2, `save ${t}: never on his first night`);
+    for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 2, `save ${t}: rares on plays ${at[i - 1]} and ${at[i]}`);
+    assert.equal(Object.keys(found).length, 2, `save ${t}: both rare ones within thirteen plays`);
   }
 });
 
@@ -512,4 +514,15 @@ test('the night\'s own photos keep the clock: the nose in the deep of the night,
       assert.ok(inRange(man, '05:52', '06:59') && man > light, `${turns} turns: the man at ${man}`);
     }
   }
+});
+
+test('fix-discovery-homes: the nose at the lens is a later night\'s surprise, never his first night here', () => {
+  const opts = { queueLength: 4, cast: ['das', 'vos', 'ree'] };
+  let later = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    assert.equal(drawWildcameraPlay(newPlay(MISSION, seed, 1), { ...opts, neusDrought: NEUS_PITY }).neus, null, `seed ${seed}: not the first night`);
+    if (drawWildcameraPlay(newPlay(MISSION, seed, 2), opts).neus) later += 1;
+    assert.ok(drawWildcameraPlay(newPlay(MISSION, seed, 3), { ...opts, neusDrought: NEUS_PITY }).neus, 'a later night: the pity rule');
+  }
+  assert.ok(later > 40 && later < 110, `from the second night by its chance (${later}/200)`);
 });

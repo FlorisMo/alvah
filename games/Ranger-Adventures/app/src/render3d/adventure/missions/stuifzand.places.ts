@@ -39,6 +39,7 @@ import { atLocal, dist, headingTo, segDist, toLocal, type Frame } from '../place
 import type { Clump } from '../cover-math.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import type { Play } from '../../../core/play.ts';
+import { komtNog } from '../../../content/ontdekkingen.ts';
 
 export const MISSION = 'stuifzand';
 
@@ -366,6 +367,52 @@ export function displayOf(n: NestId, spot: 0 | 1): Spot {
 export function displayYaw(n: NestId, spot: 0 | 1): number {
   return NESTS[n].frame.heading + Math.PI - displaySide(n, spot).sg * DISPLAY_TURN;
 }
+/**
+ * At dusk he comes back from the guard place to the scrape: the walk ends where he steps back
+ * and gives her room (`endSpot`) on the GUARD'S side of the scrape (`BACK_SIDE`: the side
+ * nearest the guard place, whichever side the car passed), so the way back never crosses the
+ * scrape; and where the straight line from where he is would still pass near her, the chip
+ * (and a perfect player) goes round her (`wayRound`): ≥ HER_ROOM from her, for every nest,
+ * spot and side (pinned). He walks at her anyway (nearer than HER_REACT)? She sits up, looks
+ * at him and churrs softly: "Rustig. Hier broeden vogels." (stuifzand.ts).
+ */
+export const BACK_SIDE: Pass = 'l';
+export function nestBackOf(n: NestId): Place { return endSpot(n, BACK_SIDE); }
+/** How much room (m) the way back keeps from her. */
+export const HER_ROOM = 1.5;
+/** How near (m) he may come before she reacts. */
+export const HER_REACT = 1.2;
+/** How far round her (m from her) the way's turning points lie. */
+const ROUND_R = HER_ROOM + 0.55;
+/**
+ * Where the chip points on the way from `from` to `to` so it keeps `room` from `her`: null
+ * when the straight line already does; else the turning point round her (on a circle
+ * ROUND_R round her) with the shortest way whose both legs keep the room; when he already
+ * stands within the room, a point straight away from her first.
+ */
+export function wayRound(from: Spot, to: Spot, her: Spot, room = HER_ROOM): Spot | null {
+  if (segDist(her, from, to) >= room) return null;
+  if (dist(from, her) < room) {
+    const d = dist(from, her) || 1;
+    return { x: her.x + ((from.x - her.x) / d) * ROUND_R, z: her.z + ((from.z - her.z) / d) * ROUND_R };
+  }
+  let best: Spot | null = null, len = Infinity;
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * Math.PI * 2;
+    const c = { x: her.x + Math.sin(a) * ROUND_R, z: her.z + Math.cos(a) * ROUND_R };
+    if (segDist(her, from, c) < room || segDist(her, c, to) < room || !clearOfSolids(c, 0.3)) continue;
+    const l = dist(from, c) + dist(c, to);
+    if (l < len) { len = l; best = c; }
+  }
+  return best;
+}
+/** The way a perfect player walks back from the guard place (golden's hint): round her when
+ *  the straight line would pass near her. */
+export function nestBackVia(n: NestId, spot: 0 | 1): Spot[] {
+  const p = wayRound(GUARD_STAND, nestBackOf(n), NESTS[n].spots[spot]);
+  return p ? [p] : [];
+}
+
 /** The dusk picture the rare is seen in, and the reunion after it (one calm move from the
  *  close look, then held): a little further back and up over the scrape from the path's side —
  *  her on her nest low on one side, the air where he claps high on the other, near enough that
@@ -491,6 +538,10 @@ export const ZONES: Readonly<Record<'open' | 'hol', Spot & { r: number; h: numbe
 /** The anthill at the edge of the sand between the scrapes and the guard place (a find),
  *  out of every search's, flush's and guard's picture (pinned). */
 export const ANTHILL: Spot & { h: number } = { x: 38.0, z: 35.2, h: 0.5 };
+/** It is his once he walks right up to it (this near, m, with it in his picture): a find for
+ *  the curious (its veldgids hint says what to look for), never one every walk passes —
+ *  every way the story walks keeps further off (pinned). */
+export const ANTHILL_NEAR = 2.4;
 /** Where a woodlark rises from the sand and sings, as he walks (`me`, facing `heading`): ~7 m
  *  ahead of him and ~4 m to the side a play drew (`side`; the other where that is no open
  *  sand), or null where neither is. */
@@ -581,7 +632,7 @@ export function readVariant(v: string): { nest: NestId; spot: 0 | 1; side: Pass 
  * all three), her spot in it, the side the car passed it on (never his last play's route with
  * the same nest), which way the flushed parent flutters, whether and where a woodlark sings.
  */
-export function zandLayout(play: Pick<Play, 'fork'>, last: readonly string[] = []): ZandLaid {
+export function zandLayout(play: Pick<Play, 'fork'> & { n?: number }, last: readonly string[] = []): ZandLaid {
   const prev = last.map((v) => readVariant(v)).filter((v): v is NonNullable<typeof v> => !!v);
   const recent = prev.slice(-2).map((p) => p.nest);
   const nf = play.fork('sz-nest');
@@ -595,7 +646,9 @@ export function zandLayout(play: Pick<Play, 'fork'>, last: readonly string[] = [
   const side: Pass = lastSide ? (lastSide === 'l' ? 'r' : 'l') : sf.pick(PASSES);
   const flutter: Pass = play.fork('sz-flush').pick(PASSES);
   const lf = play.fork('sz-leeuwerik');
-  const lark: Pass | null = lf.chance(0.6) ? lf.pick(PASSES) : null;
+  // (a later visit's song: never on his first play here — its row's `vanaf`)
+  const sings = lf.chance(0.6);
+  const lark: Pass | null = sings && komtNog('stuifzand.leeuwerik', { n: play.n ?? 99 }) ? lf.pick(PASSES) : null;
   const variant = `${nest}${spot ? 'b' : 'a'}-${side}-${flutter}`;
   return { nest, spot, side, flutter, lark, variant };
 }

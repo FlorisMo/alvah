@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gidsPages, openingPage, anyNieuw, turnPage, revealSaysWhere, WERELD } from './gids-math.ts';
-import { ONTDEKKINGEN, type Ontdekking } from '../../content/ontdekkingen.ts';
+import { ONTDEKKINGEN, OOK_HIER, dierVan, type Ontdekking } from '../../content/ontdekkingen.ts';
 
 const row = (id: string, soort: Ontdekking['soort'] = 'dier'): Ontdekking =>
   ({ id, home: id.split('.')[0], soort, naam: 'de x', hint: 'Wie is dit?', icon: 'paw' });
@@ -79,4 +79,34 @@ test('the real table: every page has a picture for every slot, the open world ha
   }
   assert.ok(pages.at(-1)!.entries.filter((e) => e.rare).length >= 1, 'a rare one in the open world');
   for (const p of pages) for (const e of p.entries) assert.ok(e.o.model || e.o.icon, `${e.o.id}: a picture`);
+});
+
+test('one animal on several pages: known from one page, it shows softened on the others (still not found there)', () => {
+  const pages = (found: Record<string, object>) => Object.fromEntries(gidsPages(ONTDEKKINGEN, found, ORDER).flatMap((p) => p.entries.map((e) => [e.o.id, e])));
+  // he met the buzzard over the meadow (ree): on 'Overal' its row is known, not found
+  const a = pages({ 'ree-niet-aanraken.buizerd': {} });
+  assert.equal(a['wereld.buizerd'].found, false);
+  assert.equal(a['wereld.buizerd'].elders, true);
+  assert.equal(a['ree-niet-aanraken.buizerd'].elders, false, 'found there: not "elders"');
+  // the badger he helped at the camera: the oversteek's rare badger and the open world's
+  const b = pages({ 'wildcamera.das': {} });
+  assert.equal(b['ecoduct.das'].elders, true);
+  assert.equal(b['wereld.das'].elders, true);
+  // a page's own sibling never counts (the twins are not 'known' from the calf), nor a
+  // photo (the camera's nose photo is not the boar), nor a nothing-found save
+  const c = pages({ 'ree-niet-aanraken.reekalf': {}, 'frisling.zeug': {} });
+  assert.equal(c['ree-niet-aanraken.tweeling'].elders, false);
+  assert.equal(c['wildcamera.neus'].elders, false);
+  assert.equal(c['ecoduct.wildzwijn'].elders, true, 'the sow he met at the wallow');
+  assert.ok(Object.values(pages({})).every((e) => !e.elders));
+});
+
+test('every animal that lives on more than one page has its line for each page, ≤ 7 words', () => {
+  for (const o of ONTDEKKINGEN) {
+    const d = dierVan(o);
+    const shared = !!d && ONTDEKKINGEN.some((r) => r.home !== o.home && dierVan(r) === d);
+    if (shared) assert.ok(OOK_HIER[o.id], `${o.id}: where it is met on this page`);
+    else assert.equal(OOK_HIER[o.id], undefined, `${o.id}: a line it never shows`);
+  }
+  for (const [id, line] of Object.entries(OOK_HIER)) assert.ok(line.split(/\s+/).length <= 7, `${id}: "${line}"`);
 });
