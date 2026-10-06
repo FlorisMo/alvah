@@ -89,6 +89,45 @@ export function zinnen(text: string): string[] {
   return (t.match(/[^.!?…]+(?:[.!?…]+["”’'»)]*|$)/g) ?? [t]).map((s) => s.trim()).filter(Boolean);
 }
 
+/**
+ * Run 7 (words-ree): a text as the LINES a strip or a toast shows it, so no line on screen
+ * holds more than `max` words. It breaks at sentence ends and keeps as many whole sentences
+ * on a line as fit ("Goed. Hij loopt zelf." stays one line; a line a mission composes at
+ * runtime, "Een slang ligt in de zon. Hou afstand.", becomes two). A sentence longer than
+ * `max` on its own (the content lint never lets one through; a composed line could) is
+ * broken into near-equal parts between its words, never a part over `max`. Pure.
+ */
+export function regels(text: string, max: number = MAX_WORDS_PER_SENTENCE): string[] {
+  const out: string[] = [];
+  let cur: string[] = [];
+  let n = 0;
+  const flush = (): void => { if (cur.length) out.push(cur.join(' ')); cur = []; n = 0; };
+  for (const z of zinnen(text)) {
+    const w = countWords(z);
+    if (w > max) {
+      flush();
+      // near-equal parts: "een twee drie vier vijf zes zeven acht negen" → 5 + 4
+      const parts = Math.ceil(w / max);
+      const per = Math.ceil(w / parts);
+      let part: string[] = [];
+      let pw = 0;
+      for (const tok of z.split(/\s+/)) {
+        const word = HAS_ALNUM.test(tok);
+        if (word && pw === per) { out.push(part.join(' ')); part = []; pw = 0; }
+        part.push(tok);
+        if (word) pw += 1;
+      }
+      if (part.length) out.push(part.join(' '));
+      continue;
+    }
+    if (n + w > max) flush();
+    cur.push(z);
+    n += w;
+  }
+  flush();
+  return out;
+}
+
 export interface LabeledText {
   /** Waar de tekst vandaan komt (missie-id + veld), voor een leesbare faalmelding. */
   label: string;

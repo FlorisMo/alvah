@@ -20,6 +20,17 @@ import { coarsePointer } from '../hud/device';
 import { session, esc } from './session';
 import { speakButtonHtml } from '../ReadAloud';
 import { icon, type IconName } from '../icons';
+import { regels } from '../../core/readlevel';
+
+/** Put `text` in `el` as the lines a child reads it in: at sentence ends, ≤ 7 words each
+ *  (`regels`), one under the other. */
+export function showLines(el: HTMLElement, text: string): void {
+  el.replaceChildren();
+  regels(text).forEach((l, i) => {
+    if (i) el.appendChild(document.createElement('br'));
+    el.appendChild(document.createTextNode(l));
+  });
+}
 
 export interface ChipCue {
   /** what he walks to ("De big", "De modderpoel") */
@@ -81,7 +92,9 @@ export class AdventureHud {
     this.line.classList.toggle('adv-good', !!opts.good);
     if (text === this.said) return;
     this.said = text;
-    this.lineText.textContent = text;
+    // run 7 (words-ree): broken at sentence ends, never more than 7 words on a line on
+    // screen (a line a mission composes, "question + what to do", included); read as one
+    showLines(this.lineText, text);
     if (store.get().settings.voorlezen) {
       if (opts.queue) narrator.queue(text); else narrator.speak(text);
     }
