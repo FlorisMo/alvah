@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { shot, collectPageErrors, reportPageErrors } from './helpers';
 
 /**
- * Onboarding E2E (run 6, FLOW P2: the lessons, ui/hud/Lessons.ts). After Bram's greeting
+ * Onboarding E2E (run 6, FLOW P2: the lessons, ui/hud/Lessons.ts). After Benjamin's greeting
  * the walk lesson shows ONE strip with the arrow key caps and "Loop met de pijltjes." (the
  * desktop test pointer), walking a few metres dismisses it, and what was learned is saved
  * in the shared `alvah-ef-v1` blob (`settings.geleerd`) so it never shows again. An old
@@ -25,7 +25,7 @@ function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   }, fn.toString()) as Promise<T | null>;
 }
 
-test('onboarding: the walk lesson shows after Bram, walking dismisses it, the learned flag persists', async ({ page }, testInfo) => {
+test('onboarding: the walk lesson shows after Benjamin, walking dismisses it, the learned flag persists', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
@@ -35,13 +35,13 @@ test('onboarding: the walk lesson shows after Bram, walking dismisses it, the le
   await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
   await expect.poll(() => hook(page, (r) => r.screen), { timeout: 30_000 }).toBe('world');
 
-  // (1) one teaching strip at a time: Bram first, then the walk lesson with its key caps
+  // (1) one teaching strip at a time: Benjamin first, then the walk lesson with its key caps
   const lesson = page.locator('.lesson-strip.ls-lopen');
   await expect(lesson).toBeVisible({ timeout: 30_000 });
   await expect(lesson).toContainText('Loop met de pijltjes.'); // desktop pointer → the arrow keys
   await expect(lesson.locator('.kcap')).toHaveCount(4);
   await expect(page.locator('.speaker-strip')).toHaveCount(0);
-  await expect(page.locator('.explore-wayfind'), 'the chip waits for Bram\'s hook').toBeHidden();
+  await expect(page.locator('.explore-wayfind'), 'the chip waits for Benjamin\'s hook').toBeHidden();
   await shot(page, 'onboarding-walk-lesson');
 
   // (2) walking a few metres dismisses it

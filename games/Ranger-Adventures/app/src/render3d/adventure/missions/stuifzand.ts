@@ -59,6 +59,7 @@ import {
   pointAt, project, setNestNow, slotsOf, zandClearings, zandLayout,
   type Edge, type Pass, type ViewSpec, type ZandLaid,
 } from './stuifzand.places';
+import { narrator } from '../../../core/narrator';
 
 /** The light this home starts in: any but dusk (the evening falls while he guards), a new one
  *  each play, never one of his last two plays'. */
@@ -84,7 +85,7 @@ const LARK_SPAN = 2.5;
 
 /** Is something being said now (a call never sounds over a spoken line)? */
 function speaking(): boolean {
-  return typeof window !== 'undefined' && !!window.speechSynthesis?.speaking;
+  return narrator.busy();
 }
 
 /** This play's drift sand, drawn and laid under the briefing card. */

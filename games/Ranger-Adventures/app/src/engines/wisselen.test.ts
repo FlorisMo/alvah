@@ -11,7 +11,7 @@ import { knobsFor, judgeBeat } from '../core/skill.ts';
 import { newPlay } from '../core/play.ts';
 import { AREA_VELUWE } from '../content/veluwe.ts';
 import type { Skin } from '../content/types.ts';
-import { forSpeech } from '../core/narrator.ts';
+import { forSpeech } from '../core/voice.ts';
 
 test('the two places come from the mission rule', () => {
   assert.deepEqual(placeNames('Dag-dier → open plek. Nacht-dier → het hol.'), { open: 'open plek', hol: 'het hol' });

@@ -12,7 +12,7 @@ import { metNaam } from '../src/content/mentor';
  * played like a player (real clicks and keys, a fresh browser):
  *
  *   1. the first visit: the title (nothing is said before the player touches the page,
- *      the voice starts at his first click), the maker, Bram's greeting, the lessons, the
+ *      the voice starts at his first click), the maker, Benjamin's greeting, the lessons, the
  *      hook, the mission marker's prompt, the briefing;
  *   2. a save that knows the first minute: mission 1 played with the real mouse (the play
  *      hints) to its reunion, the fact cards, the reward and the first clue, which says
@@ -27,13 +27,13 @@ import { metNaam } from '../src/content/mentor';
  * pointerdown or keydown, as a browser does for a child who just opened the link.
  *
  * How: a watcher in the page notes every reading line the moment it is on screen (the
- * surfaces below), and a spy on `speechSynthesis.speak` notes every utterance. A line
+ * surfaces below), and the narrator's `ranger:say` event notes every utterance. A line
  * passes when its words were spoken in an utterance around the time it appeared (up to
  * 30 s before: a card is read at once, its lines are written as the voice reaches them;
  * up to 15 s after: a line waits for the voice before it). The test fails on the first
  * visible line that was never spoken, naming it.
  *
- * The reading surfaces (FLOW's): the title, the maker's title and greeting, Bram's strip,
+ * The reading surfaces (FLOW's): the title, the maker's title and greeting, Benjamin's strip,
  * the lesson strip, the one prompt bottom centre (its words, not the key cap), the rim
  * tip, and on the cards every title, briefing line, fact, reunion line, the reward's
  * praise and knap woord, the clue (its title, text and where it went) and Onderweg's
@@ -69,11 +69,7 @@ async function watch(page: Page): Promise<void> {
     const w = window as unknown as { __said: Said[]; __seen: Seen[] };
     w.__said = [];
     w.__seen = [];
-    const orig = SpeechSynthesis.prototype.speak;
-    SpeechSynthesis.prototype.speak = function (u: SpeechSynthesisUtterance) {
-      w.__said.push({ text: u.text, at: performance.now() });
-      try { return orig.call(this, u); } catch { /* no voice in this browser */ }
-    };
+    window.addEventListener('ranger:say', (e) => { w.__said.push({ text: (e as CustomEvent<string>).detail, at: performance.now() }); });
     const known = new Set<string>();
     const words = (el: Element): string => {
       const c = el.cloneNode(true) as HTMLElement;
@@ -251,8 +247,8 @@ test('the first visit, title to briefing: every line that appears is read aloud'
   await klaar.click();
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
 
-  // Bram's greeting, then walk, run, the hook (the golden walker's keys)
-  await expect.poll(async () => (await R<{ learned: string[] }>(page, 'r.hint()')).learned.includes('bram'), { timeout: 40_000, message: 'Bram greeted' }).toBe(true);
+  // Benjamin's greeting, then walk, run, the hook (the golden walker's keys)
+  await expect.poll(async () => (await R<{ learned: string[] }>(page, 'r.hint()')).learned.includes('bram'), { timeout: 40_000, message: 'Benjamin greeted' }).toBe(true);
   await snap(page, 'after-greeting');
   await expect(page.locator('.lesson-strip')).toBeVisible({ timeout: 15_000 });
   await page.keyboard.down('ArrowUp'); await sleep(page, 1_800); await page.keyboard.up('ArrowUp');
@@ -271,7 +267,7 @@ test('the first visit, title to briefing: every line that appears is read aloud'
   await sleep(page, 1_200);
   await snap(page, 'marker');
 
-  // the briefing: Bram's field note, every line written as it is read
+  // the briefing: Benjamin's field note, every line written as it is read
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: MISSIE.gaOpPad })).toBeVisible({ timeout: 10_000 });
   await expect.poll(() => page.locator('.briefing-line.ra-line-wait').count(), { timeout: 30_000, message: 'every briefing line is written' }).toBe(0);
@@ -291,7 +287,7 @@ test('mission 1 to its reward and first clue: every line is read aloud, the clue
   shotsInto(testInfo, 'reward-clue');
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
-  // a save that has met Bram and learned the controls (so the walk goes straight to work)
+  // a save that has met Benjamin and learned the controls (so the walk goes straight to work)
   await page.addInitScript(() => {
     if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: { avatarGemaakt: true, settings: { geleerd: { bram: true, lopen: true, rennen: true, haak: true, kijken: true, jeep: true } } } }));
   });

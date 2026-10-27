@@ -233,7 +233,7 @@ function buildWorld(): World {
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
   // mission board overlay in-place.
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });
-  // run 6: the hut's porch ring (once Bram has told about the young raaf) opens the hut
+  // run 6: the hut's porch ring (once Benjamin has told about the young raaf) opens the hut
   world.setPorch({ onNear: onPorchApproach, onOpen: tryOpenPorch });
   // F-11: the calm world-rim cue ("Hier stopt het bos") through the one hint channel.
   world.setBoundaryHint(showBoundaryHint);
@@ -329,7 +329,7 @@ function showTitleCard(opts: { after?: number; afterVeil?: boolean } = {}): void
 
 /** From the title or the maker into play: the follow camera takes the lens over from the
  *  shot in one move, the ranger turns to the forest, the HUD and the sound come in. The
- *  player can walk at once. Then the first minute: Bram greets a new boswachter (or
+ *  player can walk at once. Then the first minute: Benjamin greets a new boswachter (or
  *  welcomes a `returning` one back) and the lessons follow (ui/hud/Lessons.ts). */
 export function enterPlay(returning: boolean): void {
   const world = session.world;
@@ -401,7 +401,7 @@ export function resumePatrol(): void {
     armBeat(patrolTick);
   }
   showExploreHud(titel);
-  // back from a finished mission: Bram points at the missiebord (once, after the first)
+  // back from a finished mission: Benjamin points at the missiebord (once, after the first)
   if (patrolTick > 0) armMissiebordBeat();
 }
 

@@ -322,9 +322,9 @@ export interface RangerDevHook {
    *  Null before the world is live. */
   quality(): { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null;
   /** Run 6 (FLOW P2): the first minute (ui/hud/Lessons.ts). `active` is the ONE step on
-   *  screen — a lesson ('lopen' walk, 'rennen' run, 'kijken' look round) or one of Bram's
+   *  screen — a lesson ('lopen' walk, 'rennen' run, 'kijken' look round) or one of Benjamin's
    *  beats ('bram' the greeting, 'haak' the hook, 'welkom', 'missiebord', 'jeep') — or
-   *  null; `speaking`/`line` what Bram says now; `learned` the steps saved for good
+   *  null; `speaking`/`line` what Benjamin says now; `learned` the steps saved for good
    *  (settings.geleerd); `chip` whether the way-chip may show (false until the hook);
    *  `tip` the one transient tip on screen ('boundary') or null; `helpChip` whether the
    *  "?" chip is there. Null before the world/hook is ready. */
@@ -439,7 +439,7 @@ export type HintState = {
   active: string | null; speaking: boolean; line: string | null; learned: string[]; chip: boolean;
   tip: string | null; helpChip: boolean; returning: boolean;
   progress: { walkedM: number; runS: number; lookPx: number };
-  /** Bram: where he stands, his height, whether he talks (and shows the speech mark),
+  /** Benjamin: where he stands, his height, whether he talks (and shows the speech mark),
    *  how far (rad) he turns away from facing the ranger. */
   bram: { x: number; z: number; h: number; talking: boolean; mark: boolean; offRanger: number } | null;
 };

@@ -82,7 +82,25 @@ RANGER_PORT=<your-port> npm run golden     # THE check: plays GOAL.md 1-8 like a
 ## Alvah's contracts (never trade these away)
 
 Calm camera (fixed FOV, roll 0, no shake/snap; reduced-motion = cuts) · never scary,
-never game-over · Dutch text at AVI M3/E3, ≤7 words per line, read-aloud on new strings ·
+never game-over · Dutch text at AVI M3/E3, ≤7 words per line, read-aloud on new strings in Benjamin's
+recorded voice (record them with `npm run voice`, see below) ·
 targets ≥56 px · <150 draw calls · laptop first, iPad must keep working · save data only
 via `core/state.ts` + `core/persist.ts` under `alvah-ef-v1` · assets via `assetUrl` ·
 no new runtime dependencies without Floris · no surnames · never print `.env.local`.
+
+## Benjamin's voice: every spoken word
+
+The mentor is **Benjamin** (he was Bram until 2026-10-27; the save key `geleerd.bram`
+keeps the old name on purpose). Everything read aloud is Benjamin's recorded ElevenLabs
+voice (id `squHBnETMVeVdrDpROKa`, `core/voice.ts#VOICE`), never the browser's voice and
+never another ElevenLabs voice. How it works: ARCHITECTURE.md, "Benjamin's voice".
+
+- **New or changed spoken words → record them in the same change.** Play them (or run
+  the e2e specs) against the dev server, then from `app/`:
+  `npm run voice` (dry run: what is missing, how many characters) and
+  `npm run voice -- --go` (records into `public/voice/`). Commit the clips with the words.
+  A sentence without a clip is said in the browser's robot voice: that is the bug to fix.
+- The key is `ELEVENLABS_API_KEY` in `app/.env.local`; it is billed per character, so
+  run the dry run first and tell Floris the count before recording thousands.
+- Never test "is the voice talking" with `speechSynthesis`: ask `narrator.busy()`.
+

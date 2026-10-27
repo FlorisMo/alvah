@@ -221,7 +221,7 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     soft(back.onScreen, 'back: the ranger left the screen');
     await shot(page, 'after-turn-keys');
 
-    // run 6 (FLOW P2): after Bram's greeting the run lesson shows the Shift key; he does
+    // run 6 (FLOW P2): after Benjamin's greeting the run lesson shows the Shift key; he does
     // what it says (Shift + ↑) and it goes, learned for good. Having run already (the pace
     // check above runs during the greeting) counts: then it is learned by doing and skipped.
     const runLesson = page.locator('.lesson-strip.ls-rennen');
@@ -232,7 +232,7 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
       soft((await runLesson.count()) === 0, 'the run lesson showed although he had already run');
     } else {
       const shown = await runLesson.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false);
-      soft(shown, 'no run lesson ([Shift] "Hou Shift vast. Dan ren je.") after Bram\'s greeting');
+      soft(shown, 'no run lesson ([Shift] "Hou Shift vast. Dan ren je.") after Benjamin\'s greeting');
       if (shown) await shot(page, 'run-lesson');
       await page.keyboard.down('Shift');
       let ran: Awaited<ReturnType<typeof holdKey>>;
@@ -403,11 +403,11 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
 
   // --------------------------------------------- 5. go to the first mission ----
   await step(5, async () => {
-    // run 6 (FLOW P2): the chip shows once Bram has told the hook (it follows the lessons)
+    // run 6 (FLOW P2): the chip shows once Benjamin has told the hook (it follows the lessons)
     const t5 = Date.now();
     const chip = await page.locator('.explore-wayfind').waitFor({ state: 'visible', timeout: 30_000 }).then(() => true, () => false);
-    if (Date.now() - t5 > 500) note(`the chip came ${((Date.now() - t5) / 1000).toFixed(1)} s into this step (Bram's hook)`);
-    soft(chip, 'the chip never showed (Bram\'s hook did not come)');
+    if (Date.now() - t5 > 500) note(`the chip came ${((Date.now() - t5) / 1000).toFixed(1)} s into this step (Benjamin's hook)`);
+    soft(chip, 'the chip never showed (Benjamin\'s hook did not come)');
     const hud = await uiText(page);
     const pointed = missions.find((m) => hud.includes(m.titel));
     soft(!!pointed, `the HUD names no mission to go to (HUD text: "${hud.replace(/\s+/g, ' ').slice(0, 120)}")`);

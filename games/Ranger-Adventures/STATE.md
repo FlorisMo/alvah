@@ -4,6 +4,19 @@
 > it was verified. Goal and steps: [GOAL.md](GOAL.md).
 > ✅ works · 🟡 works with problems · ❌ blocks the player
 
+## 2026-10-27: Benjamin's voice (voice/benjamin)
+
+The mentor is now **Benjamin** (was Bram), and every line the game reads aloud is his
+recorded ElevenLabs voice: 1,414 sentence clips in `app/public/voice/` (36.7 min, ~27,800
+characters recorded). A text with any sentence unrecorded falls back whole to the browser
+voice, and the dev server notes it in `app/scripts/voice-missed.txt` for the next
+`npm run voice`. Played at 1280×800 on a fresh save, title to the first lesson: every
+line came from a clip (10 played, the browser voice used for none), and the speaker strip's
+highlight moved word by word in step. Checks: `npm test` "ℹ pass 1078 ℹ fail 0", tsc clean;
+`anim` + `interact` "5 passed (3.4m)"; `readaloud` + `readcoverage` + `veldgids` "7 passed
+(7.4m)". The full e2e suite was stopped at 69/121 on the owner's word (the specs it reached
+passed but for `anim` and `interact` under load, both green on the rerun above).
+
 ## 2026-10-06 14:55: after run 7 (run7/integration; every check ran on 2b43aa5, and only docs changed after it; played by hand on a fresh save + screenshots looked at)
 
 **The golden path is ALL GREEN, and every adventure is now a different little expedition
@@ -191,13 +204,13 @@ draw calls ≤ 105 (the two playtesters saw peaks of 112 and 121; the cap is 150
 | # | Step | Status | What a player experiences |
 |---|------|--------|---------------------------|
 | 1 | Opening screen | ✅ | The spawn clearing at golden hour under the title; Enter presses *Begin*. |
-| 2 | Make your ranger | ✅ | Skin, hair, jacket, eyes show on the 3D ranger. He is a real 8-year-old: 1.32 m beside Bram and the poacher (1.8 m); animals and plants at true size. |
-| 3 | Walk the world | ✅ | Bram greets him by name, then the lessons are learned by doing (arrows, Shift). Walking 2.0-2.2 m/s, Shift runs 4.1-4.2 m/s (iPad: the stick at its rim); the lens stays ~5 m behind, FOV 55, no bob, no snap. A marker's animal stands beside its ring, never in it. |
-| 4 | Jeep / helicopter | ✅ | Animals see the jeep coming and trot aside; it brakes for them and never touches one (driven at a roaming boar: it trotted off, closest 4.0 m). Bram suggests the jeep once when the next mission is far, and is quiet once he sits in it. Heli flies to a pad and lands. |
-| 5 | Go to mission 1 | ✅ | Bram's hook brings the chip; Enter at the ring starts it. |
+| 2 | Make your ranger | ✅ | Skin, hair, jacket, eyes show on the 3D ranger. He is a real 8-year-old: 1.32 m beside Benjamin and the poacher (1.8 m); animals and plants at true size. |
+| 3 | Walk the world | ✅ | Benjamin greets him by name, then the lessons are learned by doing (arrows, Shift). Walking 2.0-2.2 m/s, Shift runs 4.1-4.2 m/s (iPad: the stick at its rim); the lens stays ~5 m behind, FOV 55, no bob, no snap. A marker's animal stands beside its ring, never in it. |
+| 4 | Jeep / helicopter | ✅ | Animals see the jeep coming and trot aside; it brakes for them and never touches one (driven at a roaming boar: it trotted off, closest 4.0 m). Benjamin suggests the jeep once when the next mission is far, and is quiet once he sits in it. Heli flies to a pad and lands. |
+| 5 | Go to mission 1 | ✅ | Benjamin's hook brings the chip; Enter at the ring starts it. |
 | 6 | Mission 1 games | ✅ | *De verdwaalde frisling*, one adventure (below). |
 | 7 | Finish mission | ✅ | Reward with three breinkrachten, the cut-fence clue; the family of six stays at the wallow. |
-| 8 | Back in the world | ✅ | By the family; Bram: "Volg de pijl linksboven." while the chip points to the reekalf (one next step); the story order is the four adventures first. Reload keeps all four homes "after". |
+| 8 | Back in the world | ✅ | By the family; Benjamin: "Volg de pijl linksboven." while the chip points to the reekalf (one next step); the story order is the four adventures first. Reload keeps all four homes "after". |
 
 The four redesigned missions, as played:
 

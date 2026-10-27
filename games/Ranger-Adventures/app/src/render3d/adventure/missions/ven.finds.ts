@@ -42,6 +42,7 @@ import {
   blueOf, butterflySpot, dragonflyHome, featherSpot, onLoop, plopSpot, type VenLife,
 } from './ven.life';
 import type { Frog, VenHome } from './ven.home';
+import { narrator } from '../../../core/narrator';
 
 /** How big (m) the ducks are drawn: a mallard and her ducklings of a few weeks, ≈ 1.4× (AnimalScale). */
 const MOTHER_H = SIZE['eend-moeder'].h;
@@ -429,7 +430,7 @@ export class VenLife3d {
     if (this.quackIn <= 0) {
       this.quackIn = 7 + this.duckRnd() * 9;
       const m = this.mother;
-      if (!this.laid && m && cam && store.get().settings.geluid && !(typeof window !== 'undefined' && window.speechSynthesis?.speaking)) {
+      if (!this.laid && m && cam && store.get().settings.geluid && !narrator.busy()) {
         Sound.callAt('eend', m.position.x, m.position.z, listenerOf(cam), 22);
       }
     }

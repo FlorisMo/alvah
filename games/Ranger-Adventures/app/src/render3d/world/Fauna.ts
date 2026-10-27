@@ -102,13 +102,13 @@ const SWOOP_DRIFT = 4;
 /** How fast (rad/s) a swooping glider turns to the way it really flies. */
 const SWOOP_TURN = 2.4;
 
-/** Where Bram, the warden, stands: beside the missiebord (run 6, FLOW). */
+/** Where Benjamin, the warden, stands: beside the missiebord (run 6, FLOW). */
 export const WARDEN_AT = { x: 3.9, z: -5.0 } as const;
-/** How fast Bram turns to the ranger and back (rad/s): a calm turn of the body. */
+/** How fast Benjamin turns to the ranger and back (rad/s): a calm turn of the body. */
 const WARDEN_TURN_RATE = 2.2;
 /** Quiet this long (s), he turns back to the clearing. */
 const WARDEN_RESUME_S = 1.6;
-/** The ranger this close (m), Bram looks at him even when he says nothing. */
+/** The ranger this close (m), Benjamin looks at him even when he says nothing. */
 const WARDEN_NOTICE_M = 4.5;
 
 export class Fauna {
@@ -132,9 +132,9 @@ export class Fauna {
   blobCount = 0;
   // the season's ontknoping (the poacher was reported): he no longer lurks in the trees
   // but stands calmly by the BOA warden — the reformed poacher of the canon (VISION §4a),
-  // a step behind Bram's shoulder, off the sand path
+  // a step behind Benjamin's shoulder, off the sand path
   private readonly POACHER_REFORMED = { x: 5.6, z: -6.4 };
-  // ---- run 6 (FLOW lane): Bram, the warden, speaks ---------------------------------
+  // ---- run 6 (FLOW lane): Benjamin, the warden, speaks ---------------------------------
   // While he speaks (ui/hud/Speaker) he turns to the ranger and a small speech mark
   // floats over his head; after, he turns back to his rest (facing the spawn clearing).
   private wardenTalking = false;
@@ -462,7 +462,7 @@ export class Fauna {
     this.blobCount++;
   }
 
-  /** Run 7: the story's grown-ups (Bram, the distant figure) out of one picture (a camera
+  /** Run 7: the story's grown-ups (Benjamin, the distant figure) out of one picture (a camera
    *  trap's photo, World.snapshot `people: false`); returns how to put them back. */
   peopleOutOfPicture(): () => void {
     const was = this.scenicActors.map((a) => a.group.visible);
@@ -481,7 +481,7 @@ export class Fauna {
   placeScenicActors(): void {
     // grown men at their true heights (AnimalScale), a head and a half above the boy
     const ACTORS: { id: string; x: number; z: number; height: number }[] = [
-      // Bram, the BOA, stands beside his missiebord (2.2, -5) on its right as you arrive:
+      // Benjamin, the BOA, stands beside his missiebord (2.2, -5) on its right as you arrive:
       // in the first play frame, clear of its ring and of the forward (−z) corridor, at
       // the edge of the sand track toward the watchtower (run 6, FLOW)
       { id: 'ranger-warden-boa', x: WARDEN_AT.x, z: WARDEN_AT.z, height: SIZE.boa.h },
@@ -527,8 +527,8 @@ export class Fauna {
     a.group.rotation.y = Math.atan2(-at.x, -at.z); // face the spawn clearing, like the warden
   }
 
-  // ---- run 6 (FLOW lane): Bram speaks ------------------------------------------------
-  /** Bram speaks (true) or is quiet again (false): he turns to the ranger while he
+  // ---- run 6 (FLOW lane): Benjamin speaks ------------------------------------------------
+  /** Benjamin speaks (true) or is quiet again (false): he turns to the ranger while he
    *  speaks and, when he talks in person (`mark`), a small speech mark floats over his
    *  head. Over the portofoon (far off) there is no mark: drawn on top of the world, it
    *  showed through the cabin roof when he stood behind it. */
@@ -545,13 +545,13 @@ export class Fauna {
     if (this.speechMark) this.speechMark.visible = on && mark;
   }
 
-  /** Where Bram stands (x, z), or null before he is placed. */
+  /** Where Benjamin stands (x, z), or null before he is placed. */
   wardenPos(): { x: number; z: number } | null {
     const w = this.scenicActors.find((a) => a.id === 'ranger-warden-boa');
     return w ? { x: w.group.position.x, z: w.group.position.z } : null;
   }
 
-  /** Bram for the dev hook: where he stands, how tall, whether he talks (a speech mark
+  /** Benjamin for the dev hook: where he stands, how tall, whether he talks (a speech mark
    *  over him) and how far (rad) he turns away from facing `ranger`. */
   wardenState(ranger: { x: number; z: number }): { x: number; z: number; h: number; talking: boolean; mark: boolean; offRanger: number } | null {
     const w = this.scenicActors.find((a) => a.id === 'ranger-warden-boa');
@@ -562,7 +562,7 @@ export class Fauna {
     return { x: p.x, z: p.z, h: w.height, talking: this.wardenTalking, mark: !!this.speechMark?.visible, offRanger: Math.round(off * 100) / 100 };
   }
 
-  /** Per frame: while he speaks, and while the ranger stands near him, Bram turns
+  /** Per frame: while he speaks, and while the ranger stands near him, Benjamin turns
    *  (calmly, the short way) to face the ranger; a little after he has finished he turns
    *  back to the clearing. Under reduced motion the turn is a cut. */
   tendWarden(dt: number, ranger: { x: number; z: number }, reduced: boolean): void {

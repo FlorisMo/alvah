@@ -425,5 +425,5 @@ acceptance list; `RANGER_PORT=<p> npm run gate` tail; `npm run golden` ALL GREEN
 `npx playwright test e2e/missions.spec.ts --grep "wildcamera"` (three tests) with two seeds;
 draw calls < 150 in every beat; no `Math.random` in `missions/wildcamera*`; every new string
 ≤ 7 words and read aloud; nothing pops into view; the man's photo free of jeep, helicopter,
-Bram and the ranger; the 2D floor (Instellingen → altijd 2D) plays the mission with the same
+Benjamin and the ranger; the 2D floor (Instellingen → altijd 2D) plays the mission with the same
 pools.

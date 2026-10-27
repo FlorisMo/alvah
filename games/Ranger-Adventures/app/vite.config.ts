@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+import * as fs from 'node:fs';
 
 /**
  * Standalone Vite app for "Ranger van de Veluwe".
@@ -33,10 +34,41 @@ function manualChunks(id: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Benjamin's voice (core/voice.ts): in dev, a text the game says with no recorded clip
+ * is POSTed here and noted once in `scripts/voice-missed.txt` (git-ignored), so any
+ * play or e2e run against the dev server collects what `npm run voice` records next.
+ */
+function voiceMissed(): Plugin {
+  const file = new URL('./scripts/voice-missed.txt', import.meta.url);
+  return {
+    name: 'voice-missed',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__voice-missed', (req, res) => {
+        let body = '';
+        req.on('data', (c) => { body += c; });
+        req.on('end', () => {
+          const line = body.replace(/\s+/g, ' ').trim();
+          if (req.method === 'POST' && line) {
+            const have = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n') : [];
+            if (!have.includes(line)) fs.appendFileSync(file, line + '\n');
+          }
+          res.statusCode = 204;
+          res.end();
+        });
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const site = mode === 'site';
   return {
     base: site ? '/ranger/' : '/',
+    plugins: [voiceMissed()],
+    // (the list it writes never reloads a page mid-play)
+    server: { watch: { ignored: ['**/scripts/voice-missed.txt'] } },
     build: {
       // Keep ALL CSS in one file: the Astro wrapper (`src/pages/ranger/
       // index.astro`) hardcodes a single `<link href="/ranger/app.css">`, so

@@ -1,7 +1,7 @@
 /**
- * mentor.ts — what Bram says, and the first minute's lessons (run 6, FLOW lane P2).
+ * mentor.ts — what Benjamin says, and the first minute's lessons (run 6, FLOW lane P2).
  *
- * Bram is the warden (the BOA of the canon), the player's mentor, by the missiebord.
+ * Benjamin is the warden (the BOA of the canon), the player's mentor, by the missiebord.
  * First name only. Calm, kind, few words: he greets a new boswachter, tells the hook
  * of the first mission, and later points at the jeep and at the missiebord when they
  * become useful. His lines play in the speaker strip (ui/hud/Speaker.ts), read aloud
@@ -14,12 +14,12 @@
  */
 
 /** The mentor's name, as the speaker strip shows it. */
-export const MENTOR_NAAM = 'Bram';
+export const MENTOR_NAAM = 'Benjamin';
 
-/** Bram's lines per beat. Each line is one strip, spoken on its own. */
-export const BRAM = {
+/** Benjamin's lines per beat. Each line is one strip, spoken on its own. */
+export const BENJAMIN = {
   /** A new boswachter, just made in the maker: the first play frame. */
-  intro: ['Hoi {naam}! Welkom op de Veluwe.', 'Ik ben Bram, de boswachter.', 'Jij bent nu ook boswachter!'],
+  intro: ['Hoi {naam}! Welkom op de Veluwe.', 'Ik ben Benjamin, de boswachter.', 'Jij bent nu ook boswachter!'],
   /** The hook of the first mission (the frisling), once the controls are learned. The
    *  MISSIONS lane's frisling story: a piglet lost from its group, which roots at the
    *  mud pool; you find it and bring it home. Knap woorden: frisling. */
@@ -36,7 +36,7 @@ export const BRAM = {
   raaf: ['Bij de hut zit een jonge raaf.', 'Kun jij hem helpen?'],
   /** A returning player, once a session; he adds who he is if they never met. */
   welkomTerug: ['Welkom terug, {naam}!'],
-  kennismaken: 'Ik ben Bram, de boswachter.',
+  kennismaken: 'Ik ben Benjamin, de boswachter.',
 } as const;
 
 /** Fill in the ranger's name. */

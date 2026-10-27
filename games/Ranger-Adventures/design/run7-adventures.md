@@ -150,7 +150,7 @@ After the mission one frog sits in plain view on a moss cushion at the middle ba
 
 | # | Beat | What he sees and does | Line (draft, plain) | Measures |
 |---|------|------------------------|---------------------|----------|
-| 0 | Briefing | Bram's card; under it the play is laid (bay, stations, adder) | "Bij het ven roepen de kikkers." "Eén zit verstopt bij het water." "Kun jij hem vinden?" "Kijk goed waar je loopt." | |
+| 0 | Briefing | Benjamin's card; under it the play is laid (bay, stations, adder) | "Bij het ven roepen de kikkers." "Eén zit verstopt bij het water." "Kun jij hem vinden?" "Kijk goed waar je loopt." | |
 | 1 | Look | one calm look across the water at this play's bay: rings where the frogs call, their call | "Hoor je de kikkers?" | |
 | 2 | Follow (walk) | he walks round the hide onto the north bank toward the sound; the chip says "De kikkers" with an ear; **running silences them** ("Sst. Nu zijn ze stil."), standing still ~1.2 s and they call again; at `trailLegs` points they fall silent by themselves: "Sta stil. Luister." and answer when he is still | "Loop naar de kikkers." | zoeken trail (knobs only) |
 | 3 | Station 1 | this play's first rustkracht moment (adder, soft moss, see 3.3) | | dagnacht 1/3 |

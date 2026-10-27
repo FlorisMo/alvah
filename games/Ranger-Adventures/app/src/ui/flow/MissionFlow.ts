@@ -32,7 +32,7 @@ import { MENTOR_NAAM } from '../../content/mentor';
 import { MISSIE, HUT, GROEI, vul } from '../../content/copy';
 import { SKILL_META } from '../../core/skill';
 import { deviceText } from '../hud/device';
-import { BRAM_PORTRAIT } from '../hud/Speaker';
+import { BENJAMIN_PORTRAIT } from '../hud/Speaker';
 import { missionIcon } from '../MissionIcon';
 import { icon, CLUE_ICON } from '../icons';
 import { session, esc, naam, card, clearOverlays, fadeCut, kicker, leave } from './session';
@@ -177,13 +177,13 @@ export function showBriefing(mission: Mission): void {
   const lines = again ? [mission.kort ?? ''] : (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
   const shown = lines.flatMap(zinnen); // one sentence a line: every line on the page ≤ 7 words
 
-  // Bram's field note: his portrait and name, the mission's picture and title, the lines
+  // Benjamin's field note: his portrait and name, the mission's picture and title, the lines
   // written as they are read. "Ga op pad" and "Nog even rondkijken" sit in the pinned
   // footer: at 800×600 the way back used to fall below the card (breaker note)
   const el = card(
     `<div class="card briefing veldnotitie">` +
-    `<div class="vn-head"><span class="vn-bram">${BRAM_PORTRAIT}</span>` +
-    kicker(null, vul(MISSIE.veldnotitie, { bram: MENTOR_NAAM, landschap: landschapNaam(mission.landschap) })) + `</div>` +
+    `<div class="vn-head"><span class="vn-benjamin">${BENJAMIN_PORTRAIT}</span>` +
+    kicker(null, vul(MISSIE.veldnotitie, { mentor: MENTOR_NAAM, landschap: landschapNaam(mission.landschap) })) + `</div>` +
     `<div class="vn-title">${missionIcon(mission, 'mc-icon--big')}<h1 class="boot-title">${esc(mission.titel)}</h1></div>` +
     `<div class="card-body">` +
     `<div class="briefing-lines">${shown.map((_, i) => `<p class="briefing-line" data-line="${i}"></p>`).join('')}</div>` +

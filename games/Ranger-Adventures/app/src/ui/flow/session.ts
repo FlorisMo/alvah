@@ -74,7 +74,7 @@ export function fadeCut(move: () => void, then: () => void): void {
  * Run 7 (feel): the same warm dip for a cut INSIDE the world (World.ride: climbing into the
  * jeep from its front would swing the view ~170° round it). `move` runs while it is deepest,
  * `then` once the world has drawn the new view under it, and the dip lifts. Unlike fadeCut
- * it is no menu (`menuOpen` stays false: a line Bram is reading goes on, the world holds the
+ * it is no menu (`menuOpen` stays false: a line Benjamin is reading goes on, the world holds the
  * ranger itself) and it takes nothing off the screen. Under reduced motion a plain cut.
  */
 export function dipCut(move: () => void, then: () => void): void {

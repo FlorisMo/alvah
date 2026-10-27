@@ -13,9 +13,9 @@ main.ts ── boot veil + Stage (renderer, loop) ─► ui/Missions.ts → Worl
           ui/flow/WorldSession.ts   builds the World, runs free roam, returns from missions
           ui/flow/MissionFlow.ts    briefing → steps (mini-games) → reward → clue → back
           ui/hud/ExploreHud.ts      pill, waypoint chip, ONE proximity prompt, the "?" card
-          ui/hud/Lessons.ts         the first minute: Bram's beats + the lessons, one at a time
+          ui/hud/Lessons.ts         the first minute: Benjamin's beats + the lessons, one at a time
                                     (rules: core/lessons.ts; words: content/mentor.ts)
-          ui/hud/Speaker.ts         Bram's speaker strip: one line at a time, read aloud
+          ui/hud/Speaker.ts         Benjamin's speaker strip: one line at a time, read aloud
           ui/hub/Hub.ts             pause, missiebord, sporenboek (clue board), badges
           ui/keys.ts                Enter/Space = the one visible primary button, Esc = back
           ui/dev/wireDevhook.ts     connects window.__ranger read-backs
@@ -28,9 +28,9 @@ render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls
                         occluder fade (only the crowns between camera and ranger fade); a home
                         tree's branch stub (TreeStub) is part of its tree: drawn and faded with it
    world/Progress.ts    lasting per-mission tableau at a finished marker (onMissionComplete)
-   world/Fauna.ts       Bram the warden (by the missiebord; turns to you when he speaks),
+   world/Fauna.ts       Benjamin the warden (by the missiebord; turns to you when he speaks),
                         poacher, roaming animals
-   world/Markers.ts     mission markers, missiebord, the hut's porch ring (once Bram told
+   world/Markers.ts     mission markers, missiebord, the hut's porch ring (once Benjamin told
                         about the young raaf), sit-spot, proximity, wayfinding
    world/Vehicles.ts    jeep, helicopter + pads, the jeep's dust (world/Dust.ts: one Points
                         cloud, hidden while no puff lives, lit like the ground and drawn through
@@ -61,11 +61,40 @@ engines/           the pure game logic (scoring, sequences, rules); no three.js;
 render2d/          the 2D floor per game (reduced motion / fallback)
 content/veluwe.ts  missions, steps, animals, texts (Dutch, AVI M3/E3)
 content/copy.ts    the copy deck: every word on the shared screens (HUD, cards, Pauze, hut,
-                   Instellingen); screens.ts the title + maker, mentor.ts Bram + the lessons.
+                   Instellingen); screens.ts the title + maker, mentor.ts Benjamin + the lessons.
                    core/readlevel.test.ts lints all of it (≤7 words a sentence and a shown
-                   line, no dash, no hype, no surname, one cast)
+                   line, no dash, no hype, no surname, one cast); core/readingcorpus.ts walks it
 core/              state + persist (save data), input, vehicle/heli physics, skill, sound, …
+core/narrator.ts   THE voice: every word read aloud goes through it (see "Benjamin's voice")
 ```
+
+## Benjamin's voice (2026-10-27)
+
+Everything the game reads aloud is said by **Benjamin**, the warden (named Bram until
+2026-10-27), in ONE recorded ElevenLabs voice Floris designed for him (voice id
+`squHBnETMVeVdrDpROKa`, in `core/voice.ts#VOICE`). Never use another voice, never change
+its settings casually: a change re-records every clip.
+
+- **Recorded ahead, never live.** `npm run voice` (`app/scripts/voice.mjs`) records each
+  sentence once into `app/public/voice/<id>.mp3` and `public/voice/manifest.json` (the
+  sentence → its clip, its length, when each word starts). The game never calls
+  ElevenLabs; the key (`ELEVENLABS_API_KEY` in `app/.env.local`) never ships.
+- **Playing.** `core/narrator.ts` splits a text into sentences (`core/voice.ts#voiceUnits`)
+  and plays their clips one after the other. If one sentence has no clip, or the browser
+  refuses the sound, the browser's own voice (Web Speech) says the whole text instead.
+  Ask `narrator.busy()` / `narrator.quiet()` whether the voice is talking, never
+  `speechSynthesis` (it is silent while a clip plays).
+- **The word highlight** (`ui/ReadAloud.ts`) uses the clips' real word starts
+  (`narrator.timing` → `wordclock`), and starts when the voice is heard.
+- **Tests** read what the game says from the narrator's `ranger:say` window event
+  (every text, whichever voice says it), not from a `speechSynthesis` spy.
+- **New or changed words: record them before you push.** The sentences come from the
+  whole content (`core/readingcorpus.ts`) and from `app/scripts/voice-missed.txt`, where
+  the dev server notes every text the game said without a clip (lines put together in
+  play: names, counts, titles). So: change the words, play them or run the e2e specs
+  against the dev server, then `npm run voice` (a dry run: what is missing and how many
+  characters, ElevenLabs bills per character) and `npm run voice -- --go` to record.
+  `--match <regex>` records only what matches. Commit the new clips with the words.
 
 ## Rules of the road
 
@@ -92,7 +121,7 @@ classic 2D floors, same content, same logging). `MissionFlow.runAdventure` runs 
 adventure never touches save data: it logs each `Mission.stappen` step **exactly once**
 through the flow's hooks (`log`, `fact`, `reunion`), so the EF contract is unchanged.
 The story order (`WorldSession.storyOrder`) puts the missions with an entry first: the
-wayfinding chip, Bram's next step and the missiebord's "Nu doen" follow it; the markers
+wayfinding chip, Benjamin's next step and the missiebord's "Nu doen" follow it; the markers
 keep the area's layout. A home's clearings are its own ground: no other mission's staged
 patch is laid there (`World.playClear`).
 
@@ -300,7 +329,7 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   world/Sky.ts + Daylight.ts; the end of the adventure hands the golden hour back);
   `k.ui.veil(text)` — time passes; `k.world.snapshot(cam, w, h, prepare, { people })` — a
   photograph of the world through another camera (a camera trap's, taken inside a frame;
-  never the jeep or the helicopter, and with `people: false` never Bram or the far figure). A home may
+  never the jeep or the helicopter, and with `people: false` never Benjamin or the far figure). A home may
   plant real forest trees (`Adventure.trees`) and keep a glade clear of them
   (`treeClearings`); the trees between a held lens and what it frames fade.
 - *plumbing*: `k.say(line)`, `k.wait(s)`, `k.until(fn, s)`, `k.onTick(fn)`, `k.own(obj)`,

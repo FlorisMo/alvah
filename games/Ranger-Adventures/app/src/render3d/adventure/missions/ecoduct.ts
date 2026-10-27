@@ -55,6 +55,7 @@ import {
   asideView, backCorner, backOff, backWay, crossingLine, ecoductClearings, ecoductLayout, ecoductTreeClearings, fileBack, flipFacing, haltOf, lastVariants, leaveWay, mouthOf, onBed, roepSpot, screenPath, screenWay, waitOf,
   type Crossing, type EcoductLaid, type Kind, type Side,
 } from './ecoduct.places';
+import { narrator } from '../../../core/narrator';
 
 /** The light this home plays in: animals cross at dawn and dusk (a new light each play,
  *  never one of his last two plays'). */
@@ -94,7 +95,7 @@ const BED_CLEAR_M = 3;
 
 /** Is something being said now (a call never sounds over a spoken line)? */
 function speaking(): boolean {
-  return typeof window !== 'undefined' && !!window.speechSynthesis?.speaking;
+  return narrator.busy();
 }
 
 /** This play's crossing, drawn and laid under the briefing card. */

@@ -55,6 +55,7 @@ import {
   VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderHoldHeading, adderView, between, carpetAt, frogOf, decoySlots, hintRingOf, lastVenVariants, lookAim, pointAt,
   padGoal, project, route, singOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type VenLaid, type WayStep,
 } from './ven.places';
+import { narrator } from '../../../core/narrator';
 
 /** The keys that would take a step (the song asks him to keep still). */
 const STEP_KEYS = /^(Arrow(Up|Down|Left|Right)|Key[WASD])$/;
@@ -69,7 +70,7 @@ const SING_STILL_S = 1.5;
 
 /** Is something being said now (a call never sounds over a spoken line)? */
 function speaking(): boolean {
-  return typeof window !== 'undefined' && !!window.speechSynthesis?.speaking;
+  return narrator.busy();
 }
 /** He waited for a line to end at most this long (s): a voice that never says it is done
  *  never holds the frogs up. */

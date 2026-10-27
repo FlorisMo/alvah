@@ -6,7 +6,7 @@
  * thing's picture, "Nieuw in je veldgids!" (for a bird he only heard: "Dat hoorde je!")
  * and its name, read aloud once, a 🔊 to hear it again; ~4 s, then it goes. One at a time, at a QUIET moment only (core: reveal-queue.ts):
  * the world is played (the explore or adventure HUD is up), no card or menu, nobody
- * speaking (the narrator, Bram), the first minute's teaching slot idle, and inside a
+ * speaking (the narrator, Benjamin), the first minute's teaching slot idle, and inside a
  * mission only while the mission says its beat is calm (`setRevealGate`: a walk, a look,
  * the reunion). It never takes a click (only its 🔊 does) and it is never a `.ra-overlay`,
  * so it is never a menu and never in the way. Under reduced motion it simply appears and
@@ -37,8 +37,7 @@ let raf = 0;
 
 /** The narrator is saying something (before a reveal shows: never over a line). */
 function voiceBusy(): boolean {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return false;
-  return window.speechSynthesis.speaking || window.speechSynthesis.pending;
+  return narrator.busy();
 }
 
 /** May a reveal show (or stay) now? */
@@ -47,7 +46,7 @@ function quietNow(): boolean {
   if (!session.host.querySelector('.explore-hud, .adventure-hud')) return false; // (the title, the maker)
   if (menuOpen() || speaking()) return false;
   if (missionGate && !missionGate()) return false;
-  // (Bram's teaching lives in the explore HUD: a lesson left waiting there while an
+  // (Benjamin's teaching lives in the explore HUD: a lesson left waiting there while an
   // adventure runs is not on screen, and never holds that adventure's reveals back —
   // review r2 of ree-discover: a fresh save's 'rennen' lesson, shown on his way to the
   // marker, held every card of the mission until it was over)

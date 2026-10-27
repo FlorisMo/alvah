@@ -37,3 +37,6 @@ playwright-report/
 e2e/__shots__/
 # Optional Meshy/Mixamo ingest drop (W3.1) — raw GLBs never committed here.
 incoming/
+
+# Benjamin's voice: texts the dev server heard with no clip yet (npm run voice records them)
+scripts/voice-missed.txt

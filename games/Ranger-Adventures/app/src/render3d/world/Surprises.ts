@@ -43,6 +43,7 @@ import {
   SeenMeter, groundHides, shouldGo, robinSpot, robinHop, bearing, HEARD_M, ROBIN_SIDE, ROBIN_ALONG, ROBIN_FLUTTER_M, ROBIN_SHY_M,
   type SurpriseId, type SurpriseSpec, type Viewer,
 } from './surprises-math';
+import { narrator } from '../../core/narrator';
 
 /** What the director needs from the world (World.ts builds it). */
 export interface SurprisesEnv {
@@ -708,7 +709,7 @@ export class Surprises {
     const every = spec.call!.every;
     a.callIn = a.fork.between(every[0], every[1]);
     const h = this.hooks!;
-    const speaking = typeof window !== 'undefined' && !!window.speechSynthesis?.speaking;
+    const speaking = narrator.busy();
     if (!h.sound() || speaking) { a.callIn = 1.2; return; }
     const at = this.where(a);
     // (a drumming or a cuckoo carries: it may sound a little past HEARD_M, softly; it counts

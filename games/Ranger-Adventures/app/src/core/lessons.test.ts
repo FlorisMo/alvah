@@ -10,7 +10,7 @@ import {
   nextStep, hookPending, learnedByDoing, lessonDone, lessonTimedOut, migrateGeleerd, readingMs, cutByRide,
   raafDue, LESSON, type GuideState,
 } from './lessons.ts';
-import { BRAM, LES, BESTURING, metNaam } from '../content/mentor.ts';
+import { BENJAMIN, LES, BESTURING, metNaam } from '../content/mentor.ts';
 import { countWords } from './readlevel.ts';
 
 const fresh = (over: Partial<GuideState> = {}): GuideState => ({
@@ -20,7 +20,7 @@ const fresh = (over: Partial<GuideState> = {}): GuideState => ({
   ...over,
 });
 
-test('a new boswachter: Bram first, then walk, run, the hook — one at a time', () => {
+test('a new boswachter: Benjamin first, then walk, run, the hook — one at a time', () => {
   assert.equal(nextStep(fresh()), 'bram');
   assert.equal(nextStep(fresh({ geleerd: { bram: true } })), 'lopen');
   assert.equal(nextStep(fresh({ geleerd: { bram: true, lopen: true } })), 'rennen');
@@ -28,7 +28,7 @@ test('a new boswachter: Bram first, then walk, run, the hook — one at a time',
   assert.equal(nextStep(fresh({ geleerd: { bram: true, lopen: true, rennen: true, haak: true } })), null);
 });
 
-test('walking during Bram counts: a lesson already done is skipped', () => {
+test('walking during Benjamin counts: a lesson already done is skipped', () => {
   const walked = { walkedM: LESSON.lopen.doneM + 0.1, runS: 0, lookPx: 0 };
   assert.equal(nextStep(fresh({ geleerd: { bram: true }, progress: walked })), 'rennen');
   assert.deepEqual(learnedByDoing({ bram: true }, walked), ['lopen']);
@@ -45,7 +45,7 @@ test('the run lesson never blocks: it gives way after 12 s or 25 m, and the hook
 });
 
 test('riding the jeep or the heli: the lessons on foot wait, the hook and the chip do not', () => {
-  // he got in during Bram's greeting, before he had walked 3 m: the hook comes while he drives
+  // he got in during Benjamin's greeting, before he had walked 3 m: the hook comes while he drives
   assert.equal(nextStep(fresh({ geleerd: { bram: true }, onFoot: false })), 'haak');
   assert.equal(nextStep(fresh({ geleerd: { bram: true, lopen: true }, onFoot: false })), 'haak');
   // told the hook while driving: nothing more while he rides
@@ -53,7 +53,7 @@ test('riding the jeep or the heli: the lessons on foot wait, the hook and the ch
   // on foot again, what he has not learned yet comes back, in order
   assert.equal(nextStep(fresh({ geleerd: { bram: true, haak: true } })), 'lopen');
   assert.equal(nextStep(fresh({ geleerd: { bram: true, lopen: true, haak: true } })), 'rennen');
-  // Bram's greeting itself is never skipped for the ride (he can listen while he drives)
+  // Benjamin's greeting itself is never skipped for the ride (he can listen while he drives)
   assert.equal(nextStep(fresh({ onFoot: false })), 'bram');
 });
 
@@ -97,7 +97,7 @@ test('later beats: the missiebord after the first mission, the jeep when far, th
   assert.equal(lessonDone('kijken', { walkedM: 0, runS: 0, lookPx: LESSON.kijken.donePx }), true);
 });
 
-test('the young raaf: Bram tells about it once two missions are done, after the missiebord, before the jeep', () => {
+test('the young raaf: Benjamin tells about it once two missions are done, after the missiebord, before the jeep', () => {
   const all = { bram: true, lopen: true, rennen: true, haak: true };
   assert.equal(nextStep(fresh({ geleerd: all, raafDue: true })), 'raaf');
   assert.equal(nextStep(fresh({ geleerd: all, raafDue: true, missiebordArmed: true })), 'missiebord', 'the missiebord first');
@@ -118,14 +118,14 @@ test('the old save flags become learned steps', () => {
   assert.deepEqual(migrateGeleerd({ wereldHintGezien: true, geleerd: { kijken: true } }), { lopen: true, haak: true, kijken: true });
 });
 
-test('a line of Bram stays up at least its reading time', () => {
+test('a line of Benjamin stays up at least its reading time', () => {
   assert.equal(readingMs('Help jij hem zoeken?'), 1200 + 4 * 350);
 });
 
-test('every line Bram says and every lesson is ≤ 7 words, with the name filled in', () => {
+test('every line Benjamin says and every lesson is ≤ 7 words, with the name filled in', () => {
   const lines = [
-    ...BRAM.intro, ...BRAM.haak.simpel, ...BRAM.haak.knap, ...BRAM.jeep, ...BRAM.missiebord, ...BRAM.raaf,
-    ...BRAM.welkomTerug, BRAM.kennismaken,
+    ...BENJAMIN.intro, ...BENJAMIN.haak.simpel, ...BENJAMIN.haak.knap, ...BENJAMIN.jeep, ...BENJAMIN.missiebord, ...BENJAMIN.raaf,
+    ...BENJAMIN.welkomTerug, BENJAMIN.kennismaken,
     ...Object.values(LES).flatMap((l) => [l.keys, l.stick]),
     BESTURING.titel, BESTURING.terug, ...BESTURING.keys.map((r) => r.wat), ...BESTURING.stick.map((r) => r.wat),
   ].map((l) => metNaam(l, 'Alvah'));
@@ -134,5 +134,5 @@ test('every line Bram says and every lesson is ≤ 7 words, with the name filled
     assert.ok(!/\{naam\}/.test(l));
     assert.ok(!/—/.test(l), `"${l}" has an em dash`);
   }
-  assert.equal(metNaam(BRAM.intro[0], 'Bo'), 'Hoi Bo! Welkom op de Veluwe.');
+  assert.equal(metNaam(BENJAMIN.intro[0], 'Bo'), 'Hoi Bo! Welkom op de Veluwe.');
 });

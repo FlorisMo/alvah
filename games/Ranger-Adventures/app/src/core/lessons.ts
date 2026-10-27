@@ -4,14 +4,14 @@
  * `ui/hud/Lessons.ts` runs it every frame, `core/lessons.test.ts` pins it.
  *
  * The first minute of a new boswachter, one thing at a time:
- *   bram     Bram greets you (three lines in the speaker strip)
+ *   bram     Benjamin greets you (three lines in the speaker strip)
  *   lopen    walk: the arrow key caps (the stick on a tablet), done after 3 m
  *   rennen   run: the Shift cap (the stick pushed far), done after 1.5 s of running;
  *            it gives way after 12 s shown or 25 m walked, so it never blocks
- *   haak     Bram tells the hook of the first mission; only now the chip shows the way
+ *   haak     Benjamin tells the hook of the first mission; only now the chip shows the way
  *   kijken   look round (drag the view): only if he stands still ~5 s, once a session
  * and later, once each: `missiebord` (back from the first mission), `raaf` (two missions
- * done and the young raaf not yet taken in: Bram tells about it, and the hut's porch
+ * done and the young raaf not yet taken in: Benjamin tells about it, and the hut's porch
  * gets its ring), `jeep` (the next mission far away on foot, the jeep near; never once
  * he has driven it himself). A returning player hears `welkom` once a
  * session. Walking or running before a lesson shows counts: a lesson already done is
@@ -22,7 +22,9 @@
 
 /** A step you learn by doing. */
 export type LessonId = 'lopen' | 'rennen' | 'kijken';
-/** A step Bram says. */
+/** A step Benjamin says. The greeting's id stays `bram` (the mentor's name until
+ *  2026-10-27): it is a saved key (settings.geleerd), so a renamed id would greet a
+ *  returning player as new. */
 export type BeatId = 'welkom' | 'bram' | 'haak' | 'missiebord' | 'raaf' | 'jeep';
 export type StepId = LessonId | BeatId;
 
@@ -79,7 +81,7 @@ export interface GuideState {
   progress: Progress;
 }
 
-/** Bram's hook is still to come: until then the chip does not show. */
+/** Benjamin's hook is still to come: until then the chip does not show. */
 export function hookPending(s: Pick<GuideState, 'geleerd' | 'hookRelevant'>): boolean {
   return s.hookRelevant && !s.geleerd.haak;
 }
@@ -93,7 +95,7 @@ export function nextStep(s: GuideState): StepId | null {
   if (s.returning && !s.welkomSaid) return 'welkom';
   if (!s.returning && !g.bram) return 'bram';
   // the lessons on foot wait while he rides (the jeep, the heli): what comes after them
-  // goes on, so Bram's hook and the chip never wait for him to get out
+  // goes on, so Benjamin's hook and the chip never wait for him to get out
   if (s.onFoot && !g.lopen && !lessonDone('lopen', s.progress)) return 'lopen';
   if (s.onFoot && !g.rennen && !s.rennenShown && !lessonDone('rennen', s.progress)) return 'rennen';
   if (hookPending(s)) return 'haak';
@@ -135,14 +137,14 @@ export function migrateGeleerd(settings: {
   return { ...out, ...(settings.geleerd ?? {}) };
 }
 
-/** Bram tells about the young raaf once two missions are done (it becomes useful then:
+/** Benjamin tells about the young raaf once two missions are done (it becomes useful then:
  *  it tells the "Wist je dat" facts once it is taken in), and only while it is not. */
 export const RAAF_BEAT_MISSIES = 2;
 export function raafDue(voltooid: Readonly<Record<string, boolean>>, rescued: boolean): boolean {
   return !rescued && Object.values(voltooid).filter(Boolean).length >= RAAF_BEAT_MISSIES;
 }
 
-/** How long (ms) a line of Bram's stays up at least: a reading time (1.2 s + 0.35 s a
+/** How long (ms) a line of Benjamin's stays up at least: a reading time (1.2 s + 0.35 s a
  *  word), so a line never flicks past with the voice off. */
 export function readingMs(line: string): number {
   const words = line.trim().split(/\s+/).filter(Boolean).length;

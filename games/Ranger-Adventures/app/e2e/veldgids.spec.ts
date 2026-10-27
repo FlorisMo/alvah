@@ -18,7 +18,7 @@ import { OOK_HIER } from '../src/content/ontdekkingen';
  *    surprise (the seed draws the buzzard first), sees its calm reveal (read aloud, the
  *    real animal's picture, where the veldgids is) and finds it in the gids.
  *
- * What the game says is read from a hook on `speechSynthesis.speak`; the dev hook is only
+ * What the game says is read from the narrator's `ranger:say` event; the dev hook is only
  * READ (`__ranger.surprise()` says where the surprise is, it never brings one).
  */
 
@@ -33,11 +33,7 @@ function seedSave(page: Page, extra: Record<string, unknown>): Promise<void> {
     try { if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', s); } catch { /* fresh */ }
     const w = window as unknown as { __said: string[] };
     w.__said = [];
-    const synth = window.speechSynthesis;
-    if (synth) {
-      const orig = synth.speak.bind(synth);
-      synth.speak = (u: SpeechSynthesisUtterance) => { w.__said.push(u.text); try { orig(u); } catch { /* no voice */ } };
-    }
+    window.addEventListener('ranger:say', (e) => { w.__said.push((e as CustomEvent<string>).detail); });
   }, JSON.stringify(save));
 }
 

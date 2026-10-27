@@ -3,7 +3,7 @@
  * place (run 6, FLOW lane P4). The HUD over the world, the cards between the world and a
  * mission (briefing, fact, reward, clue, finale), the in-mission Pauze, Onderweg, the
  * Pauze hub, the missiebord, the sporenboek, the badges, the raaf's hut and Instellingen.
- * The front door lives in content/screens.ts, Bram and the lessons in content/mentor.ts,
+ * The front door lives in content/screens.ts, Benjamin and the lessons in content/mentor.ts,
  * the missions in content/veluwe.ts.
  *
  * The rules, linted by core/readlevel.test.ts over every string here:
@@ -11,11 +11,11 @@
  *   - every string SHOWN on screen is ONE line of at most 7 words (a button, a chip, a tag,
  *     a strip line, a line on a card); a longer text is a list of lines, one idea each;
  *   - a string only SPOKEN (never shown) starts its key with `zeg`: only the sentence rule;
- *   - no em dash, no "held" or "kanjer", no surname: first names only (Bram, the raaf's name,
+ *   - no em dash, no "held" or "kanjer", no surname: first names only (Benjamin, the raaf's name,
  *     the ranger's name);
  *   - `{naam}`, `{titel}` … are filled in with `vul`.
  *
- * One cast: Bram (the boswachter, the player's mentor by the missiebord), the ranger (the
+ * One cast: Benjamin (the boswachter, the player's mentor by the missiebord), the ranger (the
  * player, named in the maker), the raaf (rescued at the hut, then named), de stroper.
  * One set of place names: de open plek (the clearing by the hut), de hut, het missiebord
  * (the board in the world), het sporenboek (the book in Pauze).
@@ -85,8 +85,8 @@ export const HUD_TIPS = [HUD.rand, HUD.rijden.keys, HUD.rijden.stick, HUD.rijden
 
 /* ------------------------------------------- a mission, start to finish ---- */
 export const MISSIE = {
-  /** Bram's field note: the kicker, and what the voice says before the title. */
-  veldnotitie: 'Veldnotitie van {bram} · {landschap}',
+  /** Benjamin's field note: the kicker, and what the voice says before the title. */
+  veldnotitie: 'Veldnotitie van {mentor} · {landschap}',
   zegAan: 'Ranger {naam}.',
   gaOpPad: 'Ga op pad',
   rondkijken: 'Nog even rondkijken',
@@ -166,7 +166,7 @@ export const HUB = {
   boekVraag: 'Wat is hier aan de hand?',
   nietGevonden: 'Nog niet gevonden',
   /** The facts collected on missions: the same name as the card they came on (a
-   *  "Veldnotitie" is Bram's note on a briefing; the code calls both veldnotities). */
+   *  "Veldnotitie" is Benjamin's note on a briefing; the code calls both veldnotities). */
   veldnotities: 'Wist je dat? · {n}/{m}',
   geenNotities: 'Weetjes over dieren komen hier ook.',
   /** The note under the clues, read after the newest clue: what is still to come. Never

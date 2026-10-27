@@ -35,6 +35,9 @@ export interface ClockOptions {
   rate?: number;
   /** If given, scale the whole clock to exactly this measured duration (Piper path). */
   totalMs?: number;
+  /** Benjamin's clips (core/voice.ts): when each word really starts (ms). Used as they
+   *  are when there is one per word (with `totalMs`), else the model's estimate. */
+  starts?: readonly number[];
 }
 
 // Timing model (ms), tuned to a calm child-friendly Dutch read-aloud (~rate 0.96).
@@ -61,6 +64,12 @@ function wordWeight(token: string): number {
 export function buildWordClock(text: string, opts: ClockOptions = {}): WordClock {
   const tokens = (text ?? '').trim().split(/\s+/).filter((t) => t.length > 0);
   if (tokens.length === 0) return { words: [], totalMs: 0 };
+
+  const st = opts.starts;
+  if (st && opts.totalMs && opts.totalMs > 0 && st.length === tokens.length) {
+    const total = opts.totalMs;
+    return { words: tokens.map((t, i) => ({ text: t, index: i, startMs: i === 0 ? 0 : st[i], endMs: i + 1 < st.length ? st[i + 1] : total })), totalMs: total };
+  }
 
   const rate = opts.rate && opts.rate > 0 ? opts.rate : 1;
   const weights = tokens.map(wordWeight);

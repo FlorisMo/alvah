@@ -1,10 +1,10 @@
 /**
- * Lessons.ts — the first minute, run every frame (run 6, FLOW lane P2): Bram's beats and
+ * Lessons.ts — the first minute, run every frame (run 6, FLOW lane P2): Benjamin's beats and
  * the lessons, one thing at a time, in the order core/lessons.ts decides.
  *
- * A new boswachter arrives: Bram greets him from beside the missiebord; then a lesson
+ * A new boswachter arrives: Benjamin greets him from beside the missiebord; then a lesson
  * strip teaches walking (the arrow key caps; the stick on a tablet) and running (the
- * Shift cap; the stick pushed far), each gone once he has done it; then Bram tells the
+ * Shift cap; the stick pushed far), each gone once he has done it; then Benjamin tells the
  * hook and only then does the chip top-left show the way to the first mission, whose
  * ring and tag glow. Standing still a while brings the look lesson once. Later, once
  * each: the missiebord beat after the first finished mission, the raaf beat once two
@@ -27,12 +27,13 @@ import {
   nextStep, hookPending, learnedByDoing, lessonDone, lessonTimedOut, cutByRide, raafDue,
   JEEP_BEAT, type LessonId, type StepId, type Progress, type GuideState,
 } from '../../core/lessons';
-import { BRAM, LES, metNaam } from '../../content/mentor';
+import { BENJAMIN, LES, metNaam } from '../../content/mentor';
 import { mountReadAloud } from '../ReadAloud';
 import { session, naam, menuOpen } from '../flow/session';
 import { nextMissionId } from '../flow/WorldSession';
 import { coarsePointer } from './device';
 import { say, cancelSpeaker, mountSpeaker, speaking, speakerLine } from './Speaker';
+import { narrator } from '../../core/narrator';
 
 /* ------------------------------------------------------------ the state ---- */
 // this session (a page load): what has happened, what was said
@@ -52,13 +53,13 @@ let quietSince = 0;         // when the next step first waited for the voice to 
 let raf = 0;
 let lastT = 0;
 // the step on screen now: a lesson (with how long it has shown and how far he walked
-// since), or one of Bram's beats (with the line to go on from if it was cut off)
+// since), or one of Benjamin's beats (with the line to go on from if it was cut off)
 let current:
   | { kind: 'lesson'; id: LessonId; shownS: number; walkedM: number; doneAt: number }
   | { kind: 'beat'; id: Exclude<StepId, LessonId>; from: number; saying: boolean }
   | null = null;
 let chipShown = false;      // the chip has been revealed this session
-let porchShown = false;     // Bram pointed at the hut this session (before it is saved as told)
+let porchShown = false;     // Benjamin pointed at the hut this session (before it is saved as told)
 // the teaching slot in the HUD (bottom centre, above the prompt) and the lesson strip in it
 let slot: HTMLElement | null = null;
 let lessonEl: HTMLElement | null = null;
@@ -88,26 +89,26 @@ export function stopGuide(): void {
   slot = null;
 }
 
-/** Back from a finished mission (WorldSession.resumePatrol): Bram's missiebord beat is due
+/** Back from a finished mission (WorldSession.resumePatrol): Benjamin's missiebord beat is due
  *  after the first one. */
 export function armMissiebordBeat(): void {
   if (!store.get().settings.geleerd.missiebord) missiebordArmed = true;
 }
 
-/** The chip waits for Bram's hook (a new boswachter has not been told where to go yet). */
+/** The chip waits for Benjamin's hook (a new boswachter has not been told where to go yet). */
 export function chipHeld(): boolean {
   if (chipShown) return false;
   return hookPending({ geleerd: store.get().settings.geleerd, hookRelevant: hookRelevant() });
 }
 
-/** The hut's porch ring shows: Bram has told about the young raaf, or it lives there. */
+/** The hut's porch ring shows: Benjamin has told about the young raaf, or it lives there. */
 export function porchOpen(): boolean {
   const s = store.get();
   return porchShown || !!s.settings.geleerd.raaf || s.companion.rescued;
 }
 
 /** Put the strips back into a freshly drawn HUD (after a menu): the lesson on screen
- *  carries on where it was, a cut-off line of Bram's is picked up by the next frame. */
+ *  carries on where it was, a cut-off line of Benjamin's is picked up by the next frame. */
 export function mountGuide(hud: HTMLElement | null): void {
   slot = null;
   if (!hud) return;
@@ -155,13 +156,13 @@ function tick(now: number): void {
     const m = world.rangerMotion();
     progress.walkedM += m.speed * dt;
     if (m.running) progress.runS += dt; // his run gait (Shift, or the stick at its rim)
-    // standing still counts only with nothing on screen to read (listening to Bram is not idling)
+    // standing still counts only with nothing on screen to read (listening to Benjamin is not idling)
     stillS = m.speed < 0.05 && !current && now >= gapUntil ? stillS + dt : 0;
     if (current?.kind === 'lesson') { current.walkedM += m.speed * dt; current.shownS += dt; }
   } else stillS = 0;
   const g = store.get().settings.geleerd;
   for (const id of learnedByDoing(g, progress)) store.learn(id);
-  // he found the jeep and drove it himself: Bram never has to suggest it
+  // he found the jeep and drove it himself: Benjamin never has to suggest it
   if (!g.jeep && world.vehicleState()?.inVehicle) store.learn('jeep');
 
   if (lessonEl) lessonEl.hidden = !onFoot; // the drive / flight lines own the bottom then (a ✓ fading out)
@@ -185,7 +186,7 @@ function tick(now: number): void {
     return;
   }
   if (current?.kind === 'beat') {
-    // he got into the jeep while Bram still suggests it: the rest is moot ("Pak de jeep
+    // he got into the jeep while Benjamin still suggests it: the rest is moot ("Pak de jeep
     // maar!" over a ride he already took, and again when he stepped out)
     if (current.id === 'jeep' && !onFoot && current.saying) cancelSpeaker();
     else if (!current.saying) sayBeat(current);
@@ -208,8 +209,7 @@ function tick(now: number): void {
  *  its words in about two seconds; the teaching never waits much longer than that. */
 const QUIET_WAIT_MS = 2500;
 function voiceBusy(): boolean {
-  const synth = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
-  return !!synth && store.get().settings.voorlezen && (synth.speaking || synth.pending);
+  return store.get().settings.voorlezen && narrator.busy();
 }
 
 /** Where the guide stands, for the pure rules (core/lessons.nextStep). */
@@ -228,7 +228,7 @@ function guideState(onFoot: boolean): GuideState {
   };
 }
 
-/** The next mission is the first one and it is not done: Bram's hook is about it. */
+/** The next mission is the first one and it is not done: Benjamin's hook is about it. */
 function hookRelevant(): boolean {
   const first = Content.activeArea().missies[0];
   if (!first || store.get().voltooid[first.id]) return false;
@@ -267,17 +267,17 @@ function finishStep(now: number): void {
   gapUntil = now + 900;
 }
 
-/** Bram's lines for a beat, with the ranger's name. */
+/** Benjamin's lines for a beat, with the ranger's name. */
 function linesOf(id: Exclude<StepId, LessonId>): string[] {
   const n = naam();
   const g = store.get().settings.geleerd;
   switch (id) {
-    case 'welkom': return [...BRAM.welkomTerug, ...(g.bram ? [] : [BRAM.kennismaken])].map((l) => metNaam(l, n));
-    case 'bram': return BRAM.intro.map((l) => metNaam(l, n));
-    case 'haak': return [...(store.get().settings.jargon ? BRAM.haak.knap : BRAM.haak.simpel)];
-    case 'missiebord': return BRAM.missiebord.map((l) => metNaam(l, n));
-    case 'raaf': return [...BRAM.raaf];
-    case 'jeep': return [...BRAM.jeep];
+    case 'welkom': return [...BENJAMIN.welkomTerug, ...(g.bram ? [] : [BENJAMIN.kennismaken])].map((l) => metNaam(l, n));
+    case 'bram': return BENJAMIN.intro.map((l) => metNaam(l, n));
+    case 'haak': return [...(store.get().settings.jargon ? BENJAMIN.haak.knap : BENJAMIN.haak.simpel)];
+    case 'missiebord': return BENJAMIN.missiebord.map((l) => metNaam(l, n));
+    case 'raaf': return [...BENJAMIN.raaf];
+    case 'jeep': return [...BENJAMIN.jeep];
   }
 }
 
@@ -293,7 +293,7 @@ function sayBeat(c: { kind: 'beat'; id: Exclude<StepId, LessonId>; from: number;
   void say(lines.slice(c.from), {
     onLine: (i) => {
       const at = c.from + i;
-      // the chip appears as Bram points at it, the frisling's ring and tag glow
+      // the chip appears as Benjamin points at it, the frisling's ring and tag glow
       if (c.id === 'haak' && at === lines.length - 1) revealChip();
       if (c.id === 'missiebord' && at === lines.length - 1) session.world?.glowBoard(8);
       if (c.id === 'jeep' && at === lines.length - 1) session.world?.glowJeep(true);
@@ -321,7 +321,7 @@ function revealChip(): void {
   session.world?.revealNext(true, 6);
 }
 
-/** The hut's porch ring and its tag appear, and glow a while (Bram points at the hut). */
+/** The hut's porch ring and its tag appear, and glow a while (Benjamin points at the hut). */
 function revealPorch(): void {
   porchShown = true;
   session.world?.showPorch(true);

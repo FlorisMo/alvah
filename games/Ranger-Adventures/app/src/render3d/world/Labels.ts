@@ -16,8 +16,8 @@
  *   - a tag at the screen edge fades before it is cut, so no word fragment shows (this
  *     frame's edge, never eased: an eased fade trails a turning view by several frames);
  *   - `setGlow` makes a tag glow for a few seconds of being seen (a warm sun outline, a
- *     soft breath; steady under reduced motion): the chip's mission after Bram's hook, the
- *     board. Hidden behind the cabin it waits, so the glow Bram points at is seen.
+ *     soft breath; steady under reduced motion): the chip's mission after Benjamin's hook, the
+ *     board. Hidden behind the cabin it waits, so the glow Benjamin points at is seen.
  */
 
 import * as THREE from 'three';
@@ -56,7 +56,7 @@ const OCCLUDER_DEFAULT_H = 4;
 /** A glowing tag breathes this much (scale) at this pace (s a breath). */
 const GLOW_BREATH = 0.08;
 const GLOW_PERIOD_S = 1.6;
-/** A glow counts down only while its tag is drawn at least this much (Bram points at a
+/** A glow counts down only while its tag is drawn at least this much (Benjamin points at a
  *  tag the cabin still hides: it glows once he sees it), and ends this long after it
  *  began, seen or not. */
 const GLOW_SEEN = 0.5;

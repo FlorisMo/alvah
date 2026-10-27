@@ -215,7 +215,7 @@ export class World {
   private surpriseFreeNow = false;
   private surpriseAsk = 0;
   // run 6 (FLOW): how far (px) the player has dragged the view round (the look lesson),
-  // and whether the parked jeep glows (Bram suggested it)
+  // and whether the parked jeep glows (Benjamin suggested it)
   private lookPx = 0;
   private jeepGlow = false;
   // run 7 (design §4.5): the session's mood (drawn before the title shows) and the one on
@@ -569,7 +569,7 @@ export class World {
     this.pois.setPorch(cbs);
   }
 
-  /** Show the porch ring and its tag (Bram told about the young raaf, or it lives there);
+  /** Show the porch ring and its tag (Benjamin told about the young raaf, or it lives there);
    *  `tag`: the words over it. */
   showPorch(on: boolean, tag?: string): void {
     this.pois.showPorch(on, tag);
@@ -1050,7 +1050,7 @@ export class World {
    * something in the picture for that one render (it returns how to take it out again).
    * A trap photographs the wild: the ranger's own jeep and helicopter are never in it
    * (`Vehicles.outOfPicture`). Run 7 (additive): `opts.people: false` leaves the story's
-   * grown-ups out too (Bram by his missiebord, the distant figure in the trees: a trap's
+   * grown-ups out too (Benjamin by his missiebord, the distant figure in the trees: a trap's
    * photo of a man setting a snare must show that man only); by default they stay as
    * before. Resolves null without a renderer.
    */
@@ -1190,7 +1190,7 @@ export class World {
       onFoot: !this.vehicles.inVehicle && !this.vehicles.inHeli,
       reduced,
     });
-    this.fauna.tendWarden(dt, rp, reduced); // run 6: Bram turns to the ranger while he speaks
+    this.fauna.tendWarden(dt, rp, reduced); // run 6: Benjamin turns to the ranger while he speaks
 
     // W3.2: the ranger's own locomotion animation (and his footsteps, on his feet).
     // Locomotion is reduced-motion EXEMPT (§3.4) so the mixer always advances with real
@@ -1408,20 +1408,20 @@ export class World {
     return this.progress.complete(missionId, opts.fresh, livePolicy().reduced, view);
   }
 
-  // ---- run 6 (FLOW lane): Bram, the lessons, the glowing cues --------------------------
-  /** Bram speaks (he turns to the ranger, a speech mark over his head) or is quiet. */
+  // ---- run 6 (FLOW lane): Benjamin, the lessons, the glowing cues --------------------------
+  /** Benjamin speaks (he turns to the ranger, a speech mark over his head) or is quiet. */
   setWardenTalking(on: boolean, mark = on): void {
     this.fauna.setWardenTalking(on, mark);
   }
 
-  /** How far the ranger is from Bram (m); Infinity before Bram stands. */
+  /** How far the ranger is from Benjamin (m); Infinity before Benjamin stands. */
   wardenDistance(): number {
     const w = this.fauna.wardenPos();
     if (!w) return Infinity;
     return Math.hypot(w.x - this.ranger.position.x, w.z - this.ranger.position.z);
   }
 
-  /** Bram for the dev hook (see Fauna.wardenState). */
+  /** Benjamin for the dev hook (see Fauna.wardenState). */
   wardenState(): ReturnType<Fauna['wardenState']> {
     return this.fauna.wardenState(this.ranger.position);
   }
@@ -1431,7 +1431,7 @@ export class World {
     return this.lookPx;
   }
 
-  /** Bram named the next mission: its tag now shows from afar, and its ring and tag
+  /** Benjamin named the next mission: its tag now shows from afar, and its ring and tag
    *  glow for `seconds`. `false` holds it back again (until the hook, a fresh player). */
   revealNext(on: boolean, seconds = 0): void {
     this.pois.setNextRevealed(on);

@@ -241,7 +241,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       const a = home.photoPrep(fill ?? (time === 'nacht' ? 1 : time === 'ochtend' ? 1.35 : 1.9));
       const b = prepare?.();
       return () => { b?.(); a(); };
-    }, { people: false })); // (a trap in the wood: never Bram, never the far figure in the trees)
+    }, { people: false })); // (a trap in the wood: never Benjamin, never the far figure in the trees)
     if (!raw) return null;
     shots++;
     const line = what === 'jij' ? c.fotoJij : c[`foto_${what}`];

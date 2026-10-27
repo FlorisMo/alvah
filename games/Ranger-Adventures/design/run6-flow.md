@@ -96,16 +96,16 @@ a moment where you do not know what to do.**
 | 2 | Begin (new player) | The camera glides down to the ranger (≈1.3 s). He turns round to face you. The maker panel slides in on the right. | 1.3 s |
 | 3 | Make your ranger | Big 3D ranger on the left, facing you; every swatch you pick paints him at once (skin and eyes readable on his face). Name field + name chips, "Hoi, ranger Bo!". "Dit is mijn ranger". | player |
 | 4 | Into the world | He turns back to the forest, the camera glides round and behind him into the play view (≈2 s, no cut). The world's sound fades in. Any arrow key takes over at once. | 2 s |
-| 5 | Bram | The warden, **Bram**, stands by the missiebord in view, turns to you and speaks in a speaker strip at the bottom (read aloud, words light up): "Hoi Alvah! Welkom op de Veluwe." · "Ik ben Bram, de boswachter." · "Jij bent nu ook boswachter!" You can already walk. | ≈8 s |
+| 5 | Benjamin | The warden, **Benjamin**, stands by the missiebord in view, turns to you and speaks in a speaker strip at the bottom (read aloud, words light up): "Hoi Alvah! Welkom op de Veluwe." · "Ik ben Benjamin, de boswachter." · "Jij bent nu ook boswachter!" You can already walk. | ≈8 s |
 | 6 | Learn to walk | Key-cap strip: [↑][←][→][↓] "Loop met de pijltjes." (iPad: the stick, "Sleep de stick om te lopen.") Gone after 3 m. | player |
 | 7 | Learn to run | [Shift] "Hou Shift vast. Dan ren je." (iPad: "Duw de stick ver. Dan ren je.") Gone after 1.5 s of running, or after 12 s. | player |
-| 8 | The hook | Bram: "Luister! Een kleine big is zoek." · "Help jij hem zoeken?" · "Volg de pijl linksboven." Now (not earlier) the chip appears top-left pointing at *De verdwaalde frisling*, and that marker's ring and name-tag glow softly. | ≈7 s |
+| 8 | The hook | Benjamin: "Luister! Een kleine big is zoek." · "Help jij hem zoeken?" · "Volg de pijl linksboven." Now (not earlier) the chip appears top-left pointing at *De verdwaalde frisling*, and that marker's ring and name-tag glow softly. | ≈7 s |
 | 9 | Look round | Only if he stands still ~5 s before reaching the marker: [muis] "Kijk rond: sleep met de muis." (iPad: "Kijk rond: veeg over het scherm."; a one-finger drag on the canvas already orbits, `Player.onPointerMove`). | optional |
 | 10 | To the marker | Only the frisling's tag and the Missiebord tag are up; nothing overlaps; the chip counts down. At the ring: "Speel mee: De verdwaalde frisling" with a small [Enter] key cap on the button (laptop). | ≈15 s |
-| 11 | Briefing | Bram's field note: his name and picture, the mission picture, the lines appearing one by one as they are read. "Ga op pad". Then the MISSIONS lane's game. | player |
-| 12 | Back from mission 1 | Reunion in the world, reward card, clue card, back on patrol. Bram: "Er is nog meer werk, Alvah." · "Kijk maar op het missiebord." The board's tag glows. | ≈6 s |
-| 13 | Later reveals | First time the next mission is far away on foot: Bram "Dat is ver lopen." · "Pak de jeep maar!" and the jeep's ring glows. After mission 2: "Bij de hut zit een jonge raaf." · "Kun jij hem helpen?" and the cabin porch gets a ring "Kijk in de hut". | on trigger |
-| 14 | Returning player | Veil → title → Begin → the camera glides from the title into play (no maker) → Bram, once a session: "Welkom terug, Alvah!" | 2 s |
+| 11 | Briefing | Benjamin's field note: his name and picture, the mission picture, the lines appearing one by one as they are read. "Ga op pad". Then the MISSIONS lane's game. | player |
+| 12 | Back from mission 1 | Reunion in the world, reward card, clue card, back on patrol. Benjamin: "Er is nog meer werk, Alvah." · "Kijk maar op het missiebord." The board's tag glows. | ≈6 s |
+| 13 | Later reveals | First time the next mission is far away on foot: Benjamin "Dat is ver lopen." · "Pak de jeep maar!" and the jeep's ring glows. After mission 2: "Bij de hut zit een jonge raaf." · "Kun jij hem helpen?" and the cabin porch gets a ring "Kijk in de hut". | on trigger |
+| 14 | Returning player | Veil → title → Begin → the camera glides from the title into play (no maker) → Benjamin, once a session: "Welkom terug, Alvah!" | 2 s |
 | 15 | Hoofdmenu | Pauze → "Naar het hoofdmenu": a soft fade, the ranger is back at spawn, the camera rises to the title shot, the title block returns. Begin glides back in. The world is never rebuilt. | 1.5 s |
 
 Reduced motion (OS setting or the in-game toggle): every glide is a cut, the ranger's
@@ -117,14 +117,14 @@ changes.
 1. **One world, no second scene.** The title and the maker are *shots of the real world*,
    not a diorama. Every change of screen is a camera move inside that world or a card
    over it.
-2. **One voice.** Bram (the warden/BOA of the canon, now with a first name) is the one
+2. **One voice.** Benjamin (the warden/BOA of the canon, now with a first name) is the one
    person who speaks to the player: the arrival, the hook, the later reveals, the
-   briefings (his field notes) and the ontknoping ("Je vertelt het aan Bram."). No
+   briefings (his field notes) and the ontknoping ("Je vertelt het aan Benjamin."). No
    surname, ever.
-3. **One thing at a time.** At most one teaching strip (Bram or a lesson) on screen,
+3. **One thing at a time.** At most one teaching strip (Benjamin or a lesson) on screen,
    never two hints; the proximity prompt (an action) may sit under it.
 4. **Never blocking by accident.** Narration never takes the keys: the player can walk
-   while Bram speaks. Only real menus (a card with a scrim) hold the ranger still.
+   while Benjamin speaks. Only real menus (a card with a scrim) hold the ranger still.
 5. **Every new line is read aloud**, word-highlighted, ≤ 7 words per sentence and per
    rendered line, AVI M3/E3, and lives in ONE copy module that the read-level test lints.
 6. **No dead moments** (> 1 s with nothing moving, nothing to read and nothing to do) and
@@ -274,19 +274,19 @@ Beats 0-4 and 14-15 of §2.1. The bar:
 
 ---
 
-## 4. Package P2 · The first minute: Bram, learning by doing, finding mission 1
+## 4. Package P2 · The first minute: Benjamin, learning by doing, finding mission 1
 
 ### 4.1 Player experience and the bar
 Beats 5-10, 12-13 (jeep, missiebord) and 14 (welkom terug) of §2.1. The bar:
-- Bram stands by the missiebord, in the first play frame, head-and-shoulders taller than
+- Benjamin stands by the missiebord, in the first play frame, head-and-shoulders taller than
   the ranger, turns to face the ranger while he speaks, and a small speech mark floats
   over his head while he speaks.
-- The speaker strip (name "Bram", a small drawn portrait, the line, karaoke highlight)
+- The speaker strip (name "Benjamin", a small drawn portrait, the line, karaoke highlight)
   sits bottom-centre, above the prompt slot; one line at a time; it advances when the
   voice is done (or after a reading time with voice off); it never takes the keys.
 - The lessons come one at a time, each only once ever (persisted), each dismissed by
   doing it (walk 3 m; run 1.5 s; drag to look), with a timeout so nothing waits forever.
-  Walking during Bram's greeting counts: a lesson already done is skipped.
+  Walking during Benjamin's greeting counts: a lesson already done is skipped.
 - The chip appears with the hook (not before), pointing at mission 1; the frisling ring
   and tag glow for a few seconds; the path to it is readable.
 - Name-tags: from spawn only the next mission and the Missiebord (plus anything within
@@ -300,7 +300,7 @@ Beats 5-10, 12-13 (jeep, missiebord) and 14 (welkom terug) of §2.1. The bar:
 - golden steps 3 and 5 stay green and now also see the run lesson and the hook.
 
 ### 4.2 Technical approach
-- **Bram in the world** (`render3d/world/Fauna.ts`): move `ranger-warden-boa` from
+- **Benjamin in the world** (`render3d/world/Fauna.ts`): move `ranger-warden-boa` from
   (6.4, 4.4) to beside the missiebord (≈ 1.5 m to its side, clear of its ring, the
   camera's path and the jeep's parking spot), facing the spawn; update
   `POACHER_REFORMED` so the reformed poacher still stands by him. A calm yaw ease to face
@@ -327,7 +327,7 @@ Beats 5-10, 12-13 (jeep, missiebord) and 14 (welkom terug) of §2.1. The bar:
   canvas pointer handlers in `Player.ts` already orbit on touch).
 - **Key caps** (CSS component `.kcap`): used by lessons, the controls card and a small
   [Enter] cap on the world's primary prompt buttons on a laptop (never on touch).
-- **The script** (new `content/mentor.ts`): Bram's lines per beat (intro, hook for the
+- **The script** (new `content/mentor.ts`): Benjamin's lines per beat (intro, hook for the
   first mission in simpel/knap variants, jeep, missiebord, raaf, welkom terug) with their
   triggers, `{naam}` filled from `rangerNaam`. The hook text must match the MISSIONS
   lane's frisling story: read
@@ -344,16 +344,16 @@ Beats 5-10, 12-13 (jeep, missiebord) and 14 (welkom terug) of §2.1. The bar:
   a screen-space overlap pass (sort by distance, fade the farther of two overlapping
   cards) and an edge fade. No extra draw calls.
 - **Jeep lesson**: when on foot, no lesson active, the next mission is > 30 m away and the
-  jeep ≤ 40 m: Bram's two jeep lines, the jeep's ring/tag glows until he enters it; then
+  jeep ≤ 40 m: Benjamin's two jeep lines, the jeep's ring/tag glows until he enters it; then
   the existing drive hint.
-- **After mission 1**: on the first `resumePatrol()` after a first completion, Bram's
+- **After mission 1**: on the first `resumePatrol()` after a first completion, Benjamin's
   missiebord lines and the board tag glow. Must not collide with the Onderweg beat
   (that one waits for 15 m of walking anyway) or the reward cards.
 - **Controls card** (`?` chip): `showControls()` in `ui/hub/Hub.ts` or its own module; a
   `card()` with a scrim, rows of key caps + one word each (§7.3), read aloud, "Terug"
   (Esc).
 - **A first-minute spec** (new `e2e/firstminute.spec.ts`): fresh save, real keys and
-  clicks: Begin → maker → Dit is mijn ranger → Bram's lines (spoken, spy on
+  clicks: Begin → maker → Dit is mijn ranger → Benjamin's lines (spoken, spy on
   `speechSynthesis` like scout scripts do) → walk lesson → hold Shift → run lesson done →
   hook → chip names the frisling → walk to the marker with the golden walker → "Speel
   mee" visible. Screenshots of every beat into `test-results/firstminute/`.
@@ -413,7 +413,7 @@ one quiet secondary style, cards that ease in and out. The bar:
   Stop de missie → world; pause ↔ world; bird bench in/out. No full-screen flat-colour
   frame longer than 150 ms, no white flash, no jump of the camera or the ranger, no
   moment > 1 s with nothing to read or do.
-- Briefing: Bram's field note: kicker "Veldnotitie van Bram · Heide", the mission
+- Briefing: Benjamin's field note: kicker "Veldnotitie van Benjamin · Heide", the mission
   picture (the MissionIcon pictogram, large), the title, the lines appearing one by one
   in step with the voice (all visible once read; all at once under reduced motion), then
   "Ga op pad" and "Nog even rondkijken".
@@ -492,16 +492,16 @@ one voice and one cast, revealed in an order that makes sense. The bar:
   `src/content/screens.ts` lives in the content layer and is covered by the read-level
   corpus test (≤ 7 words per sentence) plus two new checks: no rendered line over 7
   words, and no em dash, no surname-shaped word, no "held/kanjer" hype.
-- Names are consistent everywhere: Bram (the warden; also the ontknoping and the finale),
+- Names are consistent everywhere: Benjamin (the warden; also the ontknoping and the finale),
   the raaf and its chosen name, missiebord (the board in the world), sporenboek (the
   book in Pauze), Onderweg, breinkracht names.
 - Content fixes (at least): "kift" → "keft"; the ontknoping "Je belt de politie van het
-  bos." → "Je vertelt het aan Bram."; "De stroper is gemeld bij de BOA." → "…bij Bram.";
+  bos." → "Je vertelt het aan Benjamin."; "De stroper is gemeld bij de BOA." → "…bij Benjamin.";
   "Bijna! Blijf rustig — probeer nog eens." → no dash; the raaf hut's four-sentence
   intro split into short lines; "???" gone (P3); every "Hoi ranger!" briefing opener
-  consistent with Bram's field-note voice (coordinate with MISSIONS for their four
+  consistent with Benjamin's field-note voice (coordinate with MISSIONS for their four
   missions; fix the other six yourself).
-- Reveals: after mission 2, Bram's raaf lines and a ring on the cabin porch
+- Reveals: after mission 2, Benjamin's raaf lines and a ring on the cabin porch
   ("Kijk in de hut") that opens the raaf hut (the same `showCabin` Pauze uses); the first
   clue introduces the sporenboek ("Hij zit nu in je sporenboek." + where: "Je vindt het
   bij Pauze."); the fact voice switches when the raaf is rescued (P3).
@@ -564,13 +564,13 @@ porch ring), `e2e/readaloud.spec.ts` or a new `e2e/readcoverage.spec.ts`,
   mid-screen over the world in free roam.
 
 ### 7.2 Cast
-- **Bram**: the warden/BOA of the canon (`ranger-warden-boa`), the player's mentor, by
+- **Benjamin**: the warden/BOA of the canon (`ranger-warden-boa`), the player's mentor, by
   the missiebord. First name only. Calm, kind, few words.
 - **The ranger**: the player, named in the maker (default Alvah), 8 years old, 1.32 m
   (FEEL).
 - **The raaf**: rescued at the hut, then named by the player; tells the "Wist je dat"
   facts once rescued.
-- **De stroper**: the reformed poacher, off in the trees; stands by Bram after the
+- **De stroper**: the reformed poacher, off in the trees; stands by Benjamin after the
   ontknoping.
 
 ### 7.3 Copy deck (new or changed lines; every sentence ≤ 7 words)
@@ -584,27 +584,27 @@ porch ring), `e2e/readaloud.spec.ts` or a new `e2e/readcoverage.spec.ts`,
 | SAY.title | Ranger van de Veluwe. Word de nieuwe boswachter. Druk op Begin. |
 | Maker title | Maak je ranger |
 | Maker greet | Hoi, ranger {naam}! |
-| Maker done (spoken) | *(removed: Bram greets instead)* |
-| Bram · intro 1 | Hoi {naam}! Welkom op de Veluwe. |
-| Bram · intro 2 | Ik ben Bram, de boswachter. |
-| Bram · intro 3 | Jij bent nu ook boswachter! |
+| Maker done (spoken) | *(removed: Benjamin greets instead)* |
+| Benjamin · intro 1 | Hoi {naam}! Welkom op de Veluwe. |
+| Benjamin · intro 2 | Ik ben Benjamin, de boswachter. |
+| Benjamin · intro 3 | Jij bent nu ook boswachter! |
 | Lesson · lopen (keys / stick) | Loop met de pijltjes. / Sleep de stick om te lopen. |
 | Lesson · rennen (keys / stick) | Hou Shift vast. Dan ren je. / Duw de stick ver. Dan ren je. |
 | Lesson · kijken (mouse / touch) | Kijk rond: sleep met de muis. / Kijk rond: veeg over het scherm. |
-| Bram · hook 1 (simpel / knap) | Luister! Een kleine big is zoek. / Luister! Een frisling is zoek. |
-| Bram · hook 2 | Help jij hem zoeken? |
-| Bram · hook 3 | Volg de pijl linksboven. |
-| Bram · jeep | Dat is ver lopen. · Pak de jeep maar! |
-| Bram · after mission 1 | Er is nog meer werk, {naam}. · Kijk maar op het missiebord. |
-| Bram · after mission 2 | Bij de hut zit een jonge raaf. · Kun jij hem helpen? |
+| Benjamin · hook 1 (simpel / knap) | Luister! Een kleine big is zoek. / Luister! Een frisling is zoek. |
+| Benjamin · hook 2 | Help jij hem zoeken? |
+| Benjamin · hook 3 | Volg de pijl linksboven. |
+| Benjamin · jeep | Dat is ver lopen. · Pak de jeep maar! |
+| Benjamin · after mission 1 | Er is nog meer werk, {naam}. · Kijk maar op het missiebord. |
+| Benjamin · after mission 2 | Bij de hut zit een jonge raaf. · Kun jij hem helpen? |
 | Porch prompt | Kijk in de hut |
-| Bram · returning | Welkom terug, {naam}! |
+| Benjamin · returning | Welkom terug, {naam}! |
 | Controls card | Zo speel je · [pijltjes] Lopen · [Shift] Rennen · [muis] Rondkijken · [Enter] Doen · [Esc] Pauze (iPad: [stick] Lopen · [stick ver] Rennen · [veeg] Rondkijken · [tik] Doen) |
-| Briefing kicker | Veldnotitie van Bram · {landschap} |
+| Briefing kicker | Veldnotitie van Benjamin · {landschap} |
 | Fact kicker (before / after the raaf) | Wist je dat? · {n}/{m} / {raafnaam} vertelt · {n}/{m} |
 | Sporenboek, unfound | Nog niet gevonden |
 | Sporenboek, where | Je vindt het bij Pauze. |
-| Ontknoping 2 | Je vertelt het aan Bram. |
+| Ontknoping 2 | Je vertelt het aan Benjamin. |
 
 The hook must match the MISSIONS lane's frisling story; if their design changes who is
 looking for the piglet, change hook 1-2 to fit (same length rules).

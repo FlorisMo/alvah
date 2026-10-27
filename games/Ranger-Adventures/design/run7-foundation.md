@@ -287,7 +287,7 @@ k.rare(): Ontdekking | null;              // THIS play's rare visitor for this h
 - **The reveal** (`ui/hud/Reveal.ts`): a calm card under the top chips (never a
   `.ra-overlay`, `pointer-events: none` except its 🔊), the picture, "Nieuw in je
   veldgids!" and the name, read aloud once, ~4 s, one at a time from a queue. It waits for
-  a quiet moment: no card or menu up, the narrator and Bram silent, the first minute's
+  a quiet moment: no card or menu up, the narrator and Benjamin silent, the first minute's
   teaching slot idle, and inside a mission only during a walk, a look, the reunion or the
   ending (never during search, route, callers, aim or a body hold). A discovery is
   recorded at once; only its reveal waits.

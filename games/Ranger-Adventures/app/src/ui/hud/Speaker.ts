@@ -1,15 +1,15 @@
 /**
  * Speaker.ts — the speaker strip: a person in the world talks to the player (run 6,
- * FLOW lane P2). Today that is Bram, the warden by the missiebord.
+ * FLOW lane P2). Today that is Benjamin, the warden by the missiebord.
  *
  * A calm paper strip at the bottom of the screen (above the one prompt slot) with his
  * drawn portrait, his name and ONE line at a time. Each line is read aloud with the
  * words lighting up (ReadAloud.mountReadAloud) and stays until the voice is done and a
  * reading time has passed (so it never flicks past with the voice off); then the next
- * line. Meanwhile Bram turns to the ranger with a speech mark over his head; far away he
+ * line. Meanwhile Benjamin turns to the ranger with a speech mark over his head; far away he
  * talks over his portofoon (a small radio on the portrait).
  *
- * It never takes the keys: the player walks while Bram talks. It is part of the explore
+ * It never takes the keys: the player walks while Benjamin talks. It is part of the explore
  * HUD (`.explore-overlay`, never a menu, so `menuOpen()` stays false). When the HUD goes
  * (a menu card, a mission, the title), what is being said stops, and `say` resolves with
  * how many lines were said, so the caller can pick up where it stopped.
@@ -20,11 +20,12 @@ import { readingMs } from '../../core/lessons';
 import { MENTOR_NAAM } from '../../content/mentor';
 import { mountReadAloud } from '../ReadAloud';
 import { session, esc, menuOpen } from '../flow/session';
+import { narrator } from '../../core/narrator';
 
 /** What `say` resolves with: how many lines were said to the end, and whether all were. */
 export interface SayResult { spoken: number; done: boolean }
 
-/** Bram further than this (m): he talks over his portofoon. */
+/** Benjamin further than this (m): he talks over his portofoon. */
 const RADIO_M = 16;
 /** A breath between two lines (ms). */
 const LINE_GAP_MS = 380;
@@ -47,8 +48,8 @@ let doneAt = 0;                         // when it had been read and heard (ms; 
 let lineReadMs = 0;                     // its reading time (ms), worked out once a line
 let raf = 0;
 
-/** The drawn portrait of Bram: his green cap, his face, his uniform collar and badge. */
-export const BRAM_PORTRAIT =
+/** The drawn portrait of Benjamin: his green cap, his face, his uniform collar and badge. */
+export const BENJAMIN_PORTRAIT =
   '<svg class="sp-face" viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
   '<circle cx="32" cy="32" r="32" fill="#dfe8d4"/>' +
   // shoulders + shirt
@@ -69,7 +70,7 @@ export const BRAM_PORTRAIT =
   '<circle cx="32" cy="18.6" r="2.4" fill="#e9c96a"/>' +
   '</svg>';
 
-/** A small portofoon (walkie-talkie) badge on the portrait: Bram talks from afar. */
+/** A small portofoon (walkie-talkie) badge on the portrait: Benjamin talks from afar. */
 const RADIO_BADGE =
   '<svg class="sp-radio" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
   '<circle cx="12" cy="12" r="12" fill="#fdfcf8"/>' +
@@ -144,8 +145,7 @@ function tick(now: number): void {
   // the HUD went (a menu card replaced it, a mission, the title), or a veil is up: stop
   if (!strip?.isConnected || menuOpen()) { cancelSpeaker(); return; }
   const t = now - lineAt;
-  const synth = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
-  const voiceBusy = !!synth && store.get().settings.voorlezen && (synth.speaking || synth.pending);
+  const voiceBusy = store.get().settings.voorlezen && narrator.busy();
   const read = lineReadMs;
   // a line is done once it has been up its reading time and the voice is quiet (or it
   // kept going far too long); then a breath, then the next line
@@ -172,7 +172,7 @@ function showStrip(text: string, radio: boolean): void {
     strip.setAttribute('role', 'status');
     strip.setAttribute('aria-live', 'polite');
     strip.innerHTML =
-      `<span class="sp-portrait">${BRAM_PORTRAIT}${RADIO_BADGE}</span>` +
+      `<span class="sp-portrait">${BENJAMIN_PORTRAIT}${RADIO_BADGE}</span>` +
       `<span class="sp-body"><span class="sp-name">${esc(MENTOR_NAAM)}</span><span class="sp-line"></span></span>`;
   }
   if (slot && strip.parentElement !== slot) slot.appendChild(strip);

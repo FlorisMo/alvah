@@ -30,6 +30,7 @@ import { withFarCopy } from '../Lod';
 import type { MoveLimits, Obstacle } from '../CharacterController';
 import { Sound } from '../../core/sound';
 import { store } from '../../core/state';
+import { narrator } from '../../core/narrator';
 
 /** What a home's dressing (the THREE side of an adventure) gets to build with. */
 export interface DressingEnv {
@@ -541,7 +542,7 @@ export class Residents {
       if (v.next > 0) continue;
       const near = Math.hypot(a.x - ranger.x, a.z - ranger.z) <= (v.far ?? voice.within);
       // never over a spoken line: try again in a moment
-      const speaking = typeof window !== 'undefined' && !!window.speechSynthesis?.speaking;
+      const speaking = narrator.busy();
       if (!near || speaking || !geluid) { v.next = near ? 0.8 : 1.5; continue; }
       Sound.callAt(voice.call, a.x, a.z, listenerOf(camera), v.far ?? undefined);
       a.called(); // (a squirrel flicks its tail as it chatters)

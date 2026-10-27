@@ -1,7 +1,7 @@
 /**
  * ExploreHud.ts — the HUD over the live free-roam world: the Pauze pill, the
  * wayfinding chip, the proximity prompts (mission marker, missiebord, bird bench,
- * jeep, helicopter), the teaching slot (Bram's speaker strip or one lesson, run 6:
+ * jeep, helicopter), the teaching slot (Benjamin's speaker strip or one lesson, run 6:
  * ui/hud/Lessons.ts), the "?" chip (the "Zo speel je" card) and the on-screen joystick.
  * It only overlays the world; the world stays live beneath it and taps fall through to
  * the canvas (tap-to-walk).
@@ -32,7 +32,7 @@ import { speaking } from './Speaker';
 // time the HUD renders, disposed here so its listeners never outlive the world.
 let joystick: Joystick | null = null;
 
-// The one transient tip (the calm world-rim cue); the lessons and Bram's lines live in
+// The one transient tip (the calm world-rim cue); the lessons and Benjamin's lines live in
 // the teaching slot (ui/hud/Lessons.ts). `helpChip`: the "?" chip is mounted.
 const tipState: { active: 'boundary' | null; helpChip: boolean } = { active: null, helpChip: false };
 // timeout handle for the single transient tip; one at a time.
@@ -41,7 +41,7 @@ function hintSnapshot(): HintState {
   return { ...guideSnapshot(), tip: tipState.active, helpChip: tipState.helpChip };
 }
 
-/** Play begins (WorldSession.enterPlay): the first minute starts (Bram, the lessons). */
+/** Play begins (WorldSession.enterPlay): the first minute starts (Benjamin, the lessons). */
 export function beginGuide(returning: boolean): void {
   startGuide({ returning });
 }
@@ -56,7 +56,7 @@ export function disposeExploreHud(): void {
 
 export function showExploreHud(activeTitel: string | null): void {
   const world = session.world;
-  // run 6: the chip waits for Bram's hook (a new boswachter has not been told yet)
+  // run 6: the chip waits for Benjamin's hook (a new boswachter has not been told yet)
   const held = !!world && chipHeld();
   const veld = activeTitel
     ? `<div class="explore-wayfind" role="status" aria-live="polite"${held ? ' hidden' : ''}>` +
@@ -92,12 +92,12 @@ export function showExploreHud(activeTitel: string | null): void {
   // a fresh chip gets its cue at once, from where the ranger stands, instead of
   // "zoek het spoor…" until he has walked a step (parent B12)
   world?.setActiveMission(nextMissionId());
-  // the hut's porch ring, once Bram has told about the raaf (or the raaf lives there)
+  // the hut's porch ring, once Benjamin has told about the raaf (or the raaf lives there)
   world?.showPorch(porchOpen(), porchTag());
   el.querySelector('.explore-pause')?.addEventListener('click', () => showPauseHub());
   const hud = el.querySelector<HTMLElement>('.explore-hud');
   mountJoystick(hud);
-  mountGuide(hud);    // run 6: Bram's strip or the lesson on screen, put back where it was
+  mountGuide(hud);    // run 6: Benjamin's strip or the lesson on screen, put back where it was
   mountHelpChip(hud); // the "?" chip opens "Zo speel je"
   provideHint(hintSnapshot);
   // The World only re-fires its onNear callbacks on a proximity CHANGE, so a fresh
@@ -141,7 +141,7 @@ function arbitratePrompts(): void {
   const shown = show ? session.host.querySelector<HTMLElement>(`${show} button`) : null;
   if (shown) sayPrompt(shown);
   else if (!redrawing) promptSaid = '';
-  // the teaching strip (Bram, a lesson) sits just above the one prompt on screen
+  // the teaching strip (Benjamin, a lesson) sits just above the one prompt on screen
   session.host.querySelector<HTMLElement>('.explore-hud')?.style.setProperty('--prompt-h', `${shownH ? shownH + 14 : 0}px`);
 }
 
@@ -154,7 +154,7 @@ function enterCap(): string {
 
 /** Every new line is read aloud: a prompt says its words as it comes up (the button's
  *  name, without the key cap). Not again while it stays up, nor when he steps out of the
- *  ring and straight back in (a short rest per prompt); never over Bram, whose line it
+ *  ring and straight back in (a short rest per prompt); never over Benjamin, whose line it
  *  waits for. The helicopter's prompts say their own line (renderHeliPrompt). */
 let promptSaid = '';
 let redrawing = false;
@@ -344,7 +344,7 @@ export function showDriveHint(): void {
   driveHintSpoken = true;
   if (!store.get().settings.voorlezen) return;
   const line = stickShown() ? HUD.rijden.stick : `${HUD.rijden.keys} ${HUD.rijden.uit}`;
-  // Bram talking: after his line, never over it (his strip waits for the voice)
+  // Benjamin talking: after his line, never over it (his strip waits for the voice)
   if (speaking()) narrator.queue(line); else narrator.speak(line);
 }
 
@@ -394,7 +394,7 @@ export function onWayfind(cue: WayCue | null): void {
   const strip = session.host.querySelector<HTMLDivElement>('.explore-wayfind');
   if (!strip) return;
   if (!cue) { strip.hidden = true; return; }
-  // run 6: keep the words fresh, but stay hidden until Bram's hook points at it
+  // run 6: keep the words fresh, but stay hidden until Benjamin's hook points at it
   if (!chipHeld()) strip.hidden = false;
   const glyph = strip.querySelector<HTMLSpanElement>('.wf-glyph');
   const cueEl = strip.querySelector<HTMLSpanElement>('.wf-cue');
@@ -466,7 +466,7 @@ export function tryOpenBoard(): void {
   showMissionBoard();
 }
 
-/** The hut's porch (run 6, FLOW P4): once Bram has told about the young raaf, a ring on
+/** The hut's porch (run 6, FLOW P4): once Benjamin has told about the young raaf, a ring on
  *  the porch; standing in it, "Kijk in de hut" opens the hut (the raaf, the opvang). */
 export function onPorchApproach(near: boolean): void {
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-porch-prompt');

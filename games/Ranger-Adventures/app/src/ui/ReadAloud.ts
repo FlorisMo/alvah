@@ -161,14 +161,24 @@ export function mountReadAloud(opts: ReadAloudOptions): ReadAloudHandle {
   const speak = (): void => {
     halt();
     if (!fullText) return;
-    narrator.speak(fullText);
-    // The clock is tuned to the narrator's calm ~0.96 rate (wordclock.ts), so
-    // build at the default rate — no double-scaling.
-    clock = buildWordClock(fullText);
+    // Benjamin's clips know when each word starts; the browser's voice is estimated,
+    // tuned to its calm ~0.96 rate (wordclock.ts), so built at the default rate
+    const timing = narrator.timing(fullText);
+    clock = buildWordClock(fullText, timing ?? {});
     const hasRaf = typeof requestAnimationFrame === 'function' && typeof performance !== 'undefined';
-    if (!hasRaf || clock.totalMs <= 0) { showAll(); return; } // speech still happens; just no karaoke
-    startMs = performance.now();
-    raf = requestAnimationFrame(tick);
+    if (!hasRaf || clock.totalMs <= 0) { narrator.speak(fullText); showAll(); return; } // speech still happens; just no karaoke
+    // the highlight starts when the voice is heard (a clip may take a moment to load)
+    // (no later than START_WAIT_MS: lines waiting for the voice never wait for good)
+    const run = clock;
+    let started = false;
+    const begin = (): void => {
+      if (started || clock !== run) return;
+      started = true;
+      startMs = performance.now();
+      if (!raf) raf = requestAnimationFrame(tick);
+    };
+    narrator.speak(fullText, { onStart: begin });
+    window.setTimeout(begin, narrator.available ? START_WAIT_MS : 0);
   };
 
   opts.speakBtn?.addEventListener('click', speak);
@@ -192,6 +202,8 @@ export function sentenceSegments(host: HTMLElement, text: string): ReadAloudSegm
 
 /** A waiting line shows this long before the voice reaches its first word (ms). */
 const REVEAL_LEAD_MS = 220;
+/** The highlight starts with the voice, or after this long if the voice is slow (ms). */
+const START_WAIT_MS = 1500;
 
 /* ------------------------------------------------------ a screen read aloud ---- */
 

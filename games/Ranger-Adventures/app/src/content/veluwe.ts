@@ -506,7 +506,7 @@ const MISSIE_NACHTRONDE = {
   status: 'actief',
   payoff: 'nachtronde',
   kort: 'Het wordt avond. Luister naar de dieren. Breng ze op hun plek.',
-  // Bram's field note (run 6): what he saw and what he asks, no "Hoi ranger!" (the voice
+  // Benjamin's field note (run 6): what he saw and what he asks, no "Hoi ranger!" (the voice
   // already says "Ranger Alvah." before the title)
   briefing: {
     simpel: [
@@ -1026,7 +1026,7 @@ const MISSIE_EEKHOORN = {
    VERHAALBOOG — one season on the Veluwe (HANDOFF §6.4 / §7.3 / plan §13.4)
    Data-driven: missions tagged verhaalHaak drop a clue; the case-board
    in the cabin renders them; finding them moves the season forward and
-   resolves hopefully (you tell Bram, the BOA → restoration). Kid-safe: every
+   resolves hopefully (you tell Benjamin, the BOA → restoration). Kid-safe: every
    tense beat is one short sentence, off-screen, non-graphic, never sad.
    ============================================================ */
 const VERHAALBOOG_VELUWE = {
@@ -1053,7 +1053,7 @@ const VERHAALBOOG_VELUWE = {
   // hopeful resolution once all three clues are found (diegetic, on the case-board)
   ontknoping: [
     { id: 'volg',    tekst: 'Je legt de foto’s naast de sporen.' },
-    { id: 'meld',    tekst: 'Je vertelt het aan Bram.' },
+    { id: 'meld',    tekst: 'Je vertelt het aan Benjamin.' },
     { id: 'herstel', tekst: 'De stroper stopt. De heide en het ven groeien terug.' },
   ],
   // the season ends when every mission is done: one calm card, then free play in a
@@ -1403,13 +1403,13 @@ const MISSIE_HERSTEL = {
   briefing: {
     simpel: [
       'Het is koud op de heide.',
-      'De stroper is gemeld bij Bram.',
+      'De stroper is gemeld bij Benjamin.',
       'Nu mag alles weer rustig groeien.',
       'Leid de kudde langs de veilige weg.',
     ],
     knap: [
       'Het is winter op de Veluwe.',
-      'De stroper is gemeld bij Bram.',
+      'De stroper is gemeld bij Benjamin.',
       'De heide en het ven herstellen zich.',
       'Leid de kudde langs de veilige route.',
     ],

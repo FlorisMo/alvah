@@ -403,7 +403,7 @@ class Store {
     this.commit({ ...this.state, settings: { ...this.state.settings, ...patch } });
   }
 
-  /** A first-minute step is learned (a lesson done) or told (Bram's beat), for good. */
+  /** A first-minute step is learned (a lesson done) or told (Benjamin's beat), for good. */
   learn(id: keyof Geleerd): void {
     if (this.state.settings.geleerd[id]) return;
     this.setSetting({ geleerd: { ...this.state.settings.geleerd, [id]: true } });

@@ -2,7 +2,7 @@ import { test, expect, devices, type Page, type TestInfo } from '@playwright/tes
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { R, walkTo, sleep, type P2, type Vehicle } from './golden-lib';
-import { BRAM, LES, BESTURING, metNaam } from '../src/content/mentor';
+import { BENJAMIN, LES, BESTURING, metNaam } from '../src/content/mentor';
 import { HUD } from '../src/content/copy';
 import { AREA_VELUWE } from '../src/content/veluwe';
 
@@ -10,10 +10,10 @@ import { AREA_VELUWE } from '../src/content/veluwe';
  * THE FIRST MINUTE (run 6, FLOW P2), played like a first-time player: a fresh save, real
  * clicks on Begin and "Dit is mijn ranger", real arrow keys and Shift, the real mouse.
  *
- *   Bram, the warden, stands by the missiebord in the first play frame, turns to the
+ *   Benjamin, the warden, stands by the missiebord in the first play frame, turns to the
  *   ranger and greets him in the speaker strip (every line spoken and highlighted); the
  *   player can walk meanwhile. Then one lesson at a time: walk (key caps), run (Shift);
- *   then Bram's hook, and only then the chip, pointing at the frisling, whose ring and
+ *   then Benjamin's hook, and only then the chip, pointing at the frisling, whose ring and
  *   tag glow. Tags never overlap, never sit cut at the edge, and only the next mission,
  *   the Missiebord and near ones show. At the marker "Speel mee" carries an Enter cap and
  *   Enter opens the briefing. A reload never repeats a learned lesson.
@@ -22,7 +22,7 @@ import { AREA_VELUWE } from '../src/content/veluwe';
  *   the arrow keys or dragging the view, no tag ever shows cut at the screen's edge (read
  *   every frame).
  *
- * The dev hook is only READ (what Bram says, which lesson is up, the tags on screen).
+ * The dev hook is only READ (what Benjamin says, which lesson is up, the tags on screen).
  * Screenshots of every beat: test-results/firstminute/.
  */
 
@@ -38,19 +38,15 @@ type Tag = { text: string; o: number; x: number; y: number; w: number; h: number
 
 test.use({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
 
-/** Record every line the game hands the voice (the speechSynthesis spy), and every line
- *  Bram's strip shows (read each frame, so a line that came and went while the test was
+/** Record every line the game hands the voice (the narrator's `ranger:say` event), and every line
+ *  Benjamin's strip shows (read each frame, so a line that came and went while the test was
  *  busy is still seen, in order). */
 async function spyVoice(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const w = window as unknown as { __said: string[]; __strip: string[] };
     w.__said = [];
     w.__strip = [];
-    const orig = SpeechSynthesis.prototype.speak;
-    SpeechSynthesis.prototype.speak = function (u: SpeechSynthesisUtterance) {
-      w.__said.push(u.text);
-      try { return orig.call(this, u); } catch { /* no voice in this browser */ }
-    };
+    window.addEventListener('ranger:say', (e) => { w.__said.push((e as CustomEvent<string>).detail); });
     const watch = (): void => {
       const line = document.querySelector('.speaker-strip .sp-line')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
       if (line && w.__strip[w.__strip.length - 1] !== line) w.__strip.push(line);
@@ -83,9 +79,9 @@ async function enterFresh(page: Page): Promise<void> {
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
 }
 
-/** Wait until Bram's strip has shown `line` (and it was handed to the voice). */
-async function bramSays(page: Page, line: string, timeout = 20_000): Promise<void> {
-  await expect.poll(async () => (await stripLines(page)).includes(line), { timeout, message: `Bram says "${line}" in his strip` }).toBe(true);
+/** Wait until Benjamin's strip has shown `line` (and it was handed to the voice). */
+async function benjaminSays(page: Page, line: string, timeout = 20_000): Promise<void> {
+  await expect.poll(async () => (await stripLines(page)).includes(line), { timeout, message: `Benjamin says "${line}" in his strip` }).toBe(true);
   await expect.poll(async () => (await saidAll(page)).includes(line), { timeout: 5_000, message: `"${line}" is read aloud` }).toBe(true);
 }
 
@@ -105,7 +101,7 @@ function tagsClean(tags: Tag[], vw: number, vh: number, where: string): void {
   }
 }
 
-test('the first minute: Bram greets, walk and run are learned by doing, the hook brings the chip, Enter starts mission 1', async ({ page }, testInfo) => {
+test('the first minute: Benjamin greets, walk and run are learned by doing, the hook brings the chip, Enter starts mission 1', async ({ page }, testInfo) => {
   test.setTimeout(5 * 60_000);
   shotsInto(testInfo, 'laptop');
   const errors: string[] = [];
@@ -113,42 +109,42 @@ test('the first minute: Bram greets, walk and run are learned by doing, the hook
   await spyVoice(page);
   await enterFresh(page);
 
-  // -- the first play frame: Bram by the missiebord, a head and shoulders above the boy
+  // -- the first play frame: Benjamin by the missiebord, a head and shoulders above the boy
   await sleep(page, 400);
   await snapShot(page, 'arrival');
   const h0 = await hint(page);
   const board = (await R<P2>(page, 'r.board()'))!;
-  expect(h0.bram, 'Bram stands in the world').not.toBeNull();
-  expect(Math.hypot(h0.bram!.x - board.x, h0.bram!.z - board.z), 'Bram stands beside the missiebord').toBeLessThan(2.6);
+  expect(h0.bram, 'Benjamin stands in the world').not.toBeNull();
+  expect(Math.hypot(h0.bram!.x - board.x, h0.bram!.z - board.z), 'Benjamin stands beside the missiebord').toBeLessThan(2.6);
   const boy = (await R<{ height: number }>(page, 'r.avatar()')).height;
-  expect(h0.bram!.h / boy, `Bram (${h0.bram!.h} m) is a head and shoulders taller than the ranger (${boy} m)`).toBeGreaterThan(1.25);
+  expect(h0.bram!.h / boy, `Benjamin (${h0.bram!.h} m) is a head and shoulders taller than the ranger (${boy} m)`).toBeGreaterThan(1.25);
   const onScreen = await R<{ onScreen: boolean }>(page, `r.screenOf(${h0.bram!.x}, 1.0, ${h0.bram!.z})`);
-  expect(onScreen?.onScreen, 'Bram is in the first play frame').toBe(true);
+  expect(onScreen?.onScreen, 'Benjamin is in the first play frame').toBe(true);
   // the chip waits for the hook
   await expect(page.locator('.explore-wayfind')).toBeHidden();
 
-  // -- Bram greets, one line at a time, spoken, and the player can walk meanwhile
-  const intro = BRAM.intro.map((l) => metNaam(l, naam));
-  await bramSays(page, intro[0]);
+  // -- Benjamin greets, one line at a time, spoken, and the player can walk meanwhile
+  const intro = BENJAMIN.intro.map((l) => metNaam(l, naam));
+  await benjaminSays(page, intro[0]);
   await snapShot(page, 'bram-1');
-  await expect(page.locator('.speaker-strip .sp-name')).toHaveText('Bram');
+  await expect(page.locator('.speaker-strip .sp-name')).toHaveText('Benjamin');
   const hb = await hint(page);
   expect(hb.active).toBe('bram');
-  expect(hb.bram?.talking && hb.bram.mark, 'a speech mark floats over Bram while he talks').toBe(true);
-  await expect.poll(async () => (await hint(page)).bram?.offRanger ?? 9, { timeout: 4_000, message: 'Bram turns to the ranger while he speaks' }).toBeLessThan(0.35);
+  expect(hb.bram?.talking && hb.bram.mark, 'a speech mark floats over Benjamin while he talks').toBe(true);
+  await expect.poll(async () => (await hint(page)).bram?.offRanger ?? 9, { timeout: 4_000, message: 'Benjamin turns to the ranger while he speaks' }).toBeLessThan(0.35);
   const p0 = (await R<P2>(page, 'r.pos()'))!;
   await page.keyboard.down('ArrowUp'); await sleep(page, 650); await page.keyboard.up('ArrowUp');
   const p1 = (await R<P2>(page, 'r.pos()'))!;
-  expect(Math.hypot(p1.x - p0.x, p1.z - p0.z), 'he walks while Bram talks (nothing holds him)').toBeGreaterThan(0.6);
-  await bramSays(page, intro[1]);
+  expect(Math.hypot(p1.x - p0.x, p1.z - p0.z), 'he walks while Benjamin talks (nothing holds him)').toBeGreaterThan(0.6);
+  await benjaminSays(page, intro[1]);
   await snapShot(page, 'bram-2');
-  await bramSays(page, intro[2]);
+  await benjaminSays(page, intro[2]);
   await snapShot(page, 'bram-3');
   expect((await stripLines(page)).slice(0, 3), 'his three lines, one at a time, in order').toEqual(intro);
 
   // -- the walk lesson: key caps, spoken, gone after walking a few metres
   const walk = page.locator('.lesson-strip.ls-lopen');
-  await expect(walk, 'the walk lesson follows Bram').toBeVisible({ timeout: 15_000 });
+  await expect(walk, 'the walk lesson follows Benjamin').toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.speaker-strip')).toHaveCount(0); // one teaching strip at a time
   await expect(walk).toContainText(LES.lopen.keys);
   expect(await walk.locator('.kcap').count(), 'four arrow key caps').toBe(4);
@@ -173,13 +169,13 @@ test('the first minute: Bram greets, walk and run are learned by doing, the hook
   } finally { await page.keyboard.up('ArrowUp'); await page.keyboard.up('Shift'); }
   expect((await hint(page)).learned).toContain('rennen');
 
-  // -- the hook: Bram tells the story; the chip appears as he points at it, the frisling glows
-  const hook = BRAM.haak.simpel;
-  await bramSays(page, hook[0]);
+  // -- the hook: Benjamin tells the story; the chip appears as he points at it, the frisling glows
+  const hook = BENJAMIN.haak.simpel;
+  await benjaminSays(page, hook[0]);
   await expect(page.locator('.explore-wayfind'), 'the chip waits for the hook').toBeHidden();
   await snapShot(page, 'hook-1');
-  await bramSays(page, hook[1]);
-  await bramSays(page, hook[2]);
+  await benjaminSays(page, hook[1]);
+  await benjaminSays(page, hook[2]);
   await expect(page.locator('.explore-wayfind'), 'the chip appears with the hook').toBeVisible();
   await expect(page.locator('.explore-wayfind .wf-doel')).toHaveText(FIRST.titel);
   expect((await R<{ next: boolean }>(page, 'r.glow()')).next, 'the frisling ring and tag glow').toBe(true);
@@ -259,15 +255,15 @@ test('not pressing Shift: the run lesson gives way and the hook and the chip sti
   await spyVoice(page);
   await enterFresh(page);
   await expect.poll(async () => (await hint(page)).active, { timeout: 20_000 }).toBe('bram');
-  // walk all the way through Bram's greeting (the walk lesson is then already done)
+  // walk all the way through Benjamin's greeting (the walk lesson is then already done)
   await page.keyboard.down('ArrowUp'); await sleep(page, 2_500); await page.keyboard.up('ArrowUp');
   await expect(page.locator('.lesson-strip.ls-rennen'), 'the run lesson').toBeVisible({ timeout: 25_000 });
-  expect((await hint(page)).learned, 'walking during Bram counted').toContain('lopen');
+  expect((await hint(page)).learned, 'walking during Benjamin counted').toContain('lopen');
   await expect(page.locator('.lesson-strip.ls-lopen'), 'the walk lesson never showed').toHaveCount(0);
   await snapShot(page, 'run-lesson');
   // never Shift: after ~12 s it gives way
   await expect(page.locator('.lesson-strip.ls-rennen'), 'the run lesson gives way').toHaveCount(0, { timeout: 16_000 });
-  await bramSays(page, BRAM.haak.simpel[0], 10_000);
+  await benjaminSays(page, BENJAMIN.haak.simpel[0], 10_000);
   await expect(page.locator('.explore-wayfind')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.explore-wayfind .wf-doel')).toHaveText(FIRST.titel);
   await snapShot(page, 'chip');
@@ -276,18 +272,18 @@ test('not pressing Shift: the run lesson gives way and the hook and the chip sti
   expect(learned).toEqual(expect.arrayContaining(['bram', 'lopen', 'haak']));
   expect(learned, 'the run was not learned (it only gave way)').not.toContain('rennen');
 
-  // a reload: straight into play; Bram welcomes him back, nothing learned repeats, the chip is there
+  // a reload: straight into play; Benjamin welcomes him back, nothing learned repeats, the chip is there
   await page.reload();
   await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 40_000 });
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
-  await bramSays(page, metNaam(BRAM.welkomTerug[0], naam));
+  await benjaminSays(page, metNaam(BENJAMIN.welkomTerug[0], naam));
   await expect(page.locator('.explore-wayfind')).toBeVisible();
   await snapShot(page, 'welkom-terug');
   await expect(page.locator('.speaker-strip')).toHaveCount(0, { timeout: 12_000 });
   await sleep(page, 1_500);
   await expect(page.locator('.lesson-strip.ls-lopen'), 'the walk lesson is never repeated').toHaveCount(0);
   // (the voice spy starts afresh with the page) the new boswachter's greeting is not said again
-  const again = (await saidAll(page)).filter((l) => BRAM.intro.map((x) => metNaam(x, naam)).includes(l) || LES.lopen.keys === l);
+  const again = (await saidAll(page)).filter((l) => BENJAMIN.intro.map((x) => metNaam(x, naam)).includes(l) || LES.lopen.keys === l);
   expect(again, 'after a reload neither the greeting nor the walk lesson again').toEqual([]);
 });
 
@@ -299,7 +295,7 @@ test('a curious child drives off during the greeting: the hook and the chip come
   await spyVoice(page);
   await enterFresh(page);
   await expect.poll(async () => (await hint(page)).active, { timeout: 20_000 }).toBe('bram');
-  // straight to the jeep while Bram is still greeting him (real arrow keys)
+  // straight to the jeep while Benjamin is still greeting him (real arrow keys)
   const v0 = (await R<Vehicle>(page, 'r.vehicle()'))!;
   const w = await walkTo(page, v0, { stopDist: 0.3, until: (s) => s.jeepNear, timeout: 60_000 });
   expect(w.res, `walking to the jeep (${w.res})`).toBe('until');
@@ -315,7 +311,7 @@ test('a curious child drives off during the greeting: the hook and the chip come
   await snapShot(page, 'in-jeep');
 
   // he drives about; the hook comes while he is in the jeep, and the chip with it
-  const hook = BRAM.haak.simpel;
+  const hook = BENJAMIN.haak.simpel;
   const t0 = Date.now();
   let turn = false;
   while (!(await stripLines(page)).includes(hook[1]) && Date.now() - t0 < 45_000) {
@@ -326,8 +322,8 @@ test('a curious child drives off during the greeting: the hook and the chip come
     turn = !turn;
     expect(await page.locator('.lesson-strip').count(), 'no lesson on foot shows (or waits on screen) in the jeep').toBe(0);
   }
-  await bramSays(page, hook[0], 1_000);
-  await bramSays(page, hook[2], 10_000);
+  await benjaminSays(page, hook[0], 1_000);
+  await benjaminSays(page, hook[2], 10_000);
   await expect(page.locator('.explore-wayfind'), 'the chip appears with the hook, in the jeep').toBeVisible({ timeout: 3_000 });
   await expect(page.locator('.explore-wayfind .wf-doel')).toHaveText(FIRST.titel);
   expect((await R<Vehicle>(page, 'r.vehicle()'))?.inVehicle, 'still in the jeep').toBe(true);
@@ -344,7 +340,7 @@ test('a curious child drives off during the greeting: the hook and the chip come
   await expect(run, 'the run lesson comes once he is on foot').toBeVisible({ timeout: 6_000 });
   await expect.poll(async () => (await saidAll(page)).includes(LES.rennen.keys)).toBe(true);
   await snapShot(page, 'out-run-lesson');
-  // the drive line is read aloud too (queued behind Bram's line, never cutting it off)
+  // the drive line is read aloud too (queued behind Benjamin's line, never cutting it off)
   const said = await saidAll(page);
   const drive = said.findIndex((l) => l.includes(HUD.rijden.uit));
   expect(drive, 'the drive line is read aloud').toBeGreaterThanOrEqual(0);
@@ -426,7 +422,7 @@ test('the "?" chip opens "Zo speel je" with key caps, read aloud; Esc closes it'
   await expect(page.locator('.explore-hud')).toBeVisible();
 });
 
-test('the next mission far on foot: Bram suggests the jeep once, and it glows until he gets in', async ({ page }) => {
+test('the next mission far on foot: Benjamin suggests the jeep once, and it glows until he gets in', async ({ page }) => {
   test.setTimeout(3 * 60_000);
   await spyVoice(page);
   // six missions done: the next one is 40 m away, the jeep 14 m
@@ -437,16 +433,16 @@ test('the next mission far on foot: Bram suggests the jeep once, and it glows un
   await page.goto('/?dev=1');
   await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 40_000 });
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
-  await bramSays(page, BRAM.jeep[0], 30_000);
-  await bramSays(page, BRAM.jeep[1]);
+  await benjaminSays(page, BENJAMIN.jeep[0], 30_000);
+  await benjaminSays(page, BENJAMIN.jeep[1]);
   await expect.poll(async () => (await R<{ beacon: boolean }>(page, 'r.glow()')).beacon, { timeout: 4_000, message: 'the jeep glows' }).toBe(true);
   const v = (await R<P2>(page, 'r.vehicle()'))!;
   await walkTo(page, v, { stopDist: 0.3, until: (s) => s.jeepNear, timeout: 60_000 });
   await page.getByRole('button', { name: /Stap in de jeep/ }).click({ timeout: 20_000 });
   await expect.poll(async () => (await R<{ beacon: boolean }>(page, 'r.glow()')).beacon, { timeout: 4_000, message: 'the glow ends once he is in' }).toBe(false);
-  // learned once Bram's last line is done (it may still be up, or waiting on the voice, as he gets in)
+  // learned once Benjamin's last line is done (it may still be up, or waiting on the voice, as he gets in)
   await expect.poll(async () => (await hint(page)).learned, { timeout: 12_000, message: 'the jeep is learned' }).toContain('jeep');
-  const count = (await saidAll(page)).filter((l) => l === BRAM.jeep[0]).length;
+  const count = (await saidAll(page)).filter((l) => l === BENJAMIN.jeep[0]).length;
   expect(count, 'the jeep lines are said once').toBe(1);
 });
 
@@ -462,7 +458,7 @@ test.describe('on an iPad-size touch screen', () => {
     await page.getByRole('button', { name: 'Begin', exact: true }).tap({ timeout: 40_000 });
     await page.getByRole('button', { name: 'Dit is mijn ranger' }).tap({ timeout: 40_000 });
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
-    await bramSays(page, metNaam(BRAM.intro[0], naam));
+    await benjaminSays(page, metNaam(BENJAMIN.intro[0], naam));
     await snapShot(page, 'bram');
     const walk = page.locator('.lesson-strip.ls-lopen');
     await expect(walk).toBeVisible({ timeout: 25_000 });
@@ -485,12 +481,12 @@ test.describe('on an iPad-size touch screen', () => {
     await push(1.3, 2_600);
     await expect(run, 'the stick at its rim runs: the lesson is done').toHaveCount(0, { timeout: 6_000 });
     expect((await hint(page)).learned).toContain('rennen');
-    await bramSays(page, BRAM.haak.simpel[0], 15_000);
+    await benjaminSays(page, BENJAMIN.haak.simpel[0], 15_000);
     await snapShot(page, 'hook');
   });
 });
 
-test('two missions done: Bram tells about the young raaf once, and the porch ring opens the hut by Enter or a click', async ({ page }, testInfo) => {
+test('two missions done: Benjamin tells about the young raaf once, and the porch ring opens the hut by Enter or a click', async ({ page }, testInfo) => {
   test.setTimeout(4 * 60_000);
   shotsInto(testInfo, 'raaf');
   const errors: string[] = [];
@@ -509,15 +505,15 @@ test('two missions done: Bram tells about the young raaf once, and the porch rin
 
   // "Welkom terug", then the raaf: the ring on the hut's porch comes with his first line
   type Porch = { x: number; z: number; shown: boolean; near: boolean; tag: string };
-  expect((await R<Porch>(page, 'r.porch()')).shown, 'no porch ring before Bram tells about it').toBe(false);
-  await bramSays(page, metNaam(BRAM.welkomTerug[0], naam));
-  await bramSays(page, BRAM.raaf[0]);
+  expect((await R<Porch>(page, 'r.porch()')).shown, 'no porch ring before Benjamin tells about it').toBe(false);
+  await benjaminSays(page, metNaam(BENJAMIN.welkomTerug[0], naam));
+  await benjaminSays(page, BENJAMIN.raaf[0]);
   const porch = await R<Porch>(page, 'r.porch()');
-  expect(porch.shown, 'the porch ring shows as Bram points at the hut').toBe(true);
+  expect(porch.shown, 'the porch ring shows as Benjamin points at the hut').toBe(true);
   expect(porch.tag).toBe('Jonge raaf');
   expect((await R<{ porch: boolean }>(page, 'r.glow()')).porch, 'its ring and tag glow').toBe(true);
   await snapShot(page, 'raaf-line');
-  await bramSays(page, BRAM.raaf[1]);
+  await benjaminSays(page, BENJAMIN.raaf[1]);
   await expect.poll(async () => (await hint(page)).learned.includes('raaf'), { timeout: 15_000 }).toBe(true);
 
   // walk to the porch (real arrow keys): "Kijk in de hut" with its Enter cap, said aloud
@@ -549,14 +545,14 @@ test('two missions done: Bram tells about the young raaf once, and the porch rin
   await snapShot(page, 'kroa');
 
   // once: a reload never tells it again
-  const said = (await saidAll(page)).filter((l) => l === BRAM.raaf[0]).length;
+  const said = (await saidAll(page)).filter((l) => l === BENJAMIN.raaf[0]).length;
   expect(said, 'the raaf line is said once').toBe(1);
   await page.reload();
   await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 40_000 });
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
-  await bramSays(page, metNaam(BRAM.welkomTerug[0], naam));
+  await benjaminSays(page, metNaam(BENJAMIN.welkomTerug[0], naam));
   await sleep(page, 5_000);
-  expect(await stripLines(page), 'no raaf line after a reload').not.toContain(BRAM.raaf[0]);
+  expect(await stripLines(page), 'no raaf line after a reload').not.toContain(BENJAMIN.raaf[0]);
   expect((await R<Porch>(page, 'r.porch()')).shown, 'the porch ring stays: Kroa lives there').toBe(true);
   expect(errors).toEqual([]);
 });

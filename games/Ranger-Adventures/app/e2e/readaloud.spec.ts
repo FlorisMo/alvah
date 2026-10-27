@@ -10,7 +10,7 @@ import { R, sleep, walkTo, type Hint, type P2 } from './golden-lib';
  *
  *   RANGER_PORT=<port> npx playwright test e2e/readaloud.spec.ts --project=chromium
  *
- * What the game says is read from a hook on `speechSynthesis.speak` (the words the
+ * What the game says is read from the narrator's `ranger:say` event (the words the
  * voice gets); the dev hook is only READ.
  */
 
@@ -31,11 +31,7 @@ test('menus read aloud, the maker shows every choice, Enter presses Verder after
   await page.addInitScript(() => {
     const w = window as unknown as { __said: string[] };
     w.__said = [];
-    const synth = window.speechSynthesis;
-    if (synth) {
-      const orig = synth.speak.bind(synth);
-      synth.speak = (u: SpeechSynthesisUtterance) => { w.__said.push(u.text); try { orig(u); } catch { /* no voice */ } };
-    }
+    window.addEventListener('ranger:say', (e) => { w.__said.push((e as CustomEvent<string>).detail); });
   });
   await page.goto('/?dev=1');
 
@@ -144,8 +140,7 @@ test.describe('on a tablet (touch, 1080×810)', () => {
     await page.addInitScript(() => {
       const w = window as unknown as { __said: string[] };
       w.__said = [];
-      const orig = SpeechSynthesis.prototype.speak;
-      SpeechSynthesis.prototype.speak = function (u: SpeechSynthesisUtterance) { w.__said.push(u.text); try { return orig.call(this, u); } catch { /* no voice */ } };
+      window.addEventListener('ranger:say', (e) => { w.__said.push((e as CustomEvent<string>).detail); });
     });
     await page.goto('/?dev=1');
     await page.getByRole('button', { name: 'Begin', exact: true }).tap({ timeout: 40_000 });

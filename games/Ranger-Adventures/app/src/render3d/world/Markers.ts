@@ -3,7 +3,7 @@
  *
  * One marker per mission (a halo ring, a floating name-tag and the mission's animal,
  * or a totem until its GLB streams in), the Missiebord at the spawn clearing (opens
- * the mission board), the hut's porch (opens the hut, once Bram has told about the
+ * the mission board), the hut's porch (opens the hut, once Benjamin has told about the
  * young raaf) and the "Ken je roep" sit-spot bench. Owns their proximity
  * (which prompt the HUD shows), the interact dispatch, the wayfinding cue toward the
  * active mission (it follows the sand paths) and the lens-proximity fade of the
@@ -107,7 +107,7 @@ export class Markers {
   nearSitSpot = false;
   private onSitSpotNear: (near: boolean) => void = () => {};
   private onSitSpotActivate: () => void = () => {};
-  // run 6 (FLOW P4): the hut's porch — a ring before its door and a tag, shown once Bram
+  // run 6 (FLOW P4): the hut's porch — a ring before its door and a tag, shown once Benjamin
   // has told about the young raaf (`showPorch`). Its own proximity/interact path, like
   // the board; kept OUT of `markers` (never a wayfinding goal).
   private porch: { group: THREE.Group; pos: THREE.Vector3; label: THREE.Sprite; tag: string } | null = null;
@@ -123,9 +123,9 @@ export class Markers {
     mesh: THREE.Mesh; glow: number; pulse: number; // run 6: a ring that glows (s left) breathes
     glowTag?: THREE.Sprite | null;                  // …as long as this tag glows (seen-time, Labels)
   }[] = [];
-  // run 6 (FLOW): the next mission's tag shows from afar only once Bram has told the
+  // run 6 (FLOW): the next mission's tag shows from afar only once Benjamin has told the
   // player about it (the chip and the tag come together); a glowing ring round the
-  // parked jeep when Bram suggests it (`setBeacon`)
+  // parked jeep when Benjamin suggests it (`setBeacon`)
   private nextRevealed = true;
   private beacon: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; clock: number } | null = null;
   private glowClock = 0;
@@ -349,7 +349,7 @@ export class Markers {
 
   /**
    * Run 6 (FLOW P4): the hut's porch — a halo ring on the ground in front of its door and a
-   * tag over it, hidden until `showPorch(true)` (Bram told about the young raaf, or the raaf
+   * tag over it, hidden until `showPorch(true)` (Benjamin told about the young raaf, or the raaf
    * lives there). `door`: the spot before the door, on the clearing side.
    */
   placePorch(door: { x: number; z: number }): void {
@@ -379,7 +379,7 @@ export class Markers {
     if (!on && this.nearPorch) { this.nearPorch = false; this.onPorchNear(false); }
   }
 
-  /** The porch's ring and tag glow for `seconds` of being seen (Bram just told about it). */
+  /** The porch's ring and tag glow for `seconds` of being seen (Benjamin just told about it). */
   glowPorch(seconds: number): void {
     const p = this.porch;
     if (!p) return;
@@ -534,7 +534,7 @@ export class Markers {
   }
 
   // ---- run 6 (FLOW lane): the tag that matters, and glowing "go here" cues -----------
-  /** Whether the next mission's tag may show from afar (false until Bram's hook). */
+  /** Whether the next mission's tag may show from afar (false until Benjamin's hook). */
   setNextRevealed(on: boolean): void {
     this.nextRevealed = on;
     this.syncAlways();
@@ -545,7 +545,7 @@ export class Markers {
     for (const m of this.list) this.labels.setAlways(m.label, this.nextRevealed && m.missionId === this.activeId);
   }
 
-  /** The next mission's ring and tag glow for `seconds` (Bram just named it). */
+  /** The next mission's ring and tag glow for `seconds` (Benjamin just named it). */
   glowActive(seconds: number): void {
     const m = this.activeId ? this.list.find((k) => k.missionId === this.activeId) : null;
     if (!m) return;
@@ -572,7 +572,7 @@ export class Markers {
     };
   }
 
-  /** A warm glowing ring on the ground round a spot (the parked jeep Bram points at), or
+  /** A warm glowing ring on the ground round a spot (the parked jeep Benjamin points at), or
    *  none (`null`). One mesh, made on first use; laid on the ground where it is put. */
   setBeacon(at: { x: number; z: number; r: number } | null): void {
     if (!at) { if (this.beacon) this.beacon.mesh.visible = false; return; }

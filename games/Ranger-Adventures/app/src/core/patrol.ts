@@ -59,7 +59,7 @@ export function nextPatrolTarget(
  * Run 7 (the adventures lane): the story order — the missions played as adventures with
  * his own body first, in the order the game meets them (`adventureIds`: the adventure
  * registry's order, so a new adventure comes right after the ones before it), then every
- * other mission in the area's order. The wayfinding chip, Bram's next step and the
+ * other mission in the area's order. The wayfinding chip, Benjamin's next step and the
  * missiebord's "Nu doen" follow it; the markers keep the area's layout. Pure.
  */
 export function storyOrderOf<T extends PatrolStop>(missies: readonly T[], adventureIds: readonly string[]): T[] {

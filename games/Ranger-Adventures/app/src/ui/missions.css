@@ -1,7 +1,7 @@
 /* ============================================================
    missions.css — the screens between the world and a mission, built on the ONE card
    (styles/base.css `.card`, run 6 FLOW P3): the scrim and the calm cut, the briefing
-   (Bram's field note), the fact, the reunion line, the reward, the clue, the finale,
+   (Benjamin's field note), the fact, the reunion line, the reward, the clue, the finale,
    the ontknoping, Onderweg, Pauze, the missiebord, the sporenboek, the badges — and
    the explore HUD over the live world (Pauze pill, chip, prompts, joystick).
    Only what makes each screen itself lives here; the paper, the type, the buttons and
@@ -70,12 +70,12 @@
 .ra-line-in { animation: write-in 260ms var(--ease-out) both; }
 @keyframes write-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
-/* ---- the briefing: Bram's field note. His portrait and name, the mission's picture and
+/* ---- the briefing: Benjamin's field note. His portrait and name, the mission's picture and
    title, the lines on a ruled notebook page with a margin line ---- */
 .card.briefing { width: min(calc(100vw - 32px), 620px); align-items: stretch; text-align: left; gap: 14px; }
 .vn-head { display: flex; align-items: center; gap: 10px; }
-.vn-bram { flex: none; width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(47, 91, 58, 0.3); }
-.vn-bram .sp-face { width: 40px; height: 40px; }
+.vn-benjamin { flex: none; width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(47, 91, 58, 0.3); }
+.vn-benjamin .sp-face { width: 40px; height: 40px; }
 .vn-title { display: flex; align-items: center; gap: 16px; }
 .vn-title .boot-title { text-wrap: pretty; }
 .briefing-lines {

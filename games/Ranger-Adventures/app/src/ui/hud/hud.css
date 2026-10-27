@@ -1,5 +1,5 @@
 /* ============================================================
-   hud.css — the first minute's teaching slot (run 6, FLOW P2): Bram's speaker strip,
+   hud.css — the first minute's teaching slot (run 6, FLOW P2): Benjamin's speaker strip,
    the lesson strip with its key caps, the key-cap component (.kcap, also the small
    [Enter] cap on a world prompt's button), the "Zo speel je" card and the chip's
    reveal. Loaded by ui/hud/Lessons.ts.
@@ -50,7 +50,7 @@
 .lesson-strip[hidden] { display: none; }
 @keyframes teach-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-/* ---- Bram speaks ---- */
+/* ---- Benjamin speaks ---- */
 .sp-portrait {
   position: relative;
   flex: none;
@@ -162,7 +162,7 @@
 .zs-wat { font: 600 24px/1.2 var(--font-read); color: var(--ink); text-align: left; }
 .zs-pic { display: block; }
 
-/* ---- the chip appears as Bram points at it: it slides in and glows a moment ---- */
+/* ---- the chip appears as Benjamin points at it: it slides in and glows a moment ---- */
 .explore-wayfind.wf-reveal { animation: wf-in 420ms var(--ease-out) both, wf-glow 1.4s ease-out 420ms 3; }
 @keyframes wf-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
 @keyframes wf-glow {
